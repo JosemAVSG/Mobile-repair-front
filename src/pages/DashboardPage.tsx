@@ -1,0 +1,280 @@
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card } from '../components/atoms/Card';
+import { Button } from '../components/atoms/Button';
+import { MetricCard } from '../components/molecules/MetricCard';
+import { StatusBadge } from '../components/molecules/StatusBadge';
+import { DataTable, type Column } from '../components/organisms/DataTable';
+import { useApi } from '../hooks/useApi';
+import { apiGet } from '../api/client';
+import { formatDate, formatCurrency } from '../utils/formatters';
+import type { OrdenTrabajo, Repuesto, Cliente } from '../types';
+import { EstadoOrden } from '../types';
+
+// ──────────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────────
+
+interface OrdenRow {
+  id: number;
+  cliente: string;
+  estado: OrdenTrabajo['estado'];
+  fechaEntrada: string;
+}
+
+// ──────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────
+
+function buildClienteMap(clientes: Cliente[]): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const c of clientes) {
+    map.set(c.id, c.nombre);
+  }
+  return map;
+}
+
+// ──────────────────────────────────────────────
+// Dashboard Page
+// ──────────────────────────────────────────────
+
+export function DashboardPage() {
+  const navigate = useNavigate();
+
+  const ordenesReq = useApi(() => apiGet<OrdenTrabajo[]>('/api/ordenes'));
+  const repuestosReq = useApi(() => apiGet<Repuesto[]>('/api/repuestos'));
+  const clientesReq = useApi(() => apiGet<Cliente[]>('/api/clientes'));
+
+  // Wait for all requests
+  const loading =
+    ordenesReq.loading || repuestosReq.loading || clientesReq.loading;
+
+  const error = ordenesReq.error || repuestosReq.error || clientesReq.error;
+
+  // Derive metrics and table rows
+  const { metricas, rows } = useMemo(() => {
+    const ordenes = ordenesReq.data ?? [];
+    const repuestos = repuestosReq.data ?? [];
+    const clientes = clientesReq.data ?? [];
+    const clienteMap = buildClienteMap(clientes);
+
+    const activas = ordenes.filter((o) => o.estado !== EstadoOrden.ENTREGADO)
+      .length;
+    const enReparacion = ordenes.filter(
+      (o) => o.estado === EstadoOrden.REPARACION,
+    ).length;
+    const bajoStock = repuestos.filter((r) => r.bajoStock).length;
+    const ingresos = ordenes
+      .filter((o) => o.estado === EstadoOrden.ENTREGADO && o.precioTotal != null)
+      .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
+
+    // Last 10 orders, newest first
+    const last10 = [...ordenes]
+      .sort(
+        (a, b) =>
+          new Date(b.fechaEntrada).getTime() -
+          new Date(a.fechaEntrada).getTime(),
+      )
+      .slice(0, 10);
+
+    const rows: OrdenRow[] = last10.map((o) => ({
+      id: o.id,
+      cliente: clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`,
+      estado: o.estado,
+      fechaEntrada: o.fechaEntrada,
+    }));
+
+    return {
+      metricas: { activas, enReparacion, bajoStock, ingresos },
+      rows,
+    };
+  }, [ordenesReq.data, repuestosReq.data, clientesReq.data]);
+
+  // ───── Error ─────
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+          <p className="text-sm text-slate-500">Panel de Control</p>
+        </div>
+
+        <Card>
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <p className="text-sm text-red-600">
+              Error al cargar datos: {error}
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                ordenesReq.execute();
+                repuestosReq.execute();
+                clientesReq.execute();
+              }}
+            >
+              Reintentar
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ───── Loading ─────
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+          <p className="text-sm text-slate-500">Panel de Control</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+            >
+              <div className="h-10 w-10 animate-pulse rounded-lg bg-slate-200" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-20 animate-pulse rounded bg-slate-200" />
+                <div className="h-6 w-16 animate-pulse rounded bg-slate-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Card title="Órdenes Recientes">
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-10 w-full animate-pulse rounded bg-slate-100"
+              />
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ───── Empty ─────
+
+  if (ordenesReq.data != null && ordenesReq.data.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+          <p className="text-sm text-slate-500">Panel de Control</p>
+        </div>
+
+        <Card>
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-lg font-medium text-slate-700">
+              Bienvenido al Taller de Reparaciones
+            </p>
+            <p className="max-w-md text-sm text-slate-500">
+              Aún no hay órdenes de trabajo registradas. Crea tu primera
+              orden para empezar a usar el sistema.
+            </p>
+            <Button onClick={() => navigate('/ordenes')}>
+              Crear Primera Orden
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ───── Data ─────
+
+  const columns: Column<OrdenRow>[] = [
+    { key: 'id', label: 'ID', sortable: true },
+    { key: 'cliente', label: 'Cliente', sortable: true },
+    {
+      key: 'estado',
+      label: 'Estado',
+      sortable: true,
+      render: (row) => <StatusBadge estado={row.estado} />,
+    },
+    {
+      key: 'fechaEntrada',
+      label: 'Fecha Entrada',
+      sortable: true,
+      render: (row) => formatDate(row.fechaEntrada),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+        <p className="text-sm text-slate-500">Panel de Control</p>
+      </div>
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          icon="clipboard"
+          label="Órdenes Activas"
+          value={metricas.activas}
+        />
+        <MetricCard
+          icon="smartphone"
+          label="En Reparación"
+          value={metricas.enReparacion}
+        />
+        <MetricCard
+          icon="alert-circle"
+          label="Repuestos Bajos"
+          value={metricas.bajoStock}
+          variant={metricas.bajoStock > 0 ? 'warning' : 'default'}
+        />
+        <MetricCard
+          icon="dollar-sign"
+          label="Ingresos Totales"
+          value={
+            metricas.ingresos > 0
+              ? formatCurrency(metricas.ingresos)
+              : '$0'
+          }
+        />
+      </div>
+
+      {/* Recent Orders */}
+      <Card title="Órdenes Recientes" subtitle="Últimas 10 órdenes">
+        <DataTable<OrdenRow>
+          columns={columns}
+          data={rows}
+          keyExtractor={(row) => row.id}
+          emptyMessage="No hay órdenes registradas"
+          onRowClick={(row) => navigate(`/ordenes/${row.id}`)}
+        />
+      </Card>
+
+      {/* Quick Actions */}
+      <Card title="Acciones Rápidas">
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => navigate('/ordenes')}>
+            Nueva Orden
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/repuestos')}
+          >
+            Ver Repuestos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/clientes')}
+          >
+            Nuevo Cliente
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
