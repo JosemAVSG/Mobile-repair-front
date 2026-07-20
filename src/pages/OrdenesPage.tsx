@@ -40,14 +40,6 @@ const tipoDispositivoLabel: Record<TipoDispositivo, string> = {
   [TipoDispositivo.LAVADORA]: 'Lavadora',
 };
 
-const estadoOptions = [
-  { value: '', label: 'Todas' },
-  ...Object.values(EstadoOrden).map((estado) => ({
-    value: estado,
-    label: ESTADO_LABELS[estado],
-  })),
-];
-
 const ESTADO_LABELS: Record<EstadoOrden, string> = {
   [EstadoOrden.REGISTRO]: 'Registrado',
   [EstadoOrden.DIAGNOSTICO]: 'En Diagnóstico',
@@ -57,6 +49,14 @@ const ESTADO_LABELS: Record<EstadoOrden, string> = {
   [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'Presupuesto Rechazado',
   [EstadoOrden.ENTREGADO]: 'Entregado',
 };
+
+const estadoOptions = [
+  { value: '', label: 'Todas' },
+  ...Object.values(EstadoOrden).map((estado) => ({
+    value: estado,
+    label: ESTADO_LABELS[estado],
+  })),
+];
 
 // ──────────────────────────────────────────────
 // OrdenesPage
