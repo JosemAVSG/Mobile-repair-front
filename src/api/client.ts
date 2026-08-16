@@ -67,7 +67,10 @@ function buildHeaders(): Record<string, string> {
 
 function buildUrl(path: string): string {
   // path should already start with /api/
-  return path;
+  // VITE_API_URL overrides the base for production (deployed backend).
+  // In local dev, leave it unset so Vite's proxy (/api -> localhost:8080) handles it.
+  const base = import.meta.env.VITE_API_URL ?? '';
+  return `${base}${path}`;
 }
 
 // ──────────────────────────────────────────────
