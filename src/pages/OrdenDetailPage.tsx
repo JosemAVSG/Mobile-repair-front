@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -88,68 +89,106 @@ const tipoDispositivoLabels: Record<TipoDispositivo, string> = {
 export function OrdenDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const ordenId = Number(id);
+  const ordenIdValid = Number.isFinite(ordenId);
 
   // ───── Data ─────
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [orden, setOrden] = useState<OrdenTrabajo | null>(null);
-  const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [dispositivo, setDispositivo] = useState<Dispositivo | null>(null);
-  const [modelo, setModelo] = useState<Modelo | null>(null);
-  const [historial, setHistorial] = useState<HistorialEntry[]>([]);
+  // Fetch the orden first; enrichment queries below depend on it.
+  const {
+    data: orden,
+    isPending: ordenPending,
+    isFetching: ordenFetching,
+    error: ordenError,
+    refetch,
+  } = useQuery({
+    queryKey: ['ordenes', ordenId],
+    queryFn: () => apiGet<OrdenTrabajo>(`/api/ordenes/${ordenId}`),
+    enabled: ordenIdValid,
+  });
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const ordenData = await apiGet<OrdenTrabajo>(`/api/ordenes/${ordenId}`);
-      setOrden(ordenData);
+  // Enrichment (non-critical — failures leave fallbacks in place)
+  const { data: cliente, isPending: clientePending, isFetching: clienteFetching } = useQuery({
+    queryKey: ['clientes', orden?.clienteId],
+    queryFn: () => apiGet<Cliente>(`/api/clientes/${orden?.clienteId}`),
+    enabled: ordenIdValid && Boolean(orden?.clienteId),
+  });
 
-      // Enrichment (non-critical — silence individual failures)
-      try {
-        const [clienteData, dispositivoData] = await Promise.all([
-          apiGet<Cliente>(`/api/clientes/${ordenData.clienteId}`),
-          apiGet<Dispositivo>(`/api/dispositivos/${ordenData.dispositivoId}`),
-        ]);
-        setCliente(clienteData);
-        setDispositivo(dispositivoData);
+  const {
+    data: dispositivo,
+    isPending: dispositivoPending,
+    isFetching: dispositivoFetching,
+  } = useQuery({
+    queryKey: ['dispositivos', orden?.dispositivoId],
+    queryFn: () => apiGet<Dispositivo>(`/api/dispositivos/${orden?.dispositivoId}`),
+    enabled: ordenIdValid && Boolean(orden?.dispositivoId),
+  });
 
-        // Fetch modelo name if dispositivo has one
-        if (dispositivoData?.modeloId) {
-          apiGet<Modelo>(`/api/modelos/${dispositivoData.modeloId}`)
-            .then(setModelo)
-            .catch(() => {});
-        }
-      } catch {
-        // Non-critical enrichment failures
-      }
+  const {
+    data: modelo,
+    isPending: modeloPending,
+    isFetching: modeloFetching,
+  } = useQuery({
+    queryKey: ['modelos', dispositivo?.modeloId],
+    queryFn: () => apiGet<Modelo>(`/api/modelos/${dispositivo?.modeloId}`),
+    enabled: Boolean(dispositivo?.modeloId),
+  });
 
-      // Try historial (optional endpoint)
-      try {
-        const historialData = await apiGet<HistorialEntry[]>(
-          `/api/historial/ORDEN/${ordenData.id}`,
-        );
-        setHistorial(historialData);
-      } catch {
-        setHistorial([]);
-      }
-    } catch (err: unknown) {
-      if (err instanceof ApiError && err.status === 404) {
-        setError('NOT_FOUND');
-      } else {
-        setError(err instanceof Error ? err.message : 'Error inesperado');
-      }
-      setOrden(null);
-    } finally {
-      setLoading(false);
+  // Historial is optional — the endpoint may 404 for entities without events
+  const {
+    data: historial = [],
+    isPending: historialPending,
+    isFetching: historialFetching,
+  } = useQuery({
+    queryKey: ['historial', 'ORDEN', orden?.id],
+    queryFn: () => apiGet<HistorialEntry[]>(`/api/historial/ORDEN/${orden?.id}`),
+    enabled: ordenIdValid && Boolean(orden?.id),
+  });
+
+  // Loading until the orden and its (optional) enrichment have settled,
+  // matching the previous full-page spinner flow.
+  const loading =
+    ordenPending ||
+    ordenFetching ||
+    clientePending ||
+    clienteFetching ||
+    dispositivoPending ||
+    dispositivoFetching ||
+    modeloPending ||
+    modeloFetching ||
+    historialPending ||
+    historialFetching;
+
+  const error = useMemo(() => {
+    if (!ordenError) return null;
+    if (ordenError instanceof ApiError && ordenError.status === 404) {
+      return 'NOT_FOUND';
     }
-  }, [ordenId]);
+    return ordenError instanceof Error
+      ? ordenError.message
+      : String(ordenError);
+  }, [ordenError]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  // ───── Mutations ─────
+
+  const transitionMutation = useMutation({
+    mutationFn: ({ id: targetId, target }: { id: number; target: EstadoOrden }) =>
+      apiPut<OrdenTrabajo>(`/api/ordenes/${targetId}/estado?estado=${target}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
+
+  const addReparacionMutation = useMutation({
+    mutationFn: ({ ordenId: targetOrdenId, body }: { ordenId: number; body: ReparacionRequest }) =>
+      apiPost<Reparacion>(`/api/ordenes/${targetOrdenId}/reparaciones`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
 
   // ───── Transition state ─────
 
@@ -161,11 +200,7 @@ export function OrdenDetailPage() {
       if (!orden) return;
       setTransitioningTarget(target);
       try {
-        await apiPut(
-          `/api/ordenes/${orden.id}/estado?estado=${target}`,
-          {},
-        );
-        await fetchAll();
+        await transitionMutation.mutateAsync({ id: orden.id, target });
       } catch (err: unknown) {
         const msg =
           err instanceof Error ? err.message : 'Error al cambiar estado';
@@ -174,7 +209,7 @@ export function OrdenDetailPage() {
         setTransitioningTarget(null);
       }
     },
-    [orden, fetchAll],
+    [orden, transitionMutation],
   );
 
   // ───── Reparacion modal ─────
@@ -220,9 +255,8 @@ export function OrdenDetailPage() {
         descripcion: repDescripcion.trim() || undefined,
         precio: Number(repPrecio),
       };
-      await apiPost(`/api/ordenes/${orden.id}/reparaciones`, body);
+      await addReparacionMutation.mutateAsync({ ordenId: orden.id, body });
       closeRepModal();
-      await fetchAll();
     } catch (err: unknown) {
       const msg =
         err instanceof Error
@@ -232,7 +266,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepSubmitting(false);
     }
-  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, fetchAll]);
+  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, addReparacionMutation]);
 
   // ───── Reparaciones columns ─────
 
@@ -324,7 +358,7 @@ export function OrdenDetailPage() {
             <p className="text-sm text-red-600">
               Error al cargar orden: {error}
             </p>
-            <Button variant="secondary" onClick={fetchAll}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

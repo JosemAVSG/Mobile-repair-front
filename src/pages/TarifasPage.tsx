@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -8,7 +9,6 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
 import { formatCurrency } from '../utils/formatters';
 import type { Tarifa, TarifaRequest, Marca, Modelo } from '../types';
@@ -101,16 +101,62 @@ export function TarifasPage() {
     return '/api/tarifas';
   }, [verActivas, filterMarcaId, filterModeloId]);
 
+  // Query key follows the filter so TanStack Query refetches automatically
+  const tarifasQueryKey = useMemo(() => {
+    if (verActivas) return ['tarifas', 'activas'];
+    if (filterMarcaId) return ['tarifas', 'marca', filterMarcaId];
+    if (filterModeloId) return ['tarifas', 'modelo', filterModeloId];
+    return ['tarifas'];
+  }, [verActivas, filterMarcaId, filterModeloId]);
+
   // ───── Data fetching ─────
-  const { data: tarifas, loading, error, execute: refetchTarifas } = useApi(
-    () => apiGet<Tarifa[]>(endpoint),
-  );
+  const queryClient = useQueryClient();
 
-  const marcasReq = useApi(() => apiGet<Marca[]>('/api/marcas'));
-  const modelosReq = useApi(() => apiGet<Modelo[]>('/api/modelos'));
+  const {
+    data: tarifas,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch: refetchTarifas,
+  } = useQuery({
+    queryKey: tarifasQueryKey,
+    queryFn: () => apiGet<Tarifa[]>(endpoint),
+  });
 
-  // Refetch when filter endpoint changes
-  useEffect(() => { refetchTarifas(); }, [endpoint, refetchTarifas]);
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
+
+  const marcasReq = useQuery({
+    queryKey: ['marcas'],
+    queryFn: () => apiGet<Marca[]>('/api/marcas'),
+  });
+  const modelosReq = useQuery({
+    queryKey: ['modelos'],
+    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (body: TarifaRequest) =>
+      editingTarifa
+        ? apiPut<Tarifa>(`/api/tarifas/${editingTarifa.id}`, body)
+        : apiPost<Tarifa>('/api/tarifas', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tarifas'] }),
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: (tarifa: Tarifa) =>
+      apiPut<Tarifa>(`/api/tarifas/${tarifa.id}`, { activa: !tarifa.activa }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tarifas'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/tarifas/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tarifas'] }),
+  });
 
   // ───── Create/Edit modal state (declared early — used by memos below) ─────
   const [createOpen, setCreateOpen] = useState(false);
@@ -195,26 +241,24 @@ export function TarifasPage() {
       setEditTipo('');
       setEditPrecio('');
       setFieldErrors({});
-      refetchTarifas();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar tarifa';
       setFieldErrors({ tipo: msg });
     } finally {
       setSubmitting(false);
     }
-  }, [editMarcaId, editModeloId, editTipo, editPrecio, editingTarifa, validate, refetchTarifas]);
+  }, [editMarcaId, editModeloId, editTipo, editPrecio, validate, saveMutation]);
 
   // ───── Toggle active ─────
 
   const handleToggleActive = useCallback(async (tarifa: Tarifa) => {
     try {
-      await apiPut(`/api/tarifas/${tarifa.id}`, { activa: !tarifa.activa });
-      refetchTarifas();
+      await toggleActiveMutation.mutateAsync(tarifa);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cambiar estado';
       alert(msg);
     }
-  }, [refetchTarifas]);
+  }, [toggleActiveMutation]);
 
   // ───── Delete ─────
 
@@ -223,16 +267,15 @@ export function TarifasPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/tarifas/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetchTarifas();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetchTarifas]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Actions ─────
 
@@ -416,7 +459,7 @@ export function TarifasPage() {
             <p className="text-sm text-red-600">
               Error al cargar tarifas: {error}
             </p>
-            <Button variant="secondary" onClick={refetchTarifas}>
+            <Button variant="secondary" onClick={() => void refetchTarifas()}>
               Reintentar
             </Button>
           </div>

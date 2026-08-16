@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { MetricCard } from '../components/molecules/MetricCard';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet } from '../api/client';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Repuesto, Cliente } from '../types';
@@ -41,15 +41,35 @@ function buildClienteMap(clientes: Cliente[]): Map<number, string> {
 export function DashboardPage() {
   const navigate = useNavigate();
 
-  const ordenesReq = useApi(() => apiGet<OrdenTrabajo[]>('/api/ordenes'));
-  const repuestosReq = useApi(() => apiGet<Repuesto[]>('/api/repuestos'));
-  const clientesReq = useApi(() => apiGet<Cliente[]>('/api/clientes'));
+  const ordenesReq = useQuery({
+    queryKey: ['ordenes'],
+    queryFn: () => apiGet<OrdenTrabajo[]>('/api/ordenes'),
+  });
+  const repuestosReq = useQuery({
+    queryKey: ['repuestos'],
+    queryFn: () => apiGet<Repuesto[]>('/api/repuestos'),
+  });
+  const clientesReq = useQuery({
+    queryKey: ['clientes'],
+    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
+  });
 
   // Wait for all requests
   const loading =
-    ordenesReq.loading || repuestosReq.loading || clientesReq.loading;
+    ordenesReq.isPending ||
+    ordenesReq.isFetching ||
+    repuestosReq.isPending ||
+    repuestosReq.isFetching ||
+    clientesReq.isPending ||
+    clientesReq.isFetching;
 
-  const error = ordenesReq.error || repuestosReq.error || clientesReq.error;
+  const queryError =
+    ordenesReq.error ?? repuestosReq.error ?? clientesReq.error;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   // Derive metrics and table rows
   const { metricas, rows } = useMemo(() => {
@@ -108,9 +128,9 @@ export function DashboardPage() {
             <Button
               variant="secondary"
               onClick={() => {
-                ordenesReq.execute();
-                repuestosReq.execute();
-                clientesReq.execute();
+                void ordenesReq.refetch();
+                void repuestosReq.refetch();
+                void clientesReq.refetch();
               }}
             >
               Reintentar

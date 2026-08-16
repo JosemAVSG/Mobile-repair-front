@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -8,7 +9,6 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
@@ -33,9 +33,35 @@ const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 
 // ──────────────────────────────────────────────
 
 export function MarcasPage() {
-  const { data: marcas, loading, error, execute: refetch } = useApi(
-    () => apiGet<Marca[]>('/api/marcas'),
-  );
+  const queryClient = useQueryClient();
+
+  const {
+    data: marcas,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['marcas'],
+    queryFn: () => apiGet<Marca[]>('/api/marcas'),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
+
+  const createMutation = useMutation({
+    mutationFn: (body: MarcaRequest) => apiPost<Marca>('/api/marcas', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['marcas'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/marcas/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['marcas'] }),
+  });
 
   // Create modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -69,19 +95,18 @@ export function MarcasPage() {
         nombre: nombre.trim(),
         categoria: categoria as CategoriaMarca,
       };
-      await apiPost<Marca>('/api/marcas', body);
+      await createMutation.mutateAsync(body);
       setCreateOpen(false);
       setNombre('');
       setCategoria('');
       setFieldErrors({});
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al crear marca';
       setFieldErrors({ nombre: msg });
     } finally {
       setSubmitting(false);
     }
-  }, [nombre, categoria, validate, refetch]);
+  }, [nombre, categoria, validate, createMutation]);
 
   // ───── Delete ─────
 
@@ -90,16 +115,15 @@ export function MarcasPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/marcas/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetch]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Close modal helpers ─────
 
@@ -169,7 +193,7 @@ export function MarcasPage() {
             <p className="text-sm text-red-600">
               Error al cargar marcas: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

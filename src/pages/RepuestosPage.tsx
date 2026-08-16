@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -7,7 +8,6 @@ import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
 import { formatCurrency } from '../utils/formatters';
 import type { Repuesto, RepuestoRequest } from '../types';
@@ -49,12 +49,40 @@ export function RepuestosPage() {
     : '/api/repuestos';
 
   // ───── Data fetching ─────
-  const { data: repuestos, loading, error, execute: refetch } = useApi(
-    () => apiGet<Repuesto[]>(endpoint),
-  );
+  const queryClient = useQueryClient();
 
-  // Refetch when filter changes
-  useEffect(() => { refetch(); }, [endpoint, refetch]);
+  const {
+    data: repuestos,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['repuestos', bajoStockOnly ? 'bajo-stock' : 'all'],
+    queryFn: () => apiGet<Repuesto[]>(endpoint),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
+
+  const saveMutation = useMutation({
+    mutationFn: (body: RepuestoRequest) =>
+      editingRepuesto
+        ? apiPut<Repuesto>(`/api/repuestos/${editingRepuesto.id}`, body)
+        : apiPost<Repuesto>('/api/repuestos', body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['repuestos'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/repuestos/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['repuestos'] }),
+  });
 
   // ───── Create/Edit modal state ─────
   const [createOpen, setCreateOpen] = useState(false);
@@ -123,7 +151,6 @@ export function RepuestosPage() {
       setCreateOpen(false);
       setEditingRepuesto(null);
       resetForm();
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar repuesto';
       setFieldErrors({ nombre: msg });
@@ -134,7 +161,7 @@ export function RepuestosPage() {
     editNombre, editDescripcion, editCodigo,
     editPrecioCosto, editPrecioVenta,
     editStockActual, editStockMinimo, editProveedorId,
-    editingRepuesto, validate, refetch,
+    editingRepuesto, validate, saveMutation,
   ]);
 
   // ───── Delete ─────
@@ -144,16 +171,15 @@ export function RepuestosPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/repuestos/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetch]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Helpers ─────
 
@@ -347,7 +373,7 @@ export function RepuestosPage() {
             <p className="text-sm text-red-600">
               Error al cargar repuestos: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

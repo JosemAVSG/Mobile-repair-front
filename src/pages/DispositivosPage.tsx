@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -9,7 +10,6 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Dispositivo, DispositivoRequest, Modelo, Cliente } from '../types';
@@ -94,13 +94,50 @@ export function DispositivosPage() {
   const clienteIdFilter = searchParams.get('clienteId') ?? '';
 
   // Fetch dispositivos
-  const { data: dispositivos, loading, error, execute: refetch } = useApi(
-    () => apiGet<Dispositivo[]>('/api/dispositivos'),
-  );
+  const queryClient = useQueryClient();
+
+  const {
+    data: dispositivos,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['dispositivos'],
+    queryFn: () => apiGet<Dispositivo[]>('/api/dispositivos'),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   // Fetch modelos and clientes for enrichment and form selects
-  const { data: modelos } = useApi(() => apiGet<Modelo[]>('/api/modelos'));
-  const { data: clientes } = useApi(() => apiGet<Cliente[]>('/api/clientes'));
+  const { data: modelos } = useQuery({
+    queryKey: ['modelos'],
+    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
+  });
+  const { data: clientes } = useQuery({
+    queryKey: ['clientes'],
+    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (body: DispositivoRequest) =>
+      editTarget
+        ? apiPut<Dispositivo>(`/api/dispositivos/${editTarget.id}`, body)
+        : apiPost<Dispositivo>('/api/dispositivos', body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['dispositivos'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/dispositivos/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['dispositivos'] }),
+  });
 
   // Filter state
   const [filtroCliente, setFiltroCliente] = useState(clienteIdFilter);
@@ -233,13 +270,8 @@ export function DispositivosPage() {
         voltaje: voltaje.trim() || undefined,
         notasTecnicas: notasTecnicas.trim() || undefined,
       };
-      if (editTarget) {
-        await apiPut(`/api/dispositivos/${editTarget.id}`, body);
-      } else {
-        await apiPost<Dispositivo>('/api/dispositivos', body);
-      }
+      await saveMutation.mutateAsync(body);
       closeModal();
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar dispositivo';
       setFieldErrors({ general: msg });
@@ -249,7 +281,7 @@ export function DispositivosPage() {
   }, [
     tipo, modeloId, clienteId, numeroSerie, imei,
     capacidad, tipoGas, voltaje, notasTecnicas,
-    editTarget, validate, refetch, closeModal,
+    validate, saveMutation, closeModal,
   ]);
 
   // ───── Delete ─────
@@ -259,16 +291,15 @@ export function DispositivosPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/dispositivos/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetch]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Columns ─────
 
@@ -358,7 +389,7 @@ export function DispositivosPage() {
             <p className="text-sm text-red-600">
               Error al cargar dispositivos: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

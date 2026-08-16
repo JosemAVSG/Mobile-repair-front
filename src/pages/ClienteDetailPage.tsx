@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -10,7 +11,6 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPut, apiDelete } from '../api/client';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import type { Cliente, ClienteRequest, Dispositivo, OrdenTrabajo } from '../types';
@@ -46,21 +46,68 @@ const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'war
 export function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Fetch cliente
-  const { data: cliente, loading, error, execute: refetch } = useApi(
-    () => apiGet<Cliente>(`/api/clientes/${id}`),
-  );
+  const {
+    data: cliente,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['clientes', id],
+    queryFn: () => apiGet<Cliente>(`/api/clientes/${id}`),
+    enabled: Boolean(id),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   // Fetch dispositivos by clienteId
-  const { data: dispositivos, loading: loadingDisp } = useApi(
-    () => apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${id}`),
-  );
+  const {
+    data: dispositivos,
+    isPending: dispPending,
+    isFetching: dispFetching,
+  } = useQuery({
+    queryKey: ['dispositivos', 'cliente', id],
+    queryFn: () => apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${id}`),
+    enabled: Boolean(id),
+  });
+
+  const loadingDisp = dispPending || dispFetching;
 
   // Fetch ordenes (filter client-side)
-  const { data: ordenes, loading: loadingOrd } = useApi(
-    () => apiGet<OrdenTrabajo[]>('/api/ordenes'),
-  );
+  const {
+    data: ordenes,
+    isPending: ordPending,
+    isFetching: ordFetching,
+  } = useQuery({
+    queryKey: ['ordenes'],
+    queryFn: () => apiGet<OrdenTrabajo[]>('/api/ordenes'),
+  });
+
+  const loadingOrd = ordPending || ordFetching;
+
+  const updateMutation = useMutation({
+    mutationFn: (body: ClienteRequest) => apiPut<Cliente>(`/api/clientes/${cliente?.id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clientes', id] });
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiDelete<unknown>(`/api/clientes/${cliente?.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
+      navigate('/clientes');
+    },
+  });
 
   // Tab state
   const [tab, setTab] = useState<'dispositivos' | 'ordenes'>('dispositivos');
@@ -123,16 +170,15 @@ export function ClienteDetailPage() {
         telefono: editTelefono.trim() || undefined,
         email: editEmail.trim() || undefined,
       };
-      await apiPut(`/api/clientes/${cliente.id}`, body);
+      await updateMutation.mutateAsync(body);
       setEditModalOpen(false);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al actualizar cliente';
       setEditErrors({ nombre: msg });
     } finally {
       setEditSubmitting(false);
     }
-  }, [editNombre, editTelefono, editEmail, cliente, refetch]);
+  }, [editNombre, editTelefono, editEmail, cliente, updateMutation]);
 
   // ───── Delete from detail ─────
 
@@ -141,15 +187,14 @@ export function ClienteDetailPage() {
 
     setDeletingDetail(true);
     try {
-      await apiDelete(`/api/clientes/${cliente.id}`);
-      navigate('/clientes');
+      await deleteMutation.mutateAsync();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeletingDetail(false);
     }
-  }, [cliente, navigate]);
+  }, [deleteMutation]);
 
   // ───── Dispositivo columns ─────
 
@@ -234,7 +279,7 @@ export function ClienteDetailPage() {
             <p className="text-sm text-red-600">
               Error al cargar cliente: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

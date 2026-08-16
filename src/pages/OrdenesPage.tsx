@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -8,7 +9,6 @@ import { Spinner } from '../components/atoms/Spinner';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost } from '../api/client';
 import { formatDateTime, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente, Dispositivo, Modelo, OrdenRequest } from '../types';
@@ -64,40 +64,59 @@ const estadoOptions = [
 
 export function OrdenesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // ───── Estado filter ─────
 
   const [estadoFilter, setEstadoFilter] = useState<EstadoOrden | ''>('');
 
-  const ordenesFetcher = useCallback(
-    () =>
+  // Query key changes with the filter so TanStack Query refetches automatically
+  const ordenesQueryKey = estadoFilter
+    ? ['ordenes', 'estado', estadoFilter]
+    : ['ordenes'];
+
+  const {
+    data: ordenes,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ordenesQueryKey,
+    queryFn: () =>
       apiGet<OrdenTrabajo[]>(
         estadoFilter
           ? `/api/ordenes/estado/${estadoFilter}`
           : '/api/ordenes',
       ),
-    [estadoFilter],
-  );
+  });
 
-  const {
-    data: ordenes,
-    loading,
-    error,
-    execute: refetch,
-  } = useApi(ordenesFetcher, false);
-
-  // Refetch on mount and when filter changes
-  useEffect(() => {
-    refetch();
-  }, [refetch, estadoFilter]);
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   // ───── Supporting data for enrichment ─────
 
-  const { data: clientes } = useApi(() => apiGet<Cliente[]>('/api/clientes'));
-  const { data: dispositivos } = useApi(() =>
-    apiGet<Dispositivo[]>('/api/dispositivos'),
-  );
-  const { data: modelos } = useApi(() => apiGet<Modelo[]>('/api/modelos'));
+  const { data: clientes } = useQuery({
+    queryKey: ['clientes'],
+    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
+  });
+  const { data: dispositivos } = useQuery({
+    queryKey: ['dispositivos'],
+    queryFn: () => apiGet<Dispositivo[]>('/api/dispositivos'),
+  });
+  const { data: modelos } = useQuery({
+    queryKey: ['modelos'],
+    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: OrdenRequest) => apiPost<OrdenTrabajo>('/api/ordenes', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
+  });
 
   const clienteMap = useMemo(() => {
     const map = new Map<number, Cliente>();
@@ -196,22 +215,19 @@ export function OrdenesPage() {
 
   // ───── Cascade: dispositivos by cliente ─────
 
-  const [dispositivosCliente, setDispositivosCliente] = useState<
-    Dispositivo[]
-  >([]);
-  const [loadingDisps, setLoadingDisps] = useState(false);
+  const {
+    data: dispositivosCliente,
+    isPending: dispsPending,
+    isFetching: dispsFetching,
+  } = useQuery({
+    queryKey: ['dispositivos', 'cliente', createClienteId],
+    queryFn: () =>
+      apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${createClienteId}`),
+    enabled: Boolean(createClienteId),
+  });
 
-  useEffect(() => {
-    if (createClienteId) {
-      setLoadingDisps(true);
-      apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${createClienteId}`)
-        .then(setDispositivosCliente)
-        .catch(() => setDispositivosCliente([]))
-        .finally(() => setLoadingDisps(false));
-    } else {
-      setDispositivosCliente([]);
-    }
-  }, [createClienteId]);
+  const dispositivosClienteList = dispositivosCliente ?? [];
+  const loadingDisps = dispsPending || dispsFetching;
 
   // ───── Open / close create modal ─────
 
@@ -251,9 +267,8 @@ export function OrdenesPage() {
         falloReportado: createFallo.trim() || undefined,
         notas: createNotas.trim() || undefined,
       };
-      await apiPost('/api/ordenes', body);
+      await createMutation.mutateAsync(body);
       closeCreate();
-      refetch();
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al crear orden';
@@ -267,7 +282,7 @@ export function OrdenesPage() {
     createFallo,
     createNotas,
     closeCreate,
-    refetch,
+    createMutation,
   ]);
 
   // ───── Row click ─────
@@ -292,7 +307,7 @@ export function OrdenesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={refetch}>
+          <Button variant="secondary" onClick={() => void refetch()}>
             Refrescar
           </Button>
           <Button onClick={openCreate}>Nueva Orden</Button>
@@ -321,7 +336,7 @@ export function OrdenesPage() {
             <p className="text-sm text-red-600">
               Error al cargar órdenes: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>
@@ -400,7 +415,7 @@ export function OrdenesPage() {
               </div>
             ) : (
               <Select
-                options={dispositivosCliente.map((d) => {
+                options={dispositivosClienteList.map((d) => {
                   const modelo = modeloMap.get(d.modeloId);
                   const tipo = tipoDispositivoLabel[d.tipo] ?? d.tipo;
                   const modeloInfo = modelo?.nombre ?? `#${d.modeloId}`;

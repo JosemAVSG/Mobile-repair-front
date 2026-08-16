@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -7,7 +8,6 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Modelo, ModeloRequest, Marca } from '../types';
@@ -47,11 +47,40 @@ function buildMarcaOptions(marcas: Marca[]): { value: string; label: string }[] 
 // ──────────────────────────────────────────────
 
 export function ModelosPage() {
-  const { data: modelos, loading, error, execute: refetch } = useApi(
-    () => apiGet<Modelo[]>('/api/modelos'),
-  );
+  const queryClient = useQueryClient();
 
-  const marcasReq = useApi(() => apiGet<Marca[]>('/api/marcas'));
+  const {
+    data: modelos,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['modelos'],
+    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
+
+  const marcasReq = useQuery({
+    queryKey: ['marcas'],
+    queryFn: () => apiGet<Marca[]>('/api/marcas'),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: ModeloRequest) => apiPost<Modelo>('/api/modelos', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelos'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/modelos/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelos'] }),
+  });
 
   // Filter state
   const [filtroMarca, setFiltroMarca] = useState('');
@@ -107,19 +136,18 @@ export function ModelosPage() {
         nombre: nombre.trim(),
         marcaId: Number(marcaId),
       };
-      await apiPost<Modelo>('/api/modelos', body);
+      await createMutation.mutateAsync(body);
       setCreateOpen(false);
       setNombre('');
       setMarcaId('');
       setFieldErrors({});
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al crear modelo';
       setFieldErrors({ nombre: msg });
     } finally {
       setSubmitting(false);
     }
-  }, [nombre, marcaId, validate, refetch]);
+  }, [nombre, marcaId, validate, createMutation]);
 
   // ───── Delete ─────
 
@@ -128,16 +156,15 @@ export function ModelosPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/modelos/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetch]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Close modal helpers ─────
 
@@ -214,7 +241,7 @@ export function ModelosPage() {
             <p className="text-sm text-red-600">
               Error al cargar modelos: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>

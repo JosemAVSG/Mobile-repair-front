@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -7,7 +8,6 @@ import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { useApi } from '../hooks/useApi';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Cliente, ClienteRequest } from '../types';
@@ -18,9 +18,38 @@ import type { Cliente, ClienteRequest } from '../types';
 
 export function ClientesPage() {
   const navigate = useNavigate();
-  const { data: clientes, loading, error, execute: refetch } = useApi(
-    () => apiGet<Cliente[]>('/api/clientes'),
-  );
+  const queryClient = useQueryClient();
+
+  const {
+    data: clientes,
+    isPending,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['clientes'],
+    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
+  });
+
+  const loading = isPending || isFetching;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
+
+  const saveMutation = useMutation({
+    mutationFn: (body: ClienteRequest) =>
+      editTarget
+        ? apiPut<Cliente>(`/api/clientes/${editTarget.id}`, body)
+        : apiPost<Cliente>('/api/clientes', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['clientes'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete<unknown>(`/api/clientes/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['clientes'] }),
+  });
 
   // Modal state (shared for create and edit)
   const [modalOpen, setModalOpen] = useState(false);
@@ -89,20 +118,15 @@ export function ClientesPage() {
         telefono: telefono.trim() || undefined,
         email: email.trim() || undefined,
       };
-      if (editTarget) {
-        await apiPut(`/api/clientes/${editTarget.id}`, body);
-      } else {
-        await apiPost<Cliente>('/api/clientes', body);
-      }
+      await saveMutation.mutateAsync(body);
       closeModal();
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar cliente';
       setFieldErrors({ nombre: msg });
     } finally {
       setSubmitting(false);
     }
-  }, [nombre, telefono, email, editTarget, validate, refetch, closeModal]);
+  }, [nombre, telefono, email, validate, saveMutation, closeModal]);
 
   // ───── Delete ─────
 
@@ -111,16 +135,15 @@ export function ClientesPage() {
 
     setDeleting(true);
     try {
-      await apiDelete(`/api/clientes/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
       alert(msg);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, refetch]);
+  }, [deleteTarget, deleteMutation]);
 
   // ───── Row click ─────
 
@@ -199,7 +222,7 @@ export function ClientesPage() {
             <p className="text-sm text-red-600">
               Error al cargar clientes: {error}
             </p>
-            <Button variant="secondary" onClick={refetch}>
+            <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
             </Button>
           </div>
