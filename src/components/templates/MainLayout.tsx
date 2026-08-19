@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../organisms/Sidebar';
 import { Header } from '../organisms/Header';
+import { Breadcrumbs } from '../molecules/Breadcrumbs';
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,6 +18,7 @@ export function MainLayout() {
         <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <Breadcrumbs />
           <Outlet />
         </main>
       </div>

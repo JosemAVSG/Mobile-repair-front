@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
@@ -62,6 +62,7 @@ const tipoOptions = Object.values(TipoDispositivo).map((tipo) => ({
 
 export function OrdenesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   // ───── Estado filter ─────
@@ -213,14 +214,41 @@ export function OrdenesPage() {
 
   // ───── Open / close create modal ─────
 
-  const openCreate = useCallback(() => {
-    setCreateClienteId('');
-    setCreateDispositivoId('');
-    setCreateFallo('');
-    setCreateNotas('');
-    setCreateErrors({});
-    setCreateOpen(true);
-  }, []);
+  const openCreate = useCallback(
+    (preload?: { clienteId?: string; dispositivoId?: string }) => {
+      const clienteVal = preload?.clienteId
+        ? Number(preload.clienteId)
+        : '';
+      const dispositivoVal = preload?.dispositivoId
+        ? Number(preload.dispositivoId)
+        : '';
+      setCreateClienteId(
+        Number.isFinite(clienteVal) && clienteVal !== '' ? clienteVal : '',
+      );
+      setCreateDispositivoId(
+        Number.isFinite(dispositivoVal) && dispositivoVal !== ''
+          ? dispositivoVal
+          : '',
+      );
+      setCreateFallo('');
+      setCreateNotas('');
+      setCreateErrors({});
+      setCreateOpen(true);
+    },
+    [],
+  );
+
+  // Auto-open the create modal with preloads from query params, once on mount
+  const preloadApplied = useRef(false);
+  useEffect(() => {
+    if (preloadApplied.current) return;
+    const dispositivoId = searchParams.get('dispositivoId');
+    const clienteId = searchParams.get('clienteId');
+    if (dispositivoId || clienteId) {
+      preloadApplied.current = true;
+      openCreate({ clienteId: clienteId ?? undefined, dispositivoId: dispositivoId ?? undefined });
+    }
+  }, [searchParams, openCreate]);
 
   const closeCreate = useCallback(() => {
     setCreateOpen(false);
@@ -292,7 +320,7 @@ export function OrdenesPage() {
           <Button variant="secondary" onClick={() => void refetch()}>
             Refrescar
           </Button>
-          <Button onClick={openCreate}>Nueva Orden</Button>
+          <Button onClick={() => openCreate()}>Nueva Orden</Button>
         </div>
       </div>
 

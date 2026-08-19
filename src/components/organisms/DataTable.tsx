@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, type ReactNode } from 'react';
 import { Icon } from '../atoms/Icon';
 
 export interface Column<T> {
@@ -17,6 +17,7 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void;
   keyExtractor: (item: T) => string | number;
   getRowClassName?: (item: T) => string;
+  pageSize?: number;
 }
 
 export function DataTable<T>({
@@ -28,9 +29,16 @@ export function DataTable<T>({
   onRowClick,
   keyExtractor,
   getRowClassName,
+  pageSize = 10,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(1);
+  const [selectablePageSize, setSelectablePageSize] = useState(pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchFilter, sortKey, sortDir]);
 
   // Client-side filtering
   const filtered = useMemo(() => {
@@ -59,6 +67,14 @@ export function DataTable<T>({
       return sortDir === 'asc' ? cmp : -cmp;
     });
   }, [filtered, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / selectablePageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginated = useMemo(() => {
+    const start = (safePage - 1) * selectablePageSize;
+    return sorted.slice(start, start + selectablePageSize);
+  }, [sorted, safePage, selectablePageSize]);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -157,7 +173,7 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((item) => (
+          {paginated.map((item) => (
             <tr
               key={keyExtractor(item)}
               className={`border-b border-slate-100 transition-colors last:border-0 ${
@@ -176,6 +192,45 @@ export function DataTable<T>({
           ))}
         </tbody>
       </table>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+        <select
+          aria-label="Filas por página"
+          value={selectablePageSize}
+          onChange={(e) => {
+            setSelectablePageSize(Number(e.target.value));
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+        >
+          {[10, 25, 50].map((size) => (
+            <option key={size} value={size}>
+              {size} / página
+            </option>
+          ))}
+        </select>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Anterior
+          </button>
+          <span className="text-sm text-slate-600">
+            Página {safePage} de {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

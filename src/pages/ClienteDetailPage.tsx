@@ -195,17 +195,29 @@ export function ClienteDetailPage() {
     {
       key: 'id',
       label: 'Acciones',
-      render: () => (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            navigate(`/dispositivos?clienteId=${id}`);
-          }}
-        >
-          Ver
-        </Button>
+      render: (row) => (
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              navigate(`/ordenes?clienteId=${id}&dispositivoId=${row.id}`);
+            }}
+          >
+            Crear Orden
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              navigate(`/dispositivos?clienteId=${id}`);
+            }}
+          >
+            Ver
+          </Button>
+        </div>
       ),
     },
   ];
@@ -388,9 +400,18 @@ export function ClienteDetailPage() {
       {/* ───── Órdenes Tab ───── */}
       {tab === 'ordenes' && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-800">
-            Órdenes del Cliente
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-800">
+              Órdenes del Cliente
+            </h3>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate(`/ordenes?clienteId=${id}`)}
+            >
+              Nueva Orden
+            </Button>
+          </div>
 
           {loadingOrd ? (
             <div className="flex items-center justify-center py-12">

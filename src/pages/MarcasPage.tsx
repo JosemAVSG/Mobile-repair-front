@@ -8,6 +8,7 @@ import { Input } from '../components/atoms/Input';
 import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { SearchField } from '../components/molecules/SearchField';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiDelete } from '../api/client';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
@@ -66,6 +67,7 @@ export function MarcasPage() {
 
   // Filter state
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [busqueda, setBusqueda] = useState('');
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Marca | null>(null);
@@ -190,14 +192,23 @@ export function MarcasPage() {
       </div>
 
       {/* Filter by Category */}
-      <div className="max-w-xs">
-        <Select
-          label="Filtrar por Categoría"
-          options={CATEGORIA_OPTIONS}
-          placeholder="Todas las categorías"
-          value={filtroCategoria}
-          onChange={(e) => setFiltroCategoria(e.target.value)}
-        />
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="w-64">
+          <SearchField
+            placeholder="Buscar marca..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
+        </div>
+        <div className="max-w-xs">
+          <Select
+            label="Filtrar por Categoría"
+            options={CATEGORIA_OPTIONS}
+            placeholder="Todas las categorías"
+            value={filtroCategoria}
+            onChange={(e) => setFiltroCategoria(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Error state */}
@@ -220,6 +231,7 @@ export function MarcasPage() {
           columns={columns}
           data={rows}
           loading={loading}
+          searchFilter={busqueda}
           emptyMessage="No hay marcas registradas"
           keyExtractor={(row) => row.id}
         />

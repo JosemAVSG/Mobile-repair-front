@@ -7,6 +7,7 @@ import { Input } from '../components/atoms/Input';
 import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { SearchField } from '../components/molecules/SearchField';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { Badge } from '../components/atoms/Badge';
 import { apiPost, apiDelete } from '../api/client';
@@ -75,6 +76,7 @@ export function ModelosPage() {
   // Filter state
   const [filtroMarca, setFiltroMarca] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [busqueda, setBusqueda] = useState('');
 
   // Create modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -243,7 +245,14 @@ export function ModelosPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="w-64">
+          <SearchField
+            placeholder="Buscar modelo..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
+        </div>
         <div className="max-w-xs">
           <Select
             label="Filtrar por Marca"
@@ -284,6 +293,7 @@ export function ModelosPage() {
           columns={columns}
           data={rows}
           loading={loading}
+          searchFilter={busqueda}
           emptyMessage="No hay modelos registrados"
           keyExtractor={(row) => row.id}
         />

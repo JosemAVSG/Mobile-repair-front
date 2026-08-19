@@ -7,6 +7,7 @@ import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { SearchField } from '../components/molecules/SearchField';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
@@ -61,6 +62,9 @@ export function ClientesPage() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Search state
+  const [busqueda, setBusqueda] = useState('');
 
   // ───── Validation ─────
 
@@ -210,7 +214,14 @@ export function ClientesPage() {
           <h2 className="text-2xl font-bold text-slate-800">Clientes</h2>
           <p className="text-sm text-slate-500">Gestión de clientes</p>
         </div>
-        <Button onClick={openCreate}>Nuevo Cliente</Button>
+        <div className="flex items-center gap-3">
+          <SearchField
+            placeholder="Buscar cliente..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
+          <Button onClick={openCreate}>Nuevo Cliente</Button>
+        </div>
       </div>
 
       {/* Error state */}
@@ -233,6 +244,7 @@ export function ClientesPage() {
           columns={columns}
           data={clientes ?? []}
           loading={loading}
+          searchFilter={busqueda}
           emptyMessage="No hay clientes registrados"
           keyExtractor={(row) => row.id}
           onRowClick={handleRowClick}

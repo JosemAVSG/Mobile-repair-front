@@ -1,20 +1,19 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
-import { Modal } from '../components/atoms/Modal';
-import { Input } from '../components/atoms/Input';
 import { Select } from '../components/atoms/Select';
-import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { SearchField } from '../components/molecules/SearchField';
+import { DispositivoForm } from '../components/molecules/DispositivoForm';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiPut, apiDelete } from '../api/client';
-import { formatDate, TIPO_DISPOSITIVO_LABELS, tipoBadgeConfig } from '../utils/formatters';
-import { buildModeloMap, buildClienteMap, buildModeloOptions, buildClienteOptions } from '../utils/maps';
-import type { Dispositivo, DispositivoRequest, Marca } from '../types';
-import { TipoDispositivo, CategoriaMarca } from '../types';
+import { formatDate, tipoBadgeConfig, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
+import { buildModeloMap, buildClienteMap, buildClienteOptions } from '../utils/maps';
+import type { Dispositivo, DispositivoRequest } from '../types';
+import { TipoDispositivo } from '../types';
 import { useMarcas, useModelos, useClientes, useDispositivos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -30,10 +29,6 @@ interface DispositivoRow {
   createdAt: string;
 }
 
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-
 const TIPO_OPTIONS = [
   { value: TipoDispositivo.CELULAR, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.CELULAR] },
   { value: TipoDispositivo.MICROONDAS, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.MICROONDAS] },
@@ -43,41 +38,13 @@ const TIPO_OPTIONS = [
   { value: TipoDispositivo.COMPUTADORA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COMPUTADORA] },
 ];
 
-const LINEA_BLANCA_TIPOS = new Set([
-  TipoDispositivo.MICROONDAS,
-  TipoDispositivo.NEVERA,
-  TipoDispositivo.COCINA,
-  TipoDispositivo.LAVADORA,
-]);
-
-function buildMarcaCategoriaMap(marcas: Marca[]): Map<number, CategoriaMarca> {
-  const map = new Map<number, CategoriaMarca>();
-  for (const m of marcas) {
-    map.set(m.id, m.categoria);
-  }
-  return map;
-}
-
-function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
-  switch (tipo) {
-    case TipoDispositivo.CELULAR:
-      return CategoriaMarca.CELULARES;
-    case TipoDispositivo.COMPUTADORA:
-      return CategoriaMarca.COMPUTADORAS;
-    case TipoDispositivo.MICROONDAS:
-    case TipoDispositivo.NEVERA:
-    case TipoDispositivo.COCINA:
-    case TipoDispositivo.LAVADORA:
-      return CategoriaMarca.LINEA_BLANCA;
-  }
-}
-
 // ──────────────────────────────────────────────
 // Dispositivos Page
 // ──────────────────────────────────────────────
 
 export function DispositivosPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const clienteIdFilter = searchParams.get('clienteId') ?? '';
 
   // Fetch dispositivos
@@ -121,6 +88,7 @@ export function DispositivosPage() {
   // Filter state
   const [filtroCliente, setFiltroCliente] = useState(clienteIdFilter);
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [busqueda, setBusqueda] = useState('');
 
   // Modal state (shared for create and edit)
   const [modalOpen, setModalOpen] = useState(false);
@@ -143,28 +111,10 @@ export function DispositivosPage() {
   const [deleteTarget, setDeleteTarget] = useState<Dispositivo | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ───── Derived ─────
-
-  const isLineaBlanca = tipo !== '' && LINEA_BLANCA_TIPOS.has(tipo as TipoDispositivo);
-
-  const marcaCategoriaMap = useMemo(
-    () => buildMarcaCategoriaMap(marcas ?? []),
-    [marcas],
+  const clienteOptions = useMemo(
+    () => buildClienteOptions(clientes ?? []),
+    [clientes],
   );
-
-  const modeloOptions = useMemo(() => {
-    const modelosList = modelos ?? [];
-    const listaFiltrada =
-      tipo !== ''
-        ? modelosList.filter((m) => {
-            const cat = marcaCategoriaMap.get(m.marcaId);
-            return cat === categoriaDeTipo(tipo as TipoDispositivo);
-          })
-        : modelosList;
-    return buildModeloOptions(listaFiltrada);
-  }, [modelos, tipo, marcaCategoriaMap]);
-
-  const clienteOptions = useMemo(() => buildClienteOptions(clientes ?? []), [clientes]);
 
   // Enriched rows
   const modeloMap = useMemo(() => buildModeloMap(modelos ?? []), [modelos]);
@@ -331,6 +281,20 @@ export function DispositivosPage() {
       render: (row) => (
         <div className="flex gap-2">
           <Button
+            variant="primary"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              const disp = (dispositivos ?? []).find((d) => d.id === row.id);
+              const clienteId = disp?.clienteId ?? '';
+              navigate(
+                `/ordenes?dispositivoId=${row.id}&clienteId=${clienteId}`,
+              );
+            }}
+          >
+            Crear Orden
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             onClick={(e: React.MouseEvent) => {
@@ -371,7 +335,14 @@ export function DispositivosPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="w-64">
+          <SearchField
+            placeholder="Buscar dispositivo..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
+        </div>
         <div className="max-w-xs">
           <Select
             label="Filtrar por Cliente"
@@ -412,166 +383,43 @@ export function DispositivosPage() {
           columns={columns}
           data={rows}
           loading={loading}
+          searchFilter={busqueda}
           emptyMessage="No hay dispositivos registrados"
           keyExtractor={(row) => row.id}
         />
       )}
 
       {/* ───── Create / Edit Modal ───── */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
+      <DispositivoForm
+        open={modalOpen}
         title={editTarget ? 'Editar Dispositivo' : 'Nuevo Dispositivo'}
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} disabled={submitting}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSubmit} loading={submitting}>
-              {editTarget ? 'Actualizar' : 'Guardar'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <FormField label="Tipo" required error={fieldErrors.tipo}>
-            <Select
-              options={TIPO_OPTIONS}
-              placeholder="Seleccionar tipo..."
-              value={tipo}
-              onChange={(e) => {
-                const newTipo = e.target.value as TipoDispositivo | '';
-                setTipo(newTipo);
-                setModeloId('');
-                // Reset conditional fields when tipo changes
-                setNumeroSerie('');
-                setImei('');
-                setCapacidad('');
-                setTipoGas('');
-                setVoltaje('');
-                setNotasTecnicas('');
-              }}
-            />
-          </FormField>
-
-          <FormField label="Modelo" required error={fieldErrors.modeloId}>
-            <Select
-              options={modeloOptions}
-              placeholder="Seleccionar modelo..."
-              value={modeloId}
-              onChange={(e) => setModeloId(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Cliente" required error={fieldErrors.clienteId}>
-            <Select
-              options={clienteOptions}
-              placeholder="Seleccionar cliente..."
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            />
-          </FormField>
-
-          {/* Conditional fields for CELULAR */}
-          {tipo === TipoDispositivo.CELULAR && (
-            <>
-              <FormField label="Número de Serie">
-                <Input
-                  placeholder="Número de serie"
-                  value={numeroSerie}
-                  onChange={(e) => setNumeroSerie(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="IMEI">
-                <Input
-                  placeholder="IMEI del dispositivo"
-                  value={imei}
-                  onChange={(e) => setImei(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Notas Técnicas">
-                <textarea
-                  className="min-h-[80px] rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
-                  placeholder="Notas técnicas del dispositivo"
-                  value={notasTecnicas}
-                  onChange={(e) => setNotasTecnicas(e.target.value)}
-                />
-              </FormField>
-            </>
-          )}
-
-          {/* Conditional fields for COMPUTADORA */}
-          {tipo === TipoDispositivo.COMPUTADORA && (
-            <>
-              <FormField label="Número de Serie">
-                <Input
-                  placeholder="Número de serie"
-                  value={numeroSerie}
-                  onChange={(e) => setNumeroSerie(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Notas Técnicas">
-                <textarea
-                  className="min-h-[80px] rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
-                  placeholder="Notas técnicas del dispositivo"
-                  value={notasTecnicas}
-                  onChange={(e) => setNotasTecnicas(e.target.value)}
-                />
-              </FormField>
-            </>
-          )}
-
-          {/* Conditional fields for Línea Blanca */}
-          {isLineaBlanca && (
-            <>
-              <FormField label="Número de Serie">
-                <Input
-                  placeholder="Número de serie"
-                  value={numeroSerie}
-                  onChange={(e) => setNumeroSerie(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Capacidad">
-                <Input
-                  placeholder="Ej: 300L, 20kg"
-                  value={capacidad}
-                  onChange={(e) => setCapacidad(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Tipo Gas">
-                <Input
-                  placeholder="Ej: R134a"
-                  value={tipoGas}
-                  onChange={(e) => setTipoGas(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Voltaje">
-                <Input
-                  placeholder="Ej: 220V"
-                  value={voltaje}
-                  onChange={(e) => setVoltaje(e.target.value)}
-                />
-              </FormField>
-
-              <FormField label="Notas Técnicas">
-                <textarea
-                  className="min-h-[80px] rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
-                  placeholder="Notas técnicas del dispositivo"
-                  value={notasTecnicas}
-                  onChange={(e) => setNotasTecnicas(e.target.value)}
-                />
-              </FormField>
-            </>
-          )}
-        </div>
-      </Modal>
+        isEdit={editTarget !== null}
+        submitting={submitting}
+        tipo={tipo}
+        setTipo={setTipo}
+        modeloId={modeloId}
+        setModeloId={setModeloId}
+        clienteId={clienteId}
+        setClienteId={setClienteId}
+        numeroSerie={numeroSerie}
+        setNumeroSerie={setNumeroSerie}
+        imei={imei}
+        setImei={setImei}
+        capacidad={capacidad}
+        setCapacidad={setCapacidad}
+        tipoGas={tipoGas}
+        setTipoGas={setTipoGas}
+        voltaje={voltaje}
+        setVoltaje={setVoltaje}
+        notasTecnicas={notasTecnicas}
+        setNotasTecnicas={setNotasTecnicas}
+        fieldErrors={fieldErrors}
+        clientes={clientes}
+        modelos={modelos}
+        marcas={marcas}
+        onCancel={closeModal}
+        onSubmit={handleSubmit}
+      />
 
       {/* ───── Delete Confirm ───── */}
       <ConfirmDialog
