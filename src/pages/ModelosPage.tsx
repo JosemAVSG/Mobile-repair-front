@@ -8,9 +8,11 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
+import { Badge } from '../components/atoms/Badge';
 import { apiGet, apiPost, apiDelete } from '../api/client';
-import { formatDate } from '../utils/formatters';
+import { formatDate, CATEGORIA_MARCA_LABELS } from '../utils/formatters';
 import type { Modelo, ModeloRequest, Marca } from '../types';
+import { CategoriaMarca } from '../types';
 
 // ──────────────────────────────────────────────
 // Types
@@ -20,6 +22,7 @@ interface ModeloRow {
   id: number;
   nombre: string;
   marcaNombre: string;
+  marcaCategoria: CategoriaMarca | null;
   createdAt: string;
 }
 
@@ -35,12 +38,32 @@ function buildMarcaMap(marcas: Marca[]): Map<number, string> {
   return map;
 }
 
+function buildMarcaObjMap(marcas: Marca[]): Map<number, Marca> {
+  const map = new Map<number, Marca>();
+  for (const m of marcas) {
+    map.set(m.id, m);
+  }
+  return map;
+}
+
 function buildMarcaOptions(marcas: Marca[]): { value: string; label: string }[] {
   return marcas.map((m) => ({
     value: String(m.id),
     label: m.nombre,
   }));
 }
+
+const CATEGORIA_FILTER_OPTIONS = [
+  { value: CategoriaMarca.CELULARES, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES] },
+  { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
+  { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
+];
+
+const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 'warning' | 'default' }> = {
+  [CategoriaMarca.CELULARES]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES], variant: 'info' },
+  [CategoriaMarca.LINEA_BLANCA]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA], variant: 'warning' },
+  [CategoriaMarca.COMPUTADORAS]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS], variant: 'default' },
+};
 
 // ──────────────────────────────────────────────
 // Modelos Page
@@ -84,11 +107,13 @@ export function ModelosPage() {
 
   // Filter state
   const [filtroMarca, setFiltroMarca] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
 
   // Create modal state
   const [createOpen, setCreateOpen] = useState(false);
   const [nombre, setNombre] = useState('');
   const [marcaId, setMarcaId] = useState('');
+  const [filtroCategoriaForm, setFiltroCategoriaForm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ nombre?: string; marcaId?: string }>({});
 
@@ -98,22 +123,38 @@ export function ModelosPage() {
 
   // Build maps
   const marcaMap = useMemo(() => buildMarcaMap(marcasReq.data ?? []), [marcasReq.data]);
+  const marcaObjMap = useMemo(() => buildMarcaObjMap(marcasReq.data ?? []), [marcasReq.data]);
   const marcaOptions = useMemo(() => buildMarcaOptions(marcasReq.data ?? []), [marcasReq.data]);
+
+  const formMarcaOptions = useMemo(() => {
+    const marcas = marcasReq.data ?? [];
+    const filtradas = filtroCategoriaForm
+      ? marcas.filter((m) => m.categoria === filtroCategoriaForm)
+      : marcas;
+    return buildMarcaOptions(filtradas);
+  }, [marcasReq.data, filtroCategoriaForm]);
 
   // Filtered & enriched rows
   const rows = useMemo<ModeloRow[]>(() => {
     const modelosList = modelos ?? [];
-    const filtered = filtroMarca
-      ? modelosList.filter((m) => String(m.marcaId) === filtroMarca)
-      : modelosList;
+    let filtered = modelosList;
+    if (filtroMarca) {
+      filtered = filtered.filter((m) => String(m.marcaId) === filtroMarca);
+    }
+    if (filtroCategoria) {
+      filtered = filtered.filter(
+        (m) => marcaObjMap.get(m.marcaId)?.categoria === filtroCategoria,
+      );
+    }
 
     return filtered.map((m) => ({
       id: m.id,
       nombre: m.nombre,
       marcaNombre: marcaMap.get(m.marcaId) ?? `Marca #${m.marcaId}`,
+      marcaCategoria: marcaObjMap.get(m.marcaId)?.categoria ?? null,
       createdAt: m.createdAt,
     }));
-  }, [modelos, filtroMarca, marcaMap]);
+  }, [modelos, filtroMarca, filtroCategoria, marcaMap, marcaObjMap]);
 
   // ───── Validation ─────
 
@@ -140,6 +181,7 @@ export function ModelosPage() {
       setCreateOpen(false);
       setNombre('');
       setMarcaId('');
+      setFiltroCategoriaForm('');
       setFieldErrors({});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al crear modelo';
@@ -172,6 +214,7 @@ export function ModelosPage() {
     setCreateOpen(false);
     setNombre('');
     setMarcaId('');
+    setFiltroCategoriaForm('');
     setFieldErrors({});
   }, []);
 
@@ -180,6 +223,15 @@ export function ModelosPage() {
   const columns: Column<ModeloRow>[] = [
     { key: 'nombre', label: 'Nombre', sortable: true },
     { key: 'marcaNombre', label: 'Marca', sortable: true },
+    {
+      key: 'marcaCategoria',
+      label: 'Categoría',
+      render: (row) => {
+        if (!row.marcaCategoria) return '—';
+        const cfg = categoriaBadge[row.marcaCategoria];
+        return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
+      },
+    },
     {
       key: 'createdAt',
       label: 'Creado',
@@ -223,15 +275,26 @@ export function ModelosPage() {
         </Button>
       </div>
 
-      {/* Filter by Marca */}
-      <div className="max-w-xs">
-        <Select
-          label="Filtrar por Marca"
-          options={marcaOptions}
-          placeholder="Todas las marcas"
-          value={filtroMarca}
-          onChange={(e) => setFiltroMarca(e.target.value)}
-        />
+      {/* Filters */}
+      <div className="flex gap-4">
+        <div className="max-w-xs">
+          <Select
+            label="Filtrar por Marca"
+            options={marcaOptions}
+            placeholder="Todas las marcas"
+            value={filtroMarca}
+            onChange={(e) => setFiltroMarca(e.target.value)}
+          />
+        </div>
+        <div className="max-w-xs">
+          <Select
+            label="Filtrar por Categoría"
+            options={CATEGORIA_FILTER_OPTIONS}
+            placeholder="Todas las categorías"
+            value={filtroCategoria}
+            onChange={(e) => setFiltroCategoria(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Error state */}
@@ -285,9 +348,21 @@ export function ModelosPage() {
             />
           </FormField>
 
+          <FormField label="Categoría">
+            <Select
+              options={CATEGORIA_FILTER_OPTIONS}
+              placeholder="Todas las categorías"
+              value={filtroCategoriaForm}
+              onChange={(e) => {
+                setFiltroCategoriaForm(e.target.value);
+                setMarcaId('');
+              }}
+            />
+          </FormField>
+
           <FormField label="Marca" required error={fieldErrors.marcaId}>
             <Select
-              options={marcaOptions}
+              options={formMarcaOptions}
               placeholder="Seleccionar marca..."
               value={marcaId}
               onChange={(e) => setMarcaId(e.target.value)}

@@ -10,7 +10,7 @@ import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiGet, apiPost } from '../api/client';
-import { formatDateTime, formatCurrency } from '../utils/formatters';
+import { formatDateTime, formatCurrency, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente, Dispositivo, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo } from '../types';
 
@@ -32,15 +32,6 @@ interface OrdenRow {
 // Helpers
 // ──────────────────────────────────────────────
 
-const tipoDispositivoLabel: Record<TipoDispositivo, string> = {
-  [TipoDispositivo.CELULAR]: 'Celular',
-  [TipoDispositivo.MICROONDAS]: 'Microondas',
-  [TipoDispositivo.NEVERA]: 'Nevera',
-  [TipoDispositivo.COCINA]: 'Cocina',
-  [TipoDispositivo.LAVADORA]: 'Lavadora',
-  [TipoDispositivo.COMPUTADORA]: 'Computadora',
-};
-
 const ESTADO_LABELS: Record<EstadoOrden, string> = {
   [EstadoOrden.REGISTRO]: 'Registrado',
   [EstadoOrden.DIAGNOSTICO]: 'En Diagnóstico',
@@ -59,6 +50,11 @@ const estadoOptions = [
   })),
 ];
 
+const tipoOptions = Object.values(TipoDispositivo).map((tipo) => ({
+  value: tipo,
+  label: TIPO_DISPOSITIVO_LABELS[tipo],
+}));
+
 // ──────────────────────────────────────────────
 // OrdenesPage
 // ──────────────────────────────────────────────
@@ -70,6 +66,7 @@ export function OrdenesPage() {
   // ───── Estado filter ─────
 
   const [estadoFilter, setEstadoFilter] = useState<EstadoOrden | ''>('');
+  const [filtroTipo, setFiltroTipo] = useState('');
 
   // Query key changes with the filter so TanStack Query refetches automatically
   const ordenesQueryKey = estadoFilter
@@ -140,7 +137,16 @@ export function OrdenesPage() {
   // ───── Enriched rows ─────
 
   const rows = useMemo<OrdenRow[]>(() => {
-    return (ordenes ?? []).map((orden) => {
+    let ordenesList = ordenes ?? [];
+
+    if (filtroTipo) {
+      ordenesList = ordenesList.filter((orden) => {
+        const dispositivo = dispositivoMap.get(orden.dispositivoId);
+        return dispositivo?.tipo === filtroTipo;
+      });
+    }
+
+    return ordenesList.map((orden) => {
       const cliente = clienteMap.get(orden.clienteId);
       const dispositivo = dispositivoMap.get(orden.dispositivoId);
       const modelo = dispositivo
@@ -148,7 +154,7 @@ export function OrdenesPage() {
         : null;
 
       const dispLabel = dispositivo
-        ? `${tipoDispositivoLabel[dispositivo.tipo] ?? dispositivo.tipo} - ${modelo?.nombre ?? `Modelo #${dispositivo.modeloId}`}`
+        ? `${TIPO_DISPOSITIVO_LABELS[dispositivo.tipo] ?? dispositivo.tipo} - ${modelo?.nombre ?? `Modelo #${dispositivo.modeloId}`}`
         : `Dispositivo #${orden.dispositivoId}`;
 
       return {
@@ -161,7 +167,7 @@ export function OrdenesPage() {
         fechaEntrada: orden.fechaEntrada,
       };
     });
-  }, [ordenes, clienteMap, dispositivoMap, modeloMap]);
+  }, [ordenes, filtroTipo, clienteMap, dispositivoMap, modeloMap]);
 
   // ───── Columns ─────
 
@@ -315,7 +321,7 @@ export function OrdenesPage() {
         </div>
       </div>
 
-      {/* Estado filter */}
+      {/* Filters */}
       <div className="flex items-center gap-4">
         <div className="w-56">
           <Select
@@ -326,6 +332,15 @@ export function OrdenesPage() {
               setEstadoFilter(e.target.value as EstadoOrden | '')
             }
             placeholder=""
+          />
+        </div>
+        <div className="w-56">
+          <Select
+            label="Filtrar por Tipo de Dispositivo"
+            options={tipoOptions}
+            placeholder="Todos los tipos"
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
           />
         </div>
       </div>
@@ -418,7 +433,7 @@ export function OrdenesPage() {
               <Select
                 options={dispositivosClienteList.map((d) => {
                   const modelo = modeloMap.get(d.modeloId);
-                  const tipo = tipoDispositivoLabel[d.tipo] ?? d.tipo;
+                  const tipo = TIPO_DISPOSITIVO_LABELS[d.tipo] ?? d.tipo;
                   const modeloInfo = modelo?.nombre ?? `#${d.modeloId}`;
                   return {
                     value: String(d.id),

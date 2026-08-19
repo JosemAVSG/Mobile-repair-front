@@ -11,9 +11,9 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
-import { formatDate } from '../utils/formatters';
-import type { Dispositivo, DispositivoRequest, Modelo, Cliente } from '../types';
-import { TipoDispositivo } from '../types';
+import { formatDate, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
+import type { Dispositivo, DispositivoRequest, Modelo, Cliente, Marca } from '../types';
+import { TipoDispositivo, CategoriaMarca } from '../types';
 
 // ──────────────────────────────────────────────
 // Types
@@ -33,21 +33,21 @@ interface DispositivoRow {
 // ──────────────────────────────────────────────
 
 const TIPO_OPTIONS = [
-  { value: TipoDispositivo.CELULAR, label: 'Celular' },
-  { value: TipoDispositivo.MICROONDAS, label: 'Microondas' },
-  { value: TipoDispositivo.NEVERA, label: 'Nevera' },
-  { value: TipoDispositivo.COCINA, label: 'Cocina' },
-  { value: TipoDispositivo.LAVADORA, label: 'Lavadora' },
-  { value: TipoDispositivo.COMPUTADORA, label: 'Computadora' },
+  { value: TipoDispositivo.CELULAR, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.CELULAR] },
+  { value: TipoDispositivo.MICROONDAS, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.MICROONDAS] },
+  { value: TipoDispositivo.NEVERA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.NEVERA] },
+  { value: TipoDispositivo.COCINA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COCINA] },
+  { value: TipoDispositivo.LAVADORA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.LAVADORA] },
+  { value: TipoDispositivo.COMPUTADORA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COMPUTADORA] },
 ];
 
 const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [TipoDispositivo.CELULAR]: { label: 'Celular', variant: 'info' },
-  [TipoDispositivo.MICROONDAS]: { label: 'Microondas', variant: 'warning' },
-  [TipoDispositivo.NEVERA]: { label: 'Nevera', variant: 'default' },
-  [TipoDispositivo.COCINA]: { label: 'Cocina', variant: 'warning' },
-  [TipoDispositivo.LAVADORA]: { label: 'Lavadora', variant: 'info' },
-  [TipoDispositivo.COMPUTADORA]: { label: 'Computadora', variant: 'default' },
+  [TipoDispositivo.CELULAR]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.CELULAR], variant: 'info' },
+  [TipoDispositivo.MICROONDAS]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.MICROONDAS], variant: 'warning' },
+  [TipoDispositivo.NEVERA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.NEVERA], variant: 'default' },
+  [TipoDispositivo.COCINA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COCINA], variant: 'warning' },
+  [TipoDispositivo.LAVADORA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.LAVADORA], variant: 'info' },
+  [TipoDispositivo.COMPUTADORA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COMPUTADORA], variant: 'default' },
 };
 
 const LINEA_BLANCA_TIPOS = new Set([
@@ -56,6 +56,28 @@ const LINEA_BLANCA_TIPOS = new Set([
   TipoDispositivo.COCINA,
   TipoDispositivo.LAVADORA,
 ]);
+
+function buildMarcaCategoriaMap(marcas: Marca[]): Map<number, CategoriaMarca> {
+  const map = new Map<number, CategoriaMarca>();
+  for (const m of marcas) {
+    map.set(m.id, m.categoria);
+  }
+  return map;
+}
+
+function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
+  switch (tipo) {
+    case TipoDispositivo.CELULAR:
+      return CategoriaMarca.CELULARES;
+    case TipoDispositivo.COMPUTADORA:
+      return CategoriaMarca.COMPUTADORAS;
+    case TipoDispositivo.MICROONDAS:
+    case TipoDispositivo.NEVERA:
+    case TipoDispositivo.COCINA:
+    case TipoDispositivo.LAVADORA:
+      return CategoriaMarca.LINEA_BLANCA;
+  }
+}
 
 function buildModeloMap(modelos: Modelo[]): Map<number, string> {
   const map = new Map<number, string>();
@@ -125,6 +147,10 @@ export function DispositivosPage() {
     queryKey: ['clientes'],
     queryFn: () => apiGet<Cliente[]>('/api/clientes'),
   });
+  const { data: marcas } = useQuery({
+    queryKey: ['marcas'],
+    queryFn: () => apiGet<Marca[]>('/api/marcas'),
+  });
 
   const saveMutation = useMutation({
     mutationFn: (body: DispositivoRequest) =>
@@ -143,6 +169,7 @@ export function DispositivosPage() {
 
   // Filter state
   const [filtroCliente, setFiltroCliente] = useState(clienteIdFilter);
+  const [filtroTipo, setFiltroTipo] = useState('');
 
   // Modal state (shared for create and edit)
   const [modalOpen, setModalOpen] = useState(false);
@@ -169,7 +196,23 @@ export function DispositivosPage() {
 
   const isLineaBlanca = tipo !== '' && LINEA_BLANCA_TIPOS.has(tipo as TipoDispositivo);
 
-  const modeloOptions = useMemo(() => buildModeloOptions(modelos ?? []), [modelos]);
+  const marcaCategoriaMap = useMemo(
+    () => buildMarcaCategoriaMap(marcas ?? []),
+    [marcas],
+  );
+
+  const modeloOptions = useMemo(() => {
+    const modelosList = modelos ?? [];
+    const listaFiltrada =
+      tipo !== ''
+        ? modelosList.filter((m) => {
+            const cat = marcaCategoriaMap.get(m.marcaId);
+            return cat === categoriaDeTipo(tipo as TipoDispositivo);
+          })
+        : modelosList;
+    return buildModeloOptions(listaFiltrada);
+  }, [modelos, tipo, marcaCategoriaMap]);
+
   const clienteOptions = useMemo(() => buildClienteOptions(clientes ?? []), [clientes]);
 
   // Enriched rows
@@ -178,9 +221,12 @@ export function DispositivosPage() {
 
   const rows = useMemo<DispositivoRow[]>(() => {
     const list = dispositivos ?? [];
-    const filtered = filtroCliente
+    let filtered = filtroCliente
       ? list.filter((d) => String(d.clienteId) === filtroCliente)
       : list;
+    if (filtroTipo) {
+      filtered = filtered.filter((d) => d.tipo === (filtroTipo as TipoDispositivo));
+    }
 
     return filtered.map((d) => ({
       id: d.id,
@@ -190,7 +236,7 @@ export function DispositivosPage() {
       identificador: d.imei ?? d.numeroSerie ?? '—',
       createdAt: d.createdAt,
     }));
-  }, [dispositivos, filtroCliente, modeloMap, clienteMap]);
+  }, [dispositivos, filtroCliente, filtroTipo, modeloMap, clienteMap]);
 
   // ───── Validation ─────
 
@@ -319,7 +365,7 @@ export function DispositivosPage() {
     { key: 'clienteNombre', label: 'Cliente', sortable: true },
     {
       key: 'identificador',
-      label: 'IMEI / Serie',
+      label: 'Número de Serie / IMEI',
       render: (row) => row.identificador,
     },
     {
@@ -373,15 +419,26 @@ export function DispositivosPage() {
         <Button onClick={openCreate}>Nuevo Dispositivo</Button>
       </div>
 
-      {/* Filter by Cliente */}
-      <div className="max-w-xs">
-        <Select
-          label="Filtrar por Cliente"
-          options={clienteOptions}
-          placeholder="Todos los clientes"
-          value={filtroCliente}
-          onChange={(e) => setFiltroCliente(e.target.value)}
-        />
+      {/* Filters */}
+      <div className="flex gap-4">
+        <div className="max-w-xs">
+          <Select
+            label="Filtrar por Cliente"
+            options={clienteOptions}
+            placeholder="Todos los clientes"
+            value={filtroCliente}
+            onChange={(e) => setFiltroCliente(e.target.value)}
+          />
+        </div>
+        <div className="max-w-xs">
+          <Select
+            label="Filtrar por Tipo"
+            options={TIPO_OPTIONS}
+            placeholder="Todos los tipos"
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Error state */}
@@ -435,6 +492,7 @@ export function DispositivosPage() {
               onChange={(e) => {
                 const newTipo = e.target.value as TipoDispositivo | '';
                 setTipo(newTipo);
+                setModeloId('');
                 // Reset conditional fields when tipo changes
                 setNumeroSerie('');
                 setImei('');

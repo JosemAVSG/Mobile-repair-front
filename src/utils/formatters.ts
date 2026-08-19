@@ -1,4 +1,33 @@
 // ──────────────────────────────────────────────
+// Labels (tipos y categorías)
+// ──────────────────────────────────────────────
+
+import { TipoDispositivo, CategoriaMarca } from '../types';
+
+export const TIPO_DISPOSITIVO_LABELS: Record<TipoDispositivo, string> = {
+  [TipoDispositivo.CELULAR]: 'Celular',
+  [TipoDispositivo.MICROONDAS]: 'Microondas',
+  [TipoDispositivo.NEVERA]: 'Nevera',
+  [TipoDispositivo.COCINA]: 'Cocina',
+  [TipoDispositivo.LAVADORA]: 'Lavadora',
+  [TipoDispositivo.COMPUTADORA]: 'Computadora',
+};
+
+export const CATEGORIA_MARCA_LABELS: Record<CategoriaMarca, string> = {
+  [CategoriaMarca.CELULARES]: 'Celulares',
+  [CategoriaMarca.LINEA_BLANCA]: 'Línea Blanca',
+  [CategoriaMarca.COMPUTADORAS]: 'Computadoras',
+};
+
+export function tipoDispositivoLabel(tipo: TipoDispositivo): string {
+  return TIPO_DISPOSITIVO_LABELS[tipo];
+}
+
+export function categoriaMarcaLabel(cat: CategoriaMarca): string {
+  return CATEGORIA_MARCA_LABELS[cat];
+}
+
+// ──────────────────────────────────────────────
 // Formatters
 // ──────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
@@ -10,7 +10,7 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiGet, apiPost, apiDelete } from '../api/client';
-import { formatDate } from '../utils/formatters';
+import { formatDate, CATEGORIA_MARCA_LABELS } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
 import { CategoriaMarca } from '../types';
 
@@ -19,15 +19,15 @@ import { CategoriaMarca } from '../types';
 // ──────────────────────────────────────────────
 
 const CATEGORIA_OPTIONS = [
-  { value: CategoriaMarca.CELULARES, label: 'Celulares' },
-  { value: CategoriaMarca.LINEA_BLANCA, label: 'Línea Blanca' },
-  { value: CategoriaMarca.COMPUTADORAS, label: 'Computadoras' },
+  { value: CategoriaMarca.CELULARES, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES] },
+  { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
+  { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
 ];
 
 const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [CategoriaMarca.CELULARES]: { label: 'Celulares', variant: 'info' },
-  [CategoriaMarca.LINEA_BLANCA]: { label: 'Línea Blanca', variant: 'warning' },
-  [CategoriaMarca.COMPUTADORAS]: { label: 'Computadoras', variant: 'default' },
+  [CategoriaMarca.CELULARES]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES], variant: 'info' },
+  [CategoriaMarca.LINEA_BLANCA]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA], variant: 'warning' },
+  [CategoriaMarca.COMPUTADORAS]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS], variant: 'default' },
 };
 
 // ──────────────────────────────────────────────
@@ -72,9 +72,18 @@ export function MarcasPage() {
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ nombre?: string; categoria?: string }>({});
 
+  // Filter state
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Marca | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const rows = useMemo<Marca[]>(() => {
+    const marcasList = marcas ?? [];
+    if (!filtroCategoria) return marcasList;
+    return marcasList.filter((m) => m.categoria === filtroCategoria);
+  }, [marcas, filtroCategoria]);
 
   // ───── Validation ─────
 
@@ -188,6 +197,17 @@ export function MarcasPage() {
         </Button>
       </div>
 
+      {/* Filter by Category */}
+      <div className="max-w-xs">
+        <Select
+          label="Filtrar por Categoría"
+          options={CATEGORIA_OPTIONS}
+          placeholder="Todas las categorías"
+          value={filtroCategoria}
+          onChange={(e) => setFiltroCategoria(e.target.value)}
+        />
+      </div>
+
       {/* Error state */}
       {error && (
         <Card>
@@ -206,7 +226,7 @@ export function MarcasPage() {
       {!error && (
         <DataTable<Marca>
           columns={columns}
-          data={marcas ?? []}
+          data={rows}
           loading={loading}
           emptyMessage="No hay marcas registradas"
           keyExtractor={(row) => row.id}
