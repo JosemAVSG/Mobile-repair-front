@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -10,10 +10,12 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
-import { formatDate, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
-import type { Dispositivo, DispositivoRequest, Modelo, Cliente, Marca } from '../types';
+import { apiPost, apiPut, apiDelete } from '../api/client';
+import { formatDate, TIPO_DISPOSITIVO_LABELS, tipoBadgeConfig } from '../utils/formatters';
+import { buildModeloMap, buildClienteMap, buildModeloOptions, buildClienteOptions } from '../utils/maps';
+import type { Dispositivo, DispositivoRequest, Marca } from '../types';
 import { TipoDispositivo, CategoriaMarca } from '../types';
+import { useMarcas, useModelos, useClientes, useDispositivos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -40,15 +42,6 @@ const TIPO_OPTIONS = [
   { value: TipoDispositivo.LAVADORA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.LAVADORA] },
   { value: TipoDispositivo.COMPUTADORA, label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COMPUTADORA] },
 ];
-
-const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [TipoDispositivo.CELULAR]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.CELULAR], variant: 'info' },
-  [TipoDispositivo.MICROONDAS]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.MICROONDAS], variant: 'warning' },
-  [TipoDispositivo.NEVERA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.NEVERA], variant: 'default' },
-  [TipoDispositivo.COCINA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COCINA], variant: 'warning' },
-  [TipoDispositivo.LAVADORA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.LAVADORA], variant: 'info' },
-  [TipoDispositivo.COMPUTADORA]: { label: TIPO_DISPOSITIVO_LABELS[TipoDispositivo.COMPUTADORA], variant: 'default' },
-};
 
 const LINEA_BLANCA_TIPOS = new Set([
   TipoDispositivo.MICROONDAS,
@@ -79,36 +72,6 @@ function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
   }
 }
 
-function buildModeloMap(modelos: Modelo[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const m of modelos) {
-    map.set(m.id, m.nombre);
-  }
-  return map;
-}
-
-function buildClienteMap(clientes: Cliente[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const c of clientes) {
-    map.set(c.id, c.nombre);
-  }
-  return map;
-}
-
-function buildModeloOptions(modelos: Modelo[]): { value: string; label: string }[] {
-  return modelos.map((m) => ({
-    value: String(m.id),
-    label: m.nombre,
-  }));
-}
-
-function buildClienteOptions(clientes: Cliente[]): { value: string; label: string }[] {
-  return clientes.map((c) => ({
-    value: String(c.id),
-    label: c.nombre,
-  }));
-}
-
 // ──────────────────────────────────────────────
 // Dispositivos Page
 // ──────────────────────────────────────────────
@@ -126,10 +89,7 @@ export function DispositivosPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['dispositivos'],
-    queryFn: () => apiGet<Dispositivo[]>('/api/dispositivos'),
-  });
+  } = useDispositivos();
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -139,18 +99,9 @@ export function DispositivosPage() {
     : null;
 
   // Fetch modelos and clientes for enrichment and form selects
-  const { data: modelos } = useQuery({
-    queryKey: ['modelos'],
-    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
-  });
-  const { data: clientes } = useQuery({
-    queryKey: ['clientes'],
-    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
-  });
-  const { data: marcas } = useQuery({
-    queryKey: ['marcas'],
-    queryFn: () => apiGet<Marca[]>('/api/marcas'),
-  });
+  const { data: modelos } = useModelos();
+  const { data: clientes } = useClientes();
+  const { data: marcas } = useMarcas();
 
   const saveMutation = useMutation({
     mutationFn: (body: DispositivoRequest) =>
@@ -357,7 +308,7 @@ export function DispositivosPage() {
       label: 'Tipo',
       sortable: true,
       render: (row) => {
-        const cfg = tipoBadge[row.tipo];
+        const cfg = tipoBadgeConfig(row.tipo);
         return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
       },
     },

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -11,10 +11,11 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPut, apiDelete } from '../api/client';
-import { formatDate, formatCurrency } from '../utils/formatters';
-import type { Cliente, ClienteRequest, Dispositivo, OrdenTrabajo } from '../types';
+import { apiPut, apiDelete } from '../api/client';
+import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters';
+import type { Cliente, ClienteRequest, OrdenTrabajo } from '../types';
 import { TipoDispositivo } from '../types';
+import { useCliente, useDispositivosPorCliente, useOrdenes } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -28,19 +29,6 @@ interface DispositivoRow {
 }
 
 // ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-
-const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [TipoDispositivo.CELULAR]: { label: 'Celular', variant: 'info' },
-  [TipoDispositivo.MICROONDAS]: { label: 'Microondas', variant: 'warning' },
-  [TipoDispositivo.NEVERA]: { label: 'Nevera', variant: 'default' },
-  [TipoDispositivo.COCINA]: { label: 'Cocina', variant: 'warning' },
-  [TipoDispositivo.LAVADORA]: { label: 'Lavadora', variant: 'info' },
-  [TipoDispositivo.COMPUTADORA]: { label: 'Computadora', variant: 'default' },
-};
-
-// ──────────────────────────────────────────────
 // Cliente Detail Page
 // ──────────────────────────────────────────────
 
@@ -48,6 +36,7 @@ export function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const idNum = id ? Number(id) : undefined;
 
   // Fetch cliente
   const {
@@ -56,11 +45,7 @@ export function ClienteDetailPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['clientes', id],
-    queryFn: () => apiGet<Cliente>(`/api/clientes/${id}`),
-    enabled: Boolean(id),
-  });
+  } = useCliente(idNum);
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -74,11 +59,7 @@ export function ClienteDetailPage() {
     data: dispositivos,
     isPending: dispPending,
     isFetching: dispFetching,
-  } = useQuery({
-    queryKey: ['dispositivos', 'cliente', id],
-    queryFn: () => apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${id}`),
-    enabled: Boolean(id),
-  });
+  } = useDispositivosPorCliente(idNum);
 
   const loadingDisp = dispPending || dispFetching;
 
@@ -87,17 +68,14 @@ export function ClienteDetailPage() {
     data: ordenes,
     isPending: ordPending,
     isFetching: ordFetching,
-  } = useQuery({
-    queryKey: ['ordenes'],
-    queryFn: () => apiGet<OrdenTrabajo[]>('/api/ordenes'),
-  });
+  } = useOrdenes();
 
   const loadingOrd = ordPending || ordFetching;
 
   const updateMutation = useMutation({
     mutationFn: (body: ClienteRequest) => apiPut<Cliente>(`/api/clientes/${cliente?.id}`, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['clientes', id] });
+      queryClient.invalidateQueries({ queryKey: ['clientes', idNum] });
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
     },
   });
@@ -204,7 +182,7 @@ export function ClienteDetailPage() {
       key: 'tipo',
       label: 'Tipo',
       render: (row) => {
-        const cfg = tipoBadge[row.tipo];
+        const cfg = tipoBadgeConfig(row.tipo);
         return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
       },
     },

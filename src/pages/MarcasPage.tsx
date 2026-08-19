@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -9,10 +9,11 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost, apiDelete } from '../api/client';
-import { formatDate, CATEGORIA_MARCA_LABELS } from '../utils/formatters';
+import { apiPost, apiDelete } from '../api/client';
+import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
 import { CategoriaMarca } from '../types';
+import { useMarcas } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -23,12 +24,6 @@ const CATEGORIA_OPTIONS = [
   { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
   { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
 ];
-
-const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [CategoriaMarca.CELULARES]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES], variant: 'info' },
-  [CategoriaMarca.LINEA_BLANCA]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA], variant: 'warning' },
-  [CategoriaMarca.COMPUTADORAS]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS], variant: 'default' },
-};
 
 // ──────────────────────────────────────────────
 // Marcas Page
@@ -43,10 +38,7 @@ export function MarcasPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['marcas'],
-    queryFn: () => apiGet<Marca[]>('/api/marcas'),
-  });
+  } = useMarcas();
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -154,7 +146,7 @@ export function MarcasPage() {
       label: 'Categoría',
       sortable: true,
       render: (row) => {
-        const cfg = categoriaBadge[row.categoria];
+        const cfg = categoriaBadgeConfig(row.categoria);
         return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
       },
     },

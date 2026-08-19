@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -9,10 +9,11 @@ import { Spinner } from '../components/atoms/Spinner';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost } from '../api/client';
-import { formatDateTime, formatCurrency, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
+import { apiPost } from '../api/client';
+import { formatDateTime, formatCurrency, tipoDispositivoLabel } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente, Dispositivo, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo } from '../types';
+import { useOrdenes, useClientes, useDispositivos, useModelos, useDispositivosPorCliente } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -52,7 +53,7 @@ const estadoOptions = [
 
 const tipoOptions = Object.values(TipoDispositivo).map((tipo) => ({
   value: tipo,
-  label: TIPO_DISPOSITIVO_LABELS[tipo],
+  label: tipoDispositivoLabel(tipo),
 }));
 
 // ──────────────────────────────────────────────
@@ -69,25 +70,13 @@ export function OrdenesPage() {
   const [filtroTipo, setFiltroTipo] = useState('');
 
   // Query key changes with the filter so TanStack Query refetches automatically
-  const ordenesQueryKey = estadoFilter
-    ? ['ordenes', 'estado', estadoFilter]
-    : ['ordenes'];
-
   const {
     data: ordenes,
     isPending,
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ordenesQueryKey,
-    queryFn: () =>
-      apiGet<OrdenTrabajo[]>(
-        estadoFilter
-          ? `/api/ordenes/estado/${estadoFilter}`
-          : '/api/ordenes',
-      ),
-  });
+  } = useOrdenes(estadoFilter || undefined);
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -98,18 +87,9 @@ export function OrdenesPage() {
 
   // ───── Supporting data for enrichment ─────
 
-  const { data: clientes } = useQuery({
-    queryKey: ['clientes'],
-    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
-  });
-  const { data: dispositivos } = useQuery({
-    queryKey: ['dispositivos'],
-    queryFn: () => apiGet<Dispositivo[]>('/api/dispositivos'),
-  });
-  const { data: modelos } = useQuery({
-    queryKey: ['modelos'],
-    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
-  });
+  const { data: clientes } = useClientes();
+  const { data: dispositivos } = useDispositivos();
+  const { data: modelos } = useModelos();
 
   const createMutation = useMutation({
     mutationFn: (body: OrdenRequest) => apiPost<OrdenTrabajo>('/api/ordenes', body),
@@ -154,7 +134,7 @@ export function OrdenesPage() {
         : null;
 
       const dispLabel = dispositivo
-        ? `${TIPO_DISPOSITIVO_LABELS[dispositivo.tipo] ?? dispositivo.tipo} - ${modelo?.nombre ?? `Modelo #${dispositivo.modeloId}`}`
+        ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo} - ${modelo?.nombre ?? `Modelo #${dispositivo.modeloId}`}`
         : `Dispositivo #${orden.dispositivoId}`;
 
       return {
@@ -226,12 +206,7 @@ export function OrdenesPage() {
     data: dispositivosCliente,
     isPending: dispsPending,
     isFetching: dispsFetching,
-  } = useQuery({
-    queryKey: ['dispositivos', 'cliente', createClienteId],
-    queryFn: () =>
-      apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${createClienteId}`),
-    enabled: Boolean(createClienteId),
-  });
+  } = useDispositivosPorCliente(createClienteId ? Number(createClienteId) : undefined);
 
   const dispositivosClienteList = dispositivosCliente ?? [];
   const loadingDisps = dispsPending || dispsFetching;
@@ -433,7 +408,7 @@ export function OrdenesPage() {
               <Select
                 options={dispositivosClienteList.map((d) => {
                   const modelo = modeloMap.get(d.modeloId);
-                  const tipo = TIPO_DISPOSITIVO_LABELS[d.tipo] ?? d.tipo;
+                  const tipo = tipoDispositivoLabel(d.tipo) ?? d.tipo;
                   const modeloInfo = modelo?.nombre ?? `#${d.modeloId}`;
                   return {
                     value: String(d.id),

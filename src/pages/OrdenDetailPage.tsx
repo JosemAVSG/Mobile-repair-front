@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -12,18 +12,17 @@ import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
-import { apiGet, apiPut, apiPost, ApiError } from '../api/client';
-import { formatDate, formatDateTime, formatCurrency } from '../utils/formatters';
-import type {
-  OrdenTrabajo,
-  Cliente,
-  Dispositivo,
-  Modelo,
-  Reparacion,
-  ReparacionRequest,
-  HistorialEntry,
-} from '../types';
-import { EstadoOrden, TipoReparacion, TipoDispositivo } from '../types';
+import { apiPut, apiPost, ApiError } from '../api/client';
+import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel } from '../utils/formatters';
+import type { OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
+import { EstadoOrden, TipoReparacion } from '../types';
+import {
+  useOrden,
+  useCliente,
+  useDispositivo,
+  useModelo,
+  useHistorialOrden,
+} from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Estado transition map
@@ -74,15 +73,8 @@ const tipoReparacionLabels: Record<TipoReparacion, string> = {
   [TipoReparacion.OTRO]: 'Otro',
 };
 
-const tipoDispositivoLabels: Record<TipoDispositivo, string> = {
-  [TipoDispositivo.CELULAR]: 'Celular',
-  [TipoDispositivo.MICROONDAS]: 'Microondas',
-  [TipoDispositivo.NEVERA]: 'Nevera',
-  [TipoDispositivo.COCINA]: 'Cocina',
-  [TipoDispositivo.LAVADORA]: 'Lavadora',
-  [TipoDispositivo.COMPUTADORA]: 'Computadora',
-};
-
+// ──────────────────────────────────────────────
+// OrdenDetailPage
 // ──────────────────────────────────────────────
 // OrdenDetailPage
 // ──────────────────────────────────────────────
@@ -92,7 +84,6 @@ export function OrdenDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const ordenId = Number(id);
-  const ordenIdValid = Number.isFinite(ordenId);
 
   // ───── Data ─────
 
@@ -103,49 +94,31 @@ export function OrdenDetailPage() {
     isFetching: ordenFetching,
     error: ordenError,
     refetch,
-  } = useQuery({
-    queryKey: ['ordenes', ordenId],
-    queryFn: () => apiGet<OrdenTrabajo>(`/api/ordenes/${ordenId}`),
-    enabled: ordenIdValid,
-  });
+  } = useOrden(ordenId);
 
   // Enrichment (non-critical — failures leave fallbacks in place)
-  const { data: cliente, isPending: clientePending, isFetching: clienteFetching } = useQuery({
-    queryKey: ['clientes', orden?.clienteId],
-    queryFn: () => apiGet<Cliente>(`/api/clientes/${orden?.clienteId}`),
-    enabled: ordenIdValid && Boolean(orden?.clienteId),
-  });
+  const { data: cliente, isPending: clientePending, isFetching: clienteFetching } = useCliente(
+    orden?.clienteId,
+  );
 
   const {
     data: dispositivo,
     isPending: dispositivoPending,
     isFetching: dispositivoFetching,
-  } = useQuery({
-    queryKey: ['dispositivos', orden?.dispositivoId],
-    queryFn: () => apiGet<Dispositivo>(`/api/dispositivos/${orden?.dispositivoId}`),
-    enabled: ordenIdValid && Boolean(orden?.dispositivoId),
-  });
+  } = useDispositivo(orden?.dispositivoId);
 
   const {
     data: modelo,
     isPending: modeloPending,
     isFetching: modeloFetching,
-  } = useQuery({
-    queryKey: ['modelos', dispositivo?.modeloId],
-    queryFn: () => apiGet<Modelo>(`/api/modelos/${dispositivo?.modeloId}`),
-    enabled: Boolean(dispositivo?.modeloId),
-  });
+  } = useModelo(dispositivo?.modeloId);
 
   // Historial is optional — the endpoint may 404 for entities without events
   const {
     data: historial = [],
     isPending: historialPending,
     isFetching: historialFetching,
-  } = useQuery({
-    queryKey: ['historial', 'ORDEN', orden?.id],
-    queryFn: () => apiGet<HistorialEntry[]>(`/api/historial/ORDEN/${orden?.id}`),
-    enabled: ordenIdValid && Boolean(orden?.id),
-  });
+  } = useHistorialOrden(orden?.id);
 
   // Loading until the orden and its (optional) enrichment have settled,
   // matching the previous full-page spinner flow.
@@ -397,7 +370,7 @@ export function OrdenDetailPage() {
             <p>
               <span className="font-medium text-slate-700">Dispositivo:</span>{' '}
               {dispositivo
-                ? `${tipoDispositivoLabels[dispositivo.tipo] ?? dispositivo.tipo}${modelo ? ` - ${modelo.nombre}` : ` #${dispositivo.modeloId}`}`
+                ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo}${modelo ? ` - ${modelo.nombre}` : ` #${dispositivo.modeloId}`}`
                 : `#${orden.dispositivoId}`}
             </p>
             <p>

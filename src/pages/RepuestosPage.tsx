@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -8,9 +8,10 @@ import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
+import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatCurrency } from '../utils/formatters';
 import type { Repuesto, RepuestoRequest } from '../types';
+import { useRepuestos, useRepuestosBajoStock } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -44,12 +45,11 @@ export function RepuestosPage() {
   // ───── Filter state ─────
   const [bajoStockOnly, setBajoStockOnly] = useState(false);
 
-  const endpoint = bajoStockOnly
-    ? '/api/repuestos/bajo-stock'
-    : '/api/repuestos';
-
   // ───── Data fetching ─────
   const queryClient = useQueryClient();
+
+  const repuestosAll = useRepuestos();
+  const repuestosBajoStock = useRepuestosBajoStock();
 
   const {
     data: repuestos,
@@ -57,10 +57,7 @@ export function RepuestosPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['repuestos', bajoStockOnly ? 'bajo-stock' : 'all'],
-    queryFn: () => apiGet<Repuesto[]>(endpoint),
-  });
+  } = bajoStockOnly ? repuestosBajoStock : repuestosAll;
 
   const loading = isPending || isFetching;
   const error = queryError

@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { MetricCard } from '../components/molecules/MetricCard';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet } from '../api/client';
 import { formatDate, formatCurrency } from '../utils/formatters';
-import type { OrdenTrabajo, Repuesto, Cliente } from '../types';
+import type { OrdenTrabajo, Cliente } from '../types';
 import { EstadoOrden } from '../types';
+import { useOrdenes, useRepuestos, useClientes } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -41,18 +40,9 @@ function buildClienteMap(clientes: Cliente[]): Map<number, string> {
 export function DashboardPage() {
   const navigate = useNavigate();
 
-  const ordenesReq = useQuery({
-    queryKey: ['ordenes'],
-    queryFn: () => apiGet<OrdenTrabajo[]>('/api/ordenes'),
-  });
-  const repuestosReq = useQuery({
-    queryKey: ['repuestos'],
-    queryFn: () => apiGet<Repuesto[]>('/api/repuestos'),
-  });
-  const clientesReq = useQuery({
-    queryKey: ['clientes'],
-    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
-  });
+  const ordenesReq = useOrdenes();
+  const repuestosReq = useRepuestos();
+  const clientesReq = useClientes();
 
   // Wait for all requests
   const loading =

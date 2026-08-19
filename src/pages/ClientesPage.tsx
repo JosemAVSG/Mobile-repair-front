@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -8,9 +8,10 @@ import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
+import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Cliente, ClienteRequest } from '../types';
+import { useClientes } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Clientes Page
@@ -26,10 +27,7 @@ export function ClientesPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['clientes'],
-    queryFn: () => apiGet<Cliente[]>('/api/clientes'),
-  });
+  } = useClientes();
 
   const loading = isPending || isFetching;
   const error = queryError

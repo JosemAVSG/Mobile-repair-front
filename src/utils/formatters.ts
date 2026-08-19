@@ -27,6 +27,31 @@ export function categoriaMarcaLabel(cat: CategoriaMarca): string {
   return CATEGORIA_MARCA_LABELS[cat];
 }
 
+export interface BadgeConfig {
+  label: string;
+  variant: 'info' | 'warning' | 'default';
+}
+
+export function tipoBadgeConfig(tipo: TipoDispositivo): BadgeConfig {
+  const variant: BadgeConfig['variant'] =
+    tipo === TipoDispositivo.CELULAR || tipo === TipoDispositivo.LAVADORA
+      ? 'info'
+      : tipo === TipoDispositivo.MICROONDAS || tipo === TipoDispositivo.COCINA
+        ? 'warning'
+        : 'default';
+  return { label: TIPO_DISPOSITIVO_LABELS[tipo], variant };
+}
+
+export function categoriaBadgeConfig(cat: CategoriaMarca): BadgeConfig {
+  const variant: BadgeConfig['variant'] =
+    cat === CategoriaMarca.CELULARES
+      ? 'info'
+      : cat === CategoriaMarca.LINEA_BLANCA
+        ? 'warning'
+        : 'default';
+  return { label: CATEGORIA_MARCA_LABELS[cat], variant };
+}
+
 // ──────────────────────────────────────────────
 // Formatters
 // ──────────────────────────────────────────────

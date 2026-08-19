@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
@@ -9,10 +9,12 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { Badge } from '../components/atoms/Badge';
-import { apiGet, apiPost, apiDelete } from '../api/client';
-import { formatDate, CATEGORIA_MARCA_LABELS } from '../utils/formatters';
-import type { Modelo, ModeloRequest, Marca } from '../types';
+import { apiPost, apiDelete } from '../api/client';
+import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
+import { buildMarcaMap, buildMarcaObjMap, buildMarcaOptions } from '../utils/maps';
+import type { Modelo, ModeloRequest } from '../types';
 import { CategoriaMarca } from '../types';
+import { useMarcas, useModelos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -30,40 +32,11 @@ interface ModeloRow {
 // Helpers
 // ──────────────────────────────────────────────
 
-function buildMarcaMap(marcas: Marca[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const m of marcas) {
-    map.set(m.id, m.nombre);
-  }
-  return map;
-}
-
-function buildMarcaObjMap(marcas: Marca[]): Map<number, Marca> {
-  const map = new Map<number, Marca>();
-  for (const m of marcas) {
-    map.set(m.id, m);
-  }
-  return map;
-}
-
-function buildMarcaOptions(marcas: Marca[]): { value: string; label: string }[] {
-  return marcas.map((m) => ({
-    value: String(m.id),
-    label: m.nombre,
-  }));
-}
-
 const CATEGORIA_FILTER_OPTIONS = [
   { value: CategoriaMarca.CELULARES, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES] },
   { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
   { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
 ];
-
-const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 'warning' | 'default' }> = {
-  [CategoriaMarca.CELULARES]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES], variant: 'info' },
-  [CategoriaMarca.LINEA_BLANCA]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA], variant: 'warning' },
-  [CategoriaMarca.COMPUTADORAS]: { label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS], variant: 'default' },
-};
 
 // ──────────────────────────────────────────────
 // Modelos Page
@@ -78,10 +51,7 @@ export function ModelosPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ['modelos'],
-    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
-  });
+  } = useModelos();
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -90,10 +60,7 @@ export function ModelosPage() {
       : String(queryError)
     : null;
 
-  const marcasReq = useQuery({
-    queryKey: ['marcas'],
-    queryFn: () => apiGet<Marca[]>('/api/marcas'),
-  });
+  const marcasReq = useMarcas();
 
   const createMutation = useMutation({
     mutationFn: (body: ModeloRequest) => apiPost<Modelo>('/api/modelos', body),
@@ -228,7 +195,7 @@ export function ModelosPage() {
       label: 'Categoría',
       render: (row) => {
         if (!row.marcaCategoria) return '—';
-        const cfg = categoriaBadge[row.marcaCategoria];
+        const cfg = categoriaBadgeConfig(row.marcaCategoria);
         return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
       },
     },

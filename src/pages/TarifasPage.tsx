@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -9,10 +9,12 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
+import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatCurrency } from '../utils/formatters';
-import type { Tarifa, TarifaRequest, Marca, Modelo } from '../types';
+import { buildMarcaMap, buildModeloMap, buildMarcaOptions, buildModeloOptions } from '../utils/maps';
+import type { Tarifa, TarifaRequest } from '../types';
 import { TipoReparacion } from '../types';
+import { useTarifas, useMarcas, useModelos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Constants
@@ -57,34 +59,6 @@ interface FormErrors {
 }
 
 // ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-
-function buildMarcaOptions(marcas: Marca[]): { value: string; label: string }[] {
-  return marcas.map((m) => ({ value: String(m.id), label: m.nombre }));
-}
-
-function buildModeloOptions(modelos: Modelo[]): { value: string; label: string }[] {
-  return modelos.map((m) => ({ value: String(m.id), label: m.nombre }));
-}
-
-function buildMarcaMap(marcas: Marca[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const m of marcas) {
-    map.set(m.id, m.nombre);
-  }
-  return map;
-}
-
-function buildModeloMap(modelos: Modelo[]): Map<number, string> {
-  const map = new Map<number, string>();
-  for (const m of modelos) {
-    map.set(m.id, m.nombre);
-  }
-  return map;
-}
-
-// ──────────────────────────────────────────────
 // TarifasPage
 // ──────────────────────────────────────────────
 
@@ -93,21 +67,6 @@ export function TarifasPage() {
   const [verActivas, setVerActivas] = useState(false);
   const [filterMarcaId, setFilterMarcaId] = useState('');
   const [filterModeloId, setFilterModeloId] = useState('');
-
-  const endpoint = useMemo(() => {
-    if (verActivas) return '/api/tarifas/activas';
-    if (filterMarcaId) return `/api/tarifas/marca/${filterMarcaId}`;
-    if (filterModeloId) return `/api/tarifas/modelo/${filterModeloId}`;
-    return '/api/tarifas';
-  }, [verActivas, filterMarcaId, filterModeloId]);
-
-  // Query key follows the filter so TanStack Query refetches automatically
-  const tarifasQueryKey = useMemo(() => {
-    if (verActivas) return ['tarifas', 'activas'];
-    if (filterMarcaId) return ['tarifas', 'marca', filterMarcaId];
-    if (filterModeloId) return ['tarifas', 'modelo', filterModeloId];
-    return ['tarifas'];
-  }, [verActivas, filterMarcaId, filterModeloId]);
 
   // ───── Data fetching ─────
   const queryClient = useQueryClient();
@@ -118,9 +77,10 @@ export function TarifasPage() {
     isFetching,
     error: queryError,
     refetch: refetchTarifas,
-  } = useQuery({
-    queryKey: tarifasQueryKey,
-    queryFn: () => apiGet<Tarifa[]>(endpoint),
+  } = useTarifas({
+    verActivas,
+    marcaId: filterMarcaId || undefined,
+    modeloId: filterModeloId || undefined,
   });
 
   const loading = isPending || isFetching;
@@ -130,14 +90,8 @@ export function TarifasPage() {
       : String(queryError)
     : null;
 
-  const marcasReq = useQuery({
-    queryKey: ['marcas'],
-    queryFn: () => apiGet<Marca[]>('/api/marcas'),
-  });
-  const modelosReq = useQuery({
-    queryKey: ['modelos'],
-    queryFn: () => apiGet<Modelo[]>('/api/modelos'),
-  });
+  const marcasReq = useMarcas();
+  const modelosReq = useModelos();
 
   const saveMutation = useMutation({
     mutationFn: (body: TarifaRequest) =>
