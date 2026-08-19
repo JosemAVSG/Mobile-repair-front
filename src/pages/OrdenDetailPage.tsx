@@ -80,6 +80,7 @@ const tipoDispositivoLabels: Record<TipoDispositivo, string> = {
   [TipoDispositivo.NEVERA]: 'Nevera',
   [TipoDispositivo.COCINA]: 'Cocina',
   [TipoDispositivo.LAVADORA]: 'Lavadora',
+  [TipoDispositivo.COMPUTADORA]: 'Computadora',
 };
 
 // ──────────────────────────────────────────────

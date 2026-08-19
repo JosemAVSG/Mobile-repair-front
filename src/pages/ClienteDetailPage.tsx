@@ -37,6 +37,7 @@ const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'war
   [TipoDispositivo.NEVERA]: { label: 'Nevera', variant: 'default' },
   [TipoDispositivo.COCINA]: { label: 'Cocina', variant: 'warning' },
   [TipoDispositivo.LAVADORA]: { label: 'Lavadora', variant: 'info' },
+  [TipoDispositivo.COMPUTADORA]: { label: 'Computadora', variant: 'default' },
 };
 
 // ──────────────────────────────────────────────

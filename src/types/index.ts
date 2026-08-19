@@ -14,6 +14,7 @@ export interface ApiResponse<T> {
 export enum CategoriaMarca {
   CELULARES = 'CELULARES',
   LINEA_BLANCA = 'LINEA_BLANCA',
+  COMPUTADORAS = 'COMPUTADORAS',
 }
 
 export enum TipoDispositivo {
@@ -22,6 +23,7 @@ export enum TipoDispositivo {
   NEVERA = 'NEVERA',
   COCINA = 'COCINA',
   LAVADORA = 'LAVADORA',
+  COMPUTADORA = 'COMPUTADORA',
 }
 
 export enum EstadoOrden {

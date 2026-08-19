@@ -38,6 +38,7 @@ const TIPO_OPTIONS = [
   { value: TipoDispositivo.NEVERA, label: 'Nevera' },
   { value: TipoDispositivo.COCINA, label: 'Cocina' },
   { value: TipoDispositivo.LAVADORA, label: 'Lavadora' },
+  { value: TipoDispositivo.COMPUTADORA, label: 'Computadora' },
 ];
 
 const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'warning' | 'default' }> = {
@@ -46,6 +47,7 @@ const tipoBadge: Record<TipoDispositivo, { label: string; variant: 'info' | 'war
   [TipoDispositivo.NEVERA]: { label: 'Nevera', variant: 'default' },
   [TipoDispositivo.COCINA]: { label: 'Cocina', variant: 'warning' },
   [TipoDispositivo.LAVADORA]: { label: 'Lavadora', variant: 'info' },
+  [TipoDispositivo.COMPUTADORA]: { label: 'Computadora', variant: 'default' },
 };
 
 const LINEA_BLANCA_TIPOS = new Set([
@@ -478,6 +480,28 @@ export function DispositivosPage() {
                   placeholder="IMEI del dispositivo"
                   value={imei}
                   onChange={(e) => setImei(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Notas Técnicas">
+                <textarea
+                  className="min-h-[80px] rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+                  placeholder="Notas técnicas del dispositivo"
+                  value={notasTecnicas}
+                  onChange={(e) => setNotasTecnicas(e.target.value)}
+                />
+              </FormField>
+            </>
+          )}
+
+          {/* Conditional fields for COMPUTADORA */}
+          {tipo === TipoDispositivo.COMPUTADORA && (
+            <>
+              <FormField label="Número de Serie">
+                <Input
+                  placeholder="Número de serie"
+                  value={numeroSerie}
+                  onChange={(e) => setNumeroSerie(e.target.value)}
                 />
               </FormField>
 

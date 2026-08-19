@@ -21,11 +21,13 @@ import { CategoriaMarca } from '../types';
 const CATEGORIA_OPTIONS = [
   { value: CategoriaMarca.CELULARES, label: 'Celulares' },
   { value: CategoriaMarca.LINEA_BLANCA, label: 'Línea Blanca' },
+  { value: CategoriaMarca.COMPUTADORAS, label: 'Computadoras' },
 ];
 
 const categoriaBadge: Record<CategoriaMarca, { label: string; variant: 'info' | 'warning' | 'default' }> = {
   [CategoriaMarca.CELULARES]: { label: 'Celulares', variant: 'info' },
   [CategoriaMarca.LINEA_BLANCA]: { label: 'Línea Blanca', variant: 'warning' },
+  [CategoriaMarca.COMPUTADORAS]: { label: 'Computadoras', variant: 'default' },
 };
 
 // ──────────────────────────────────────────────

@@ -38,6 +38,7 @@ const tipoDispositivoLabel: Record<TipoDispositivo, string> = {
   [TipoDispositivo.NEVERA]: 'Nevera',
   [TipoDispositivo.COCINA]: 'Cocina',
   [TipoDispositivo.LAVADORA]: 'Lavadora',
+  [TipoDispositivo.COMPUTADORA]: 'Computadora',
 };
 
 const ESTADO_LABELS: Record<EstadoOrden, string> = {
