@@ -202,10 +202,10 @@ export function ClienteDetailPage() {
             size="sm"
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
-              navigate(`/ordenes?clienteId=${id}&dispositivoId=${row.id}`);
+              navigate(`/reparaciones?clienteId=${id}&dispositivoId=${row.id}`);
             }}
           >
-            Crear Orden
+            Crear Reparación
           </Button>
           <Button
             variant="secondary"
@@ -360,7 +360,7 @@ export function ClienteDetailPage() {
             }`}
             onClick={() => setTab('ordenes')}
           >
-            Órdenes del Cliente
+            Reparaciones del Cliente
           </button>
         </nav>
       </div>
@@ -397,19 +397,19 @@ export function ClienteDetailPage() {
         </div>
       )}
 
-      {/* ───── Órdenes Tab ───── */}
+      {/* ───── Reparaciones Tab ───── */}
       {tab === 'ordenes' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-800">
-              Órdenes del Cliente
+              Reparaciones del Cliente
             </h3>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate(`/ordenes?clienteId=${id}`)}
+              onClick={() => navigate(`/reparaciones?clienteId=${id}`)}
             >
-              Nueva Orden
+              Nueva Reparación
             </Button>
           </div>
 
@@ -422,9 +422,9 @@ export function ClienteDetailPage() {
               columns={ordColumns}
               data={ordenesCliente}
               loading={false}
-              emptyMessage="Este cliente no tiene órdenes registradas"
+              emptyMessage="Este cliente no tiene reparaciones registradas"
               keyExtractor={(row) => row.id}
-              onRowClick={(row) => navigate(`/ordenes/${row.id}`)}
+              onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
             />
           )}
         </div>

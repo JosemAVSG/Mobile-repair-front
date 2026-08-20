@@ -298,11 +298,11 @@ export function DispositivosPage() {
               const disp = (dispositivos ?? []).find((d) => d.id === row.id);
               const clienteId = disp?.clienteId ?? '';
               navigate(
-                `/ordenes?dispositivoId=${row.id}&clienteId=${clienteId}`,
+                `/reparaciones?dispositivoId=${row.id}&clienteId=${clienteId}`,
               );
             }}
           >
-            Crear Orden
+            Crear Reparación
           </Button>
           <Button
             variant="secondary"

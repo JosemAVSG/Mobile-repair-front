@@ -6,10 +6,12 @@ import { Button } from '../components/atoms/Button';
 import { Icon } from '../components/atoms/Icon';
 import { AuthLayout } from '../components/templates/AuthLayout';
 import { useAuth } from '../hooks/useAuth';
+import { useConfig } from '../context/ConfigContext';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
+  const { config } = useConfig();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -50,11 +52,19 @@ export function LoginPage() {
     <AuthLayout>
       <Card padding={false}>
         <div className="px-8 pt-8 pb-6 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100">
-            <Icon name="smartphone" size={28} className="text-blue-600" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary">
+            {config.logo ? (
+              <img
+                src={config.logo}
+                alt="Logo del taller"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Icon name="smartphone" size={28} className="text-white" />
+            )}
           </div>
           <h1 className="text-xl font-bold text-slate-900">
-            Reparaciones - Taller
+            {config.nombreTaller}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Inicia sesión para continuar

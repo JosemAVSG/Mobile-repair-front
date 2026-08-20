@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '../atoms/Button';
 import { Icon } from '../atoms/Icon';
 import { formatDate, tipoDispositivoLabel } from '../../utils/formatters';
+import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Marca, Modelo } from '../../types';
 
 // ──────────────────────────────────────────────
@@ -29,6 +30,8 @@ export function TicketEquipoModal({
   modelo,
   onClose,
 }: TicketEquipoModalProps) {
+  const { config } = useConfig();
+
   // Escape closes the modal
   useEffect(() => {
     if (!isOpen) return;
@@ -50,7 +53,7 @@ export function TicketEquipoModal({
 
   const imei = orden.imei;
   const serie = orden.numeroSerie;
-  const qrValue = `${window.location.origin}/ordenes/${orden.id}`;
+  const qrValue = `${window.location.origin}/reparaciones/${orden.id}`;
 
   const printStyles = `
     @media print {
@@ -101,10 +104,10 @@ export function TicketEquipoModal({
             {/* Header */}
             <div className="mb-4 text-center">
               <p className="text-sm font-bold uppercase tracking-wide text-slate-900">
-                Taller de Reparaciones
+                {config.nombreTaller}
               </p>
               <p className="mt-1 text-xs font-medium text-slate-700">
-                N° de Orden: #{orden.id}
+                N° de Reparación: #{orden.id}
               </p>
             </div>
 

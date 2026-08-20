@@ -15,6 +15,14 @@ import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
 import { apiPut, apiPost, ApiError } from '../api/client';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
+import {
+  buildWhatsAppLink,
+  buildMensajeCita,
+  buildMensajeEntregaGeneral,
+  copyTextToClipboard,
+} from '../utils/whatsapp';
+import { isOrdenAtrasada } from '../utils/ordenes';
+import { useConfig } from '../context/ConfigContext';
 import type { OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
@@ -64,6 +72,9 @@ const TRANSITION_VARIANTS: Partial<Record<EstadoOrden, 'primary' | 'secondary' |
 // Cita de entrega helpers
 // ──────────────────────────────────────────────
 
+// TODO(config): días estimados configurables
+const DIAS_ESTIMADOS_ENTREGA = 3;
+
 /** ISO datetime → valor para <input type="datetime-local"> (YYYY-MM-DDTHH:mm) */
 function toDatetimeLocal(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -92,6 +103,7 @@ export function OrdenDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { config } = useConfig();
   const ordenId = Number(id);
 
   // ───── Data ─────
@@ -309,6 +321,13 @@ export function OrdenDetailPage() {
   const [entregaError, setEntregaError] = useState<string | null>(null);
   const [entregaAccion, setEntregaAccion] = useState<'guardar' | 'quitar' | null>(null);
 
+  // Confirmación post-guardado de la cita (para WhatsApp / copiar mensaje)
+  const [confirmCita, setConfirmCita] = useState<{
+    fechaEntrega: string;
+    tipo: 'agendar' | 'reprogramar';
+  } | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
   const openEntregaModal = useCallback(() => {
     setEntregaFecha(toDatetimeLocal(orden?.fechaEntrega));
     setEntregaError(null);
@@ -328,14 +347,22 @@ export function OrdenDetailPage() {
       setEntregaError('Seleccione una fecha y hora de entrega');
       return;
     }
+    // Capturar la cita previa ANTES de la mutación para distinguir
+    // "agendar" (no había cita) de "reprogramar" (ya existía una).
+    const prevFecha = orden.fechaEntrega;
     setEntregaAccion('guardar');
     setEntregaError(null);
     try {
+      const nuevaFecha = normalizeEntrega(entregaFecha);
       await entregaMutation.mutateAsync({
         targetOrdenId: orden.id,
-        fechaEntrega: normalizeEntrega(entregaFecha),
+        fechaEntrega: nuevaFecha,
       });
       closeEntregaModal();
+      setConfirmCita({
+        fechaEntrega: nuevaFecha,
+        tipo: prevFecha ? 'reprogramar' : 'agendar',
+      });
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al agendar la entrega';
@@ -363,6 +390,47 @@ export function OrdenDetailPage() {
       setEntregaAccion(null);
     }
   }, [orden, entregaMutation, closeEntregaModal]);
+
+  // ───── WhatsApp (citas de entrega) ─────
+
+  const mensajeConfirm = useMemo(() => {
+    if (!confirmCita || !cliente?.nombre) return '';
+    return buildMensajeCita({
+      tipo: confirmCita.tipo,
+      clienteNombre: cliente.nombre,
+      fechaEntrega: confirmCita.fechaEntrega,
+      nombreTaller: config.nombreTaller,
+    });
+  }, [confirmCita, cliente, config.nombreTaller]);
+
+  const handleEnviarWhatsApp = useCallback(() => {
+    if (!confirmCita || !cliente?.telefono || !mensajeConfirm) return;
+    window.open(buildWhatsAppLink(cliente.telefono, mensajeConfirm), '_blank');
+  }, [confirmCita, cliente, mensajeConfirm]);
+
+  const handleCopiarMensaje = useCallback(async () => {
+    if (!mensajeConfirm) return;
+    const ok = await copyTextToClipboard(mensajeConfirm);
+    setCopiado(ok);
+    window.setTimeout(() => setCopiado(false), 2000);
+  }, [mensajeConfirm]);
+
+  // Reenvío del aviso desde la cabecera (fuera del modal de agenda)
+  const handleReenviarAviso = useCallback(() => {
+    if (!cliente?.telefono || !cliente.nombre) return;
+    const mensaje = orden?.fechaEntrega
+      ? buildMensajeCita({
+          tipo: 'reprogramar',
+          clienteNombre: cliente.nombre,
+          fechaEntrega: orden.fechaEntrega,
+          nombreTaller: config.nombreTaller,
+        })
+      : buildMensajeEntregaGeneral({
+          clienteNombre: cliente.nombre,
+          nombreTaller: config.nombreTaller,
+        });
+    window.open(buildWhatsAppLink(cliente.telefono, mensaje), '_blank');
+  }, [cliente, orden?.fechaEntrega, config.nombreTaller]);
 
   // ───── Reparaciones columns ─────
 
@@ -439,6 +507,34 @@ export function OrdenDetailPage() {
     return reparacionesConCosto.reduce((sum, r) => sum + (r.ganancia ?? 0), 0);
   }, [orden]);
 
+  const costoMateriales = useMemo(
+    () =>
+      orden?.reparaciones.reduce((sum, r) => sum + (r.costoRepuesto ?? 0), 0) ??
+      0,
+    [orden],
+  );
+
+  // Entrega estimada: usa la cita agendada si existe; si no, estima
+  // fechaEntrada + DIAS_ESTIMADOS_ENTREGA y la marca como "estimada".
+  const entregaEstimada = useMemo<
+    { tipo: 'agendada' | 'estimada'; valor: string } | null
+  >(() => {
+    if (!orden) return null;
+    if (orden.fechaEntrega) return { tipo: 'agendada', valor: orden.fechaEntrega };
+    const fecha = new Date(orden.fechaEntrada);
+    if (isNaN(fecha.getTime())) return null;
+    fecha.setDate(fecha.getDate() + DIAS_ESTIMADOS_ENTREGA);
+    return { tipo: 'estimada', valor: fecha.toISOString() };
+  }, [orden]);
+
+  const finalizacion = useMemo(
+    () =>
+      orden?.estado === EstadoOrden.ENTREGADO && orden.fechaSalida
+        ? orden.fechaSalida
+        : null,
+    [orden],
+  );
+
   // ───── Render states ─────
 
   // Loading
@@ -454,14 +550,14 @@ export function OrdenDetailPage() {
   if (error === 'NOT_FOUND') {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate('/ordenes')}>
-          ← Volver a Órdenes
+        <Button variant="ghost" onClick={() => navigate('/reparaciones')}>
+          ← Volver a Reparaciones
         </Button>
         <Card>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
-            <p className="text-sm text-slate-500">Orden no encontrada</p>
-            <Button variant="secondary" onClick={() => navigate('/ordenes')}>
-              Volver a Órdenes
+            <p className="text-sm text-slate-500">Reparación no encontrada</p>
+            <Button variant="secondary" onClick={() => navigate('/reparaciones')}>
+              Volver a Reparaciones
             </Button>
           </div>
         </Card>
@@ -472,13 +568,13 @@ export function OrdenDetailPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate('/ordenes')}>
-          ← Volver a Órdenes
+        <Button variant="ghost" onClick={() => navigate('/reparaciones')}>
+          ← Volver a Reparaciones
         </Button>
         <Card>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <p className="text-sm text-red-600">
-              Error al cargar orden: {error}
+              Error al cargar reparación: {error}
             </p>
             <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
@@ -496,8 +592,8 @@ export function OrdenDetailPage() {
   return (
     <div className="space-y-6">
       {/* ── Back button ── */}
-      <Button variant="ghost" onClick={() => navigate('/ordenes')}>
-        ← Volver a Órdenes
+      <Button variant="ghost" onClick={() => navigate('/reparaciones')}>
+        ← Volver a Reparaciones
       </Button>
 
       {/* ── Header section ── */}
@@ -505,7 +601,7 @@ export function OrdenDetailPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-slate-800">
-              Orden #{orden.id}
+              Reparación #{orden.id}
             </h2>
             <StatusBadge estado={orden.estado} />
           </div>
@@ -538,9 +634,24 @@ export function OrdenDetailPage() {
               </p>
             )}
             <p>
-              <span className="font-medium text-slate-700">Entrega:</span>{' '}
-              {orden.fechaEntrega ? formatDateTime(orden.fechaEntrega) : '—'}
+              <span className="font-medium text-slate-700">
+                Entrega estimada:
+              </span>{' '}
+              {entregaEstimada
+                ? entregaEstimada.tipo === 'agendada'
+                  ? formatDateTime(entregaEstimada.valor)
+                  : `${formatDate(entregaEstimada.valor)} (estimada)`
+                : '—'}
             </p>
+            <p>
+              <span className="font-medium text-slate-700">Finalización:</span>{' '}
+              {finalizacion ? formatDateTime(finalizacion) : '—'}
+            </p>
+            {isOrdenAtrasada(orden) && (
+              <div>
+                <Badge variant="danger">Entrega atrasada</Badge>
+              </div>
+            )}
           </div>
         </div>
 
@@ -548,6 +659,11 @@ export function OrdenDetailPage() {
           <Button variant="secondary" onClick={openEntregaModal}>
             Agendar Entrega
           </Button>
+          {cliente?.telefono && (
+            <Button variant="secondary" onClick={handleReenviarAviso}>
+              Enviar por WhatsApp
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setTicketOpen(true)}>
             Ticket QR
           </Button>
@@ -555,7 +671,7 @@ export function OrdenDetailPage() {
       </div>
 
       {/* ── Order Info Card ── */}
-      <Card title="Información de la Orden">
+      <Card title="Información de la Reparación">
         <div className="space-y-4">
           {orden.falloReportado && (
             <div>
@@ -594,6 +710,14 @@ export function OrdenDetailPage() {
                 </span>
                 <span className="text-slate-700">
                   {formatCurrency(totalReparaciones)}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  Costo de materiales
+                </span>
+                <span className="text-slate-700">
+                  {formatCurrency(costoMateriales)}
                 </span>
               </div>
               {gananciaTotal != null && (
@@ -819,6 +943,65 @@ export function OrdenDetailPage() {
             />
           </FormField>
         </div>
+      </Modal>
+
+      {/* ───── Confirmación de cita (WhatsApp) ───── */}
+      <Modal
+        isOpen={confirmCita !== null}
+        onClose={() => setConfirmCita(null)}
+        title={
+          confirmCita?.tipo === 'reprogramar'
+            ? 'Cita reprogramada'
+            : 'Cita agendada'
+        }
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmCita(null)}>
+              Cerrar
+            </Button>
+            {cliente?.telefono && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => void handleCopiarMensaje()}
+                  disabled={copiado}
+                >
+                  {copiado ? 'Mensaje copiado' : 'Copiar mensaje'}
+                </Button>
+                <Button onClick={handleEnviarWhatsApp}>
+                  Enviar por WhatsApp
+                </Button>
+              </>
+            )}
+          </>
+        }
+      >
+        {confirmCita && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              La cita de entrega quedó programada para{' '}
+              <span className="font-medium text-slate-800">
+                {formatDateTime(confirmCita.fechaEntrega)}
+              </span>
+              .
+            </p>
+
+            {cliente?.telefono ? (
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="mb-1 text-xs font-medium uppercase text-slate-500">
+                  Mensaje para {cliente.nombre}
+                </p>
+                <p className="text-sm text-slate-700">{mensajeConfirm}</p>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                El cliente no tiene teléfono registrado. No se puede enviar el
+                aviso por WhatsApp.
+              </p>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* ───── Ticket QR Modal ───── */}

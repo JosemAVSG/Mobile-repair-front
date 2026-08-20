@@ -9,6 +9,7 @@ import { formatDate, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente } from '../types';
 import { EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
+import { useConfig } from '../context/ConfigContext';
 
 // ──────────────────────────────────────────────
 // Types
@@ -39,6 +40,7 @@ function buildClienteMap(clientes: Cliente[]): Map<number, string> {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { config } = useConfig();
 
   const ordenesReq = useOrdenes();
   const clientesReq = useClientes();
@@ -167,7 +169,7 @@ export function DashboardPage() {
           ))}
         </div>
 
-        <Card title="Órdenes Recientes">
+        <Card title="Reparaciones Recientes">
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
@@ -205,14 +207,14 @@ export function DashboardPage() {
         <Card>
           <div className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-lg font-medium text-slate-700">
-              Bienvenido al Taller de Reparaciones
+              Bienvenido a {config.nombreTaller}
             </p>
             <p className="max-w-md text-sm text-slate-500">
-              Aún no hay órdenes de trabajo registradas. Crea tu primera
-              orden para empezar a usar el sistema.
+              Aún no hay reparaciones registradas. Crea tu primera
+              reparación para empezar a usar el sistema.
             </p>
-            <Button onClick={() => navigate('/ordenes')}>
-              Crear Primera Orden
+            <Button onClick={() => navigate('/reparaciones')}>
+              Crear Primera Reparación
             </Button>
           </div>
         </Card>
@@ -251,7 +253,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon="clipboard"
-          label="Órdenes Activas"
+          label="Reparaciones Activas"
           value={metricas.activas}
         />
         <MetricCard
@@ -276,20 +278,20 @@ export function DashboardPage() {
       </div>
 
       {/* Recent Orders */}
-      <Card title="Órdenes Recientes" subtitle="Últimas 10 órdenes">
+      <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
         <DataTable<OrdenRow>
           columns={columns}
           data={rows}
           keyExtractor={(row) => row.id}
-          emptyMessage="No hay órdenes registradas"
-          onRowClick={(row) => navigate(`/ordenes/${row.id}`)}
+          emptyMessage="No hay reparaciones registradas"
+          onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
         />
       </Card>
 
       {/* Próximas Entregas */}
       <Card
         title="Próximas Entregas"
-        subtitle="Órdenes con cita de entrega agendada"
+        subtitle="Reparaciones con cita de entrega agendada"
       >
         {proximasEntregas.length === 0 ? (
           <p className="text-sm text-slate-500">No hay entregas agendadas</p>
@@ -298,7 +300,7 @@ export function DashboardPage() {
             {proximasEntregas.map((o) => (
               <button
                 key={o.id}
-                onClick={() => navigate(`/ordenes/${o.id}`)}
+                onClick={() => navigate(`/reparaciones/${o.id}`)}
                 className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50"
               >
                 <div className="space-y-0.5">
@@ -316,7 +318,7 @@ export function DashboardPage() {
                   </p>
                 </div>
                 <p className="text-sm font-medium text-blue-600">
-                  Orden #{o.id}
+                  Reparación #{o.id}
                 </p>
               </button>
             ))}
@@ -327,8 +329,8 @@ export function DashboardPage() {
       {/* Quick Actions */}
       <Card title="Acciones Rápidas">
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => navigate('/ordenes')}>
-            Nueva Orden
+          <Button onClick={() => navigate('/reparaciones')}>
+            Nueva Reparación
           </Button>
           <Button
             variant="secondary"

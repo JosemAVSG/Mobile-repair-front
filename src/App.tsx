@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { MainLayout } from './components/templates/MainLayout';
 import { useAuth } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
@@ -12,6 +12,7 @@ import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
 import { TarifasPage } from './pages/TarifasPage';
 import { RepuestosPage } from './pages/RepuestosPage';
+import { ConfiguracionPage } from './pages/ConfiguracionPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -21,6 +22,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+// Redirect de compatibilidad: /ordenes → /reparaciones (enlaces/QR emitidos)
+function RedirectToReparaciones() {
+  const { id } = useParams<{ id: string }>();
+  return (
+    <Navigate to={id ? `/reparaciones/${id}` : '/reparaciones'} replace />
+  );
 }
 
 export default function App() {
@@ -41,10 +50,13 @@ export default function App() {
         <Route path="clientes" element={<ClientesPage />} />
         <Route path="clientes/:id" element={<ClienteDetailPage />} />
         <Route path="dispositivos" element={<DispositivosPage />} />
-        <Route path="ordenes" element={<OrdenesPage />} />
-        <Route path="ordenes/:id" element={<OrdenDetailPage />} />
+        <Route path="reparaciones" element={<OrdenesPage />} />
+        <Route path="reparaciones/:id" element={<OrdenDetailPage />} />
+        <Route path="ordenes" element={<RedirectToReparaciones />} />
+        <Route path="ordenes/:id" element={<RedirectToReparaciones />} />
         <Route path="tarifas" element={<TarifasPage />} />
         <Route path="repuestos" element={<RepuestosPage />} />
+        <Route path="configuracion" element={<ConfiguracionPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

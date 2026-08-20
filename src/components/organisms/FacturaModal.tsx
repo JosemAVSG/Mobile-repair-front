@@ -4,6 +4,7 @@ import { Button } from '../atoms/Button';
 import { Icon } from '../atoms/Icon';
 import { StatusBadge } from '../molecules/StatusBadge';
 import { formatCurrency, formatDateTime, tipoDispositivoLabel } from '../../utils/formatters';
+import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Cliente, Marca, Modelo } from '../../types';
 
 // ──────────────────────────────────────────────
@@ -31,6 +32,8 @@ export function FacturaModal({
   modelo,
   onClose,
 }: FacturaModalProps) {
+  const { config } = useConfig();
+
   // Escape closes the modal
   useEffect(() => {
     if (!isOpen) return;
@@ -103,7 +106,7 @@ export function FacturaModal({
                 FACTURA
               </h1>
               <p className="mt-1 text-sm font-medium text-slate-700">
-                Taller de Reparaciones
+                {config.nombreTaller}
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {formatDateTime(orden.fechaEntrada)}

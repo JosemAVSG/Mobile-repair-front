@@ -1,1 +1,6 @@
 @import 'tailwindcss';
+
+@theme inline {
+  --color-primary: var(--taller-primary, #2563eb);
+  --color-primary-dark: var(--taller-primary-dark, #1d4ed8);
+}

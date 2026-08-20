@@ -8,10 +8,13 @@ import { Select } from '../components/atoms/Select';
 import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
+import { Badge } from '../components/atoms/Badge';
+import { SearchField } from '../components/molecules/SearchField';
 import { FacturaModal } from '../components/organisms/FacturaModal';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost } from '../api/client';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
+import { isOrdenAtrasada } from '../utils/ordenes';
 import type { OrdenTrabajo, Cliente, Dispositivo, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
@@ -29,6 +32,8 @@ interface OrdenRow {
   falloReportado: string | null;
   precioTotal: number | null;
   fechaEntrada: string;
+  fechaEntrega: string | null;
+  atrasada: boolean;
 }
 
 // ──────────────────────────────────────────────
@@ -76,6 +81,7 @@ export function OrdenesPage() {
 
   const [estadoFilter, setEstadoFilter] = useState<EstadoOrden | ''>('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [busqueda, setBusqueda] = useState('');
 
   // Query key changes with the filter so TanStack Query refetches automatically
   const {
@@ -169,6 +175,8 @@ export function OrdenesPage() {
         falloReportado: orden.falloReportado,
         precioTotal: orden.precioTotal,
         fechaEntrada: orden.fechaEntrada,
+        fechaEntrega: orden.fechaEntrega ?? null,
+        atrasada: isOrdenAtrasada(orden),
       };
     });
   }, [ordenes, filtroTipo, clienteMap, dispositivoMap, marcaMap, modeloMap]);
@@ -182,7 +190,12 @@ export function OrdenesPage() {
     {
       key: 'estado',
       label: 'Estado',
-      render: (row) => <StatusBadge estado={row.estado} />,
+      render: (row) => (
+        <span className="inline-flex items-center gap-2">
+          <StatusBadge estado={row.estado} />
+          {row.atrasada && <Badge variant="danger">Atrasada</Badge>}
+        </span>
+      ),
     },
     {
       key: 'falloReportado',
@@ -409,7 +422,7 @@ export function OrdenesPage() {
       setFacturaOpen(true);
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Error al crear orden';
+        err instanceof Error ? err.message : 'Error al crear reparación';
       setCreateErrors({ general: msg });
     } finally {
       setCreateSubmitting(false);
@@ -433,7 +446,7 @@ export function OrdenesPage() {
   // ───── Row click ─────
 
   const handleRowClick = useCallback(
-    (row: OrdenRow) => navigate(`/ordenes/${row.id}`),
+    (row: OrdenRow) => navigate(`/reparaciones/${row.id}`),
     [navigate],
   );
 
@@ -474,17 +487,22 @@ export function OrdenesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">
-            Órdenes de Trabajo
+            Reparaciones
           </h2>
           <p className="text-sm text-slate-500">
-            Gestión de órdenes de reparación
+            Gestión de reparaciones
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <SearchField
+            placeholder="Buscar por ID, cliente, equipo o fallo..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
           <Button variant="secondary" onClick={() => void refetch()}>
             Refrescar
           </Button>
-          <Button onClick={() => openCreate()}>Nueva Orden</Button>
+          <Button onClick={() => openCreate()}>Nueva Reparación</Button>
         </div>
       </div>
 
@@ -517,7 +535,7 @@ export function OrdenesPage() {
         <Card>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <p className="text-sm text-red-600">
-              Error al cargar órdenes: {error}
+              Error al cargar reparaciones: {error}
             </p>
             <Button variant="secondary" onClick={() => void refetch()}>
               Reintentar
@@ -532,9 +550,11 @@ export function OrdenesPage() {
           columns={columns}
           data={rows}
           loading={loading}
-          emptyMessage="No hay órdenes registradas"
+          emptyMessage="No hay reparaciones registradas"
           keyExtractor={(row) => row.id}
+          searchFilter={busqueda}
           onRowClick={handleRowClick}
+          getRowClassName={(row) => (row.atrasada ? 'bg-red-50/70' : '')}
         />
       )}
 
@@ -542,7 +562,7 @@ export function OrdenesPage() {
       <Modal
         isOpen={createOpen}
         onClose={closeCreate}
-        title="Nueva Orden de Trabajo"
+        title="Nueva Reparación"
         size="lg"
         footer={
           <>
@@ -571,7 +591,7 @@ export function OrdenesPage() {
               </Button>
             ) : (
               <Button onClick={handleCreate} loading={createSubmitting}>
-                Crear Orden
+                Crear Reparación
               </Button>
             )}
           </>

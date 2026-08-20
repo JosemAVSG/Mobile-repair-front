@@ -1,6 +1,7 @@
 import { Icon } from '../atoms/Icon';
 import { Button } from '../atoms/Button';
 import { useAuth } from '../../hooks/useAuth';
+import { useConfig } from '../../context/ConfigContext';
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -8,6 +9,7 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   const { user, logout } = useAuth();
+  const { config } = useConfig();
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-6">
@@ -19,8 +21,15 @@ export function Header({ onMenuToggle }: HeaderProps) {
         >
           <Icon name="menu" size={20} />
         </button>
-        <h1 className="text-lg font-bold text-slate-800">
-          Reparaciones - Taller
+        <h1 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+          {config.logo && (
+            <img
+              src={config.logo}
+              alt="Logo del taller"
+              className="h-7 w-7 rounded-full object-cover"
+            />
+          )}
+          {config.nombreTaller}
         </h1>
       </div>
 

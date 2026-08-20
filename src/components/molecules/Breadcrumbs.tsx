@@ -62,9 +62,9 @@ function useCrumbs(
     }
   } else if (segments[0] === 'dispositivos') {
     crumbs.push({ label: 'Dispositivos' });
-  } else if (segments[0] === 'ordenes') {
-    crumbs.push({ label: 'Órdenes', to: '/ordenes' });
-    if (id) crumbs.push({ label: `Orden #${id}` });
+  } else if (segments[0] === 'reparaciones' || segments[0] === 'ordenes') {
+    crumbs.push({ label: 'Reparaciones', to: '/reparaciones' });
+    if (id) crumbs.push({ label: `Reparación #${id}` });
   } else if (segments[0] === 'tarifas') crumbs.push({ label: 'Tarifas' });
   else if (segments[0] === 'repuestos') crumbs.push({ label: 'Repuestos' });
 
