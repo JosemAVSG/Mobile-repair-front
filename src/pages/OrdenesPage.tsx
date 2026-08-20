@@ -233,6 +233,9 @@ export function OrdenesPage() {
     general?: string;
   }>({});
 
+  // ───── Stepper state ─────
+  const [paso, setPaso] = useState(1);
+
   // ───── Factura modal state ─────
   const [facturaOpen, setFacturaOpen] = useState(false);
   const [facturaOrden, setFacturaOrden] = useState<OrdenTrabajo | null>(null);
@@ -306,6 +309,7 @@ export function OrdenesPage() {
       setFacturaOpen(false);
       setFacturaOrden(null);
       setCreateErrors({});
+      setPaso(1);
       setCreateOpen(true);
     },
     [modeloMap],
@@ -358,6 +362,7 @@ export function OrdenesPage() {
     setFacturaOpen(false);
     setFacturaOrden(null);
     setCreateErrors({});
+    setPaso(1);
   }, []);
 
   // ───── Create submit ─────
@@ -431,6 +436,35 @@ export function OrdenesPage() {
     (row: OrdenRow) => navigate(`/ordenes/${row.id}`),
     [navigate],
   );
+
+  // ───── Stepper navigation ─────
+
+  const validatePaso1 = useCallback(() => {
+    const errors: {
+      cliente?: string;
+      marca?: string;
+      modelo?: string;
+      tipo?: string;
+    } = {};
+    if (!createClienteId) errors.cliente = 'Seleccione un cliente';
+    if (!createMarcaId) errors.marca = 'Seleccione una marca';
+    if (!createModeloId) errors.modelo = 'Seleccione un modelo';
+    if (!createTipo) errors.tipo = 'Seleccione un tipo';
+    return errors;
+  }, [createClienteId, createMarcaId, createModeloId, createTipo]);
+
+  const handleSiguiente = useCallback(() => {
+    if (paso === 1) {
+      const errors = validatePaso1();
+      setCreateErrors((prev) => ({ ...prev, ...errors }));
+      if (Object.keys(errors).length > 0) return;
+    }
+    setPaso((p) => Math.min(p + 1, 3));
+  }, [paso, validatePaso1]);
+
+  const handleAtras = useCallback(() => {
+    setPaso((p) => Math.max(p - 1, 1));
+  }, []);
 
   // ───── Render ─────
 
@@ -512,6 +546,15 @@ export function OrdenesPage() {
         size="lg"
         footer={
           <>
+            {paso > 1 && (
+              <Button
+                variant="secondary"
+                onClick={handleAtras}
+                disabled={createSubmitting}
+              >
+                Atrás
+              </Button>
+            )}
             <Button
               variant="secondary"
               onClick={closeCreate}
@@ -519,9 +562,18 @@ export function OrdenesPage() {
             >
               Cancelar
             </Button>
-            <Button onClick={handleCreate} loading={createSubmitting}>
-              Crear Orden
-            </Button>
+            {paso < 3 ? (
+              <Button
+                onClick={handleSiguiente}
+                disabled={createSubmitting}
+              >
+                Siguiente
+              </Button>
+            ) : (
+              <Button onClick={handleCreate} loading={createSubmitting}>
+                Crear Orden
+              </Button>
+            )}
           </>
         }
       >
@@ -532,174 +584,278 @@ export function OrdenesPage() {
             </p>
           )}
 
-          <FormField label="Cliente" required error={createErrors.cliente}>
-            <Select
-              options={
-                clientes?.map((c) => ({
-                  value: String(c.id),
-                  label: c.nombre,
-                })) ?? []
-              }
-              value={createClienteId ? String(createClienteId) : ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCreateClienteId(val ? Number(val) : '');
-              }}
-              placeholder="Seleccionar cliente..."
-            />
-          </FormField>
+          {/* Stepper indicator */}
+          <ol className="flex items-center gap-2">
+            {[
+              { n: 1, label: 'Cliente y Equipo' },
+              { n: 2, label: 'Detalles' },
+              { n: 3, label: 'Costo' },
+            ].map((step, idx) => (
+              <li key={step.n} className="flex flex-1 items-center gap-2">
+                {idx > 0 && (
+                  <div className="h-px flex-1 bg-slate-200" />
+                )}
+                <div
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+                    paso === step.n
+                      ? 'bg-blue-600 text-white'
+                      : paso > step.n
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                      paso === step.n
+                        ? 'bg-white/20'
+                        : paso > step.n
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {paso > step.n ? '✓' : step.n}
+                  </span>
+                  {step.label}
+                </div>
+              </li>
+            ))}
+          </ol>
 
-          <FormField label="Tipo" required error={createErrors.tipo}>
-            <Select
-              options={tipoOptions}
-              value={createTipo ? String(createTipo) : ''}
-              onChange={(e) => {
-                const val = e.target.value as TipoDispositivo | '';
-                setCreateTipo(val);
-                setCreateMarcaId('');
-                setCreateModeloId('');
-              }}
-              placeholder="Seleccionar tipo de dispositivo..."
-            />
-          </FormField>
-
-          <FormField label="Marca" required error={createErrors.marca}>
-            <Select
-              options={marcasFiltradas.map((m) => ({
-                value: String(m.id),
-                label: m.nombre,
-              }))}
-              value={createMarcaId ? String(createMarcaId) : ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCreateMarcaId(val ? Number(val) : '');
-                setCreateModeloId(''); // reset modelo on marca change
-              }}
-              placeholder={
-                createTipo
-                  ? 'Seleccionar marca...'
-                  : 'Primero seleccione un tipo'
-              }
-              disabled={!createTipo}
-            />
-          </FormField>
-
-          <FormField label="Modelo" required error={createErrors.modelo}>
-            <Select
-              options={modelosMarca.map((m) => ({
-                value: String(m.id),
-                label: m.nombre,
-              }))}
-              value={createModeloId ? String(createModeloId) : ''}
-              onChange={(e) =>
-                setCreateModeloId(
-                  e.target.value ? Number(e.target.value) : '',
-                )
-              }
-              placeholder={
-                createMarcaId
-                  ? 'Seleccionar modelo...'
-                  : 'Primero seleccione una marca'
-              }
-              disabled={!createMarcaId}
-            />
-          </FormField>
-
-          <FormField label="IMEI (opcional)">
-            <Input
-              placeholder="IMEI del dispositivo"
-              value={createImei}
-              onChange={(e) => setCreateImei(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Número de Serie (opcional)">
-            <Input
-              placeholder="Número de serie"
-              value={createSerie}
-              onChange={(e) => setCreateSerie(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Fallo Reportado">
-            <textarea
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-blue-500 focus:ring-blue-500"
-              rows={3}
-              placeholder="Descripción del fallo reportado por el cliente"
-              value={createFallo}
-              onChange={(e) => setCreateFallo(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Notas">
-            <textarea
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-blue-500 focus:ring-blue-500"
-              rows={3}
-              placeholder="Notas internas (opcional)"
-              value={createNotas}
-              onChange={(e) => setCreateNotas(e.target.value)}
-            />
-          </FormField>
-
-          {/* ── Costo de revisión (factura) ── */}
-          <div className="border-t border-slate-200 pt-4">
-            <p className="mb-3 text-sm font-semibold text-slate-700">
-              Costo de Revisión
-            </p>
-
-            {tarifasEquipo.length > 0 && (
-              <FormField label="Tarifa predefinida">
+          {/* Paso 1 — Cliente y Equipo */}
+          {paso === 1 && (
+            <>
+              <FormField label="Cliente" required error={createErrors.cliente}>
                 <Select
-                  options={tarifasEquipo.map((t) => ({
-                    value: String(t.id),
-                    label: `${TIPO_REPARACION_LABELS[t.tipo] ?? t.tipo} — ${formatCurrency(t.precio)}`,
-                  }))}
-                  placeholder="Seleccionar tarifa..."
-                  value=""
-                  onChange={(e) => {
-                    const tarifa = tarifasEquipo.find(
-                      (t) => String(t.id) === e.target.value,
-                    );
-                    if (!tarifa) return;
-                    setCreateTipoReparacion(tarifa.tipo);
-                    setCreatePrecioRevision(String(tarifa.precio));
-                  }}
-                />
-              </FormField>
-            )}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Tipo de revisión">
-                <Select
-                  options={tipoReparacionOptions}
-                  placeholder="Seleccionar tipo..."
-                  value={createTipoReparacion}
+                  options={
+                    clientes?.map((c) => ({
+                      value: String(c.id),
+                      label: c.nombre,
+                    })) ?? []
+                  }
+                  value={createClienteId ? String(createClienteId) : ''}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setCreateTipoReparacion(val);
-                    // Autocompletar precio si hay tarifa activa para este tipo/equipo
-                    if (val) {
-                      const match = tarifasEquipo.find(
-                        (t) => t.tipo === val,
-                      );
-                      if (match) setCreatePrecioRevision(String(match.precio));
-                    }
+                    setCreateClienteId(val ? Number(val) : '');
                   }}
+                  placeholder="Seleccionar cliente..."
                 />
               </FormField>
 
-              <FormField label="Precio (manual)">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Ej: 15000"
-                  value={createPrecioRevision}
-                  onChange={(e) => setCreatePrecioRevision(e.target.value)}
+              <FormField label="Tipo" required error={createErrors.tipo}>
+                <Select
+                  options={tipoOptions}
+                  value={createTipo ? String(createTipo) : ''}
+                  onChange={(e) => {
+                    const val = e.target.value as TipoDispositivo | '';
+                    setCreateTipo(val);
+                    setCreateMarcaId('');
+                    setCreateModeloId('');
+                  }}
+                  placeholder="Seleccionar tipo de dispositivo..."
                 />
               </FormField>
-            </div>
-          </div>
+
+              <FormField label="Marca" required error={createErrors.marca}>
+                <Select
+                  options={marcasFiltradas.map((m) => ({
+                    value: String(m.id),
+                    label: m.nombre,
+                  }))}
+                  value={createMarcaId ? String(createMarcaId) : ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCreateMarcaId(val ? Number(val) : '');
+                    setCreateModeloId(''); // reset modelo on marca change
+                  }}
+                  placeholder={
+                    createTipo
+                      ? 'Seleccionar marca...'
+                      : 'Primero seleccione un tipo'
+                  }
+                  disabled={!createTipo}
+                />
+              </FormField>
+
+              <FormField label="Modelo" required error={createErrors.modelo}>
+                <Select
+                  options={modelosMarca.map((m) => ({
+                    value: String(m.id),
+                    label: m.nombre,
+                  }))}
+                  value={createModeloId ? String(createModeloId) : ''}
+                  onChange={(e) =>
+                    setCreateModeloId(
+                      e.target.value ? Number(e.target.value) : '',
+                    )
+                  }
+                  placeholder={
+                    createMarcaId
+                      ? 'Seleccionar modelo...'
+                      : 'Primero seleccione una marca'
+                  }
+                  disabled={!createMarcaId}
+                />
+              </FormField>
+
+              <FormField label="IMEI (opcional)">
+                <Input
+                  placeholder="IMEI del dispositivo"
+                  value={createImei}
+                  onChange={(e) => setCreateImei(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Número de Serie (opcional)">
+                <Input
+                  placeholder="Número de serie"
+                  value={createSerie}
+                  onChange={(e) => setCreateSerie(e.target.value)}
+                />
+              </FormField>
+            </>
+          )}
+
+          {/* Paso 2 — Detalles */}
+          {paso === 2 && (
+            <>
+              <FormField label="Fallo Reportado">
+                <textarea
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-blue-500 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Descripción del fallo reportado por el cliente"
+                  value={createFallo}
+                  onChange={(e) => setCreateFallo(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Notas">
+                <textarea
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-blue-500 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Notas internas (opcional)"
+                  value={createNotas}
+                  onChange={(e) => setCreateNotas(e.target.value)}
+                />
+              </FormField>
+            </>
+          )}
+
+          {/* Paso 3 — Costo y Confirmar */}
+          {paso === 3 && (
+            <>
+              <div className="border-t border-slate-200 pt-4">
+                <p className="mb-3 text-sm font-semibold text-slate-700">
+                  Costo de Revisión
+                </p>
+
+                {tarifasEquipo.length > 0 && (
+                  <FormField label="Tarifa predefinida">
+                    <Select
+                      options={tarifasEquipo.map((t) => ({
+                        value: String(t.id),
+                        label: `${TIPO_REPARACION_LABELS[t.tipo] ?? t.tipo} — ${formatCurrency(t.precio)}`,
+                      }))}
+                      placeholder="Seleccionar tarifa..."
+                      value=""
+                      onChange={(e) => {
+                        const tarifa = tarifasEquipo.find(
+                          (t) => String(t.id) === e.target.value,
+                        );
+                        if (!tarifa) return;
+                        setCreateTipoReparacion(tarifa.tipo);
+                        setCreatePrecioRevision(String(tarifa.precio));
+                      }}
+                    />
+                  </FormField>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField label="Tipo de revisión">
+                    <Select
+                      options={tipoReparacionOptions}
+                      placeholder="Seleccionar tipo..."
+                      value={createTipoReparacion}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCreateTipoReparacion(val);
+                        // Autocompletar precio si hay tarifa activa para este tipo/equipo
+                        if (val) {
+                          const match = tarifasEquipo.find(
+                            (t) => t.tipo === val,
+                          );
+                          if (match) setCreatePrecioRevision(String(match.precio));
+                        }
+                      }}
+                    />
+                  </FormField>
+
+                  <FormField label="Precio (manual)">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Ej: 15000"
+                      value={createPrecioRevision}
+                      onChange={(e) => setCreatePrecioRevision(e.target.value)}
+                    />
+                  </FormField>
+                </div>
+              </div>
+
+              {/* Resumen */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-3 text-sm font-semibold text-slate-700">
+                  Resumen
+                </p>
+                <dl className="space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-500">Cliente</dt>
+                    <dd className="text-right font-medium text-slate-800">
+                      {clientes?.find((c) => c.id === createClienteId)?.nombre ??
+                        '—'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-500">Equipo</dt>
+                    <dd className="text-right font-medium text-slate-800">
+                      {[
+                        createTipo ? tipoDispositivoLabel(createTipo) : null,
+                        createMarcaId
+                          ? marcasFiltradas.find((m) => m.id === createMarcaId)
+                              ?.nombre
+                          : null,
+                        createModeloId
+                          ? modelosMarca.find(
+                              (m) => m.id === createModeloId,
+                            )?.nombre
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' - ') || '—'}
+                    </dd>
+                  </div>
+                  {createTipoReparacion && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-slate-500">Tipo de revisión</dt>
+                      <dd className="text-right font-medium text-slate-800">
+                        {TIPO_REPARACION_LABELS[
+                          createTipoReparacion as TipoReparacion
+                        ] ?? createTipoReparacion}
+                      </dd>
+                    </div>
+                  )}
+                  {createPrecioRevision && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-slate-500">Total</dt>
+                      <dd className="text-right font-semibold text-blue-700">
+                        {formatCurrency(Number(createPrecioRevision))}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 
