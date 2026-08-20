@@ -3,17 +3,20 @@
 // Cada hook encapsula queryKey + queryFn.
 // ──────────────────────────────────────────────
 
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '../api/client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiDelete, apiGet, apiPostForm } from '../api/client';
 import type {
   Cliente,
   Dispositivo,
+  EtapaFoto,
+  FotoOrden,
   HistorialEntry,
   Marca,
   Modelo,
   OrdenTrabajo,
   Repuesto,
   Tarifa,
+  Tecnico,
 } from '../types';
 
 export function useMarcas() {
@@ -34,6 +37,13 @@ export function useClientes() {
   return useQuery({
     queryKey: ['clientes'],
     queryFn: () => apiGet<Cliente[]>('/api/clientes'),
+  });
+}
+
+export function useTecnicos() {
+  return useQuery({
+    queryKey: ['tecnicos'],
+    queryFn: () => apiGet<Tecnico[]>('/api/tecnicos'),
   });
 }
 
@@ -76,12 +86,32 @@ export function useModelo(id?: number) {
   });
 }
 
-export function useOrdenes(estado?: string) {
-  const queryKey = estado ? ['ordenes', 'estado', estado] : ['ordenes'];
+/** Filtros adicionales del listado de órdenes (GET /api/ordenes?tecnicoId=X
+ *  o ?sinTecnico=true). Solo se aplican cuando no se filtra por estado. */
+export interface OrdenesFiltro {
+  tecnicoId?: number;
+  sinTecnico?: boolean;
+}
+
+export function useOrdenes(estado?: string, filtro?: OrdenesFiltro, enabled = true) {
+  const queryKey: unknown[] = ['ordenes'];
+  let endpoint = '/api/ordenes';
+
+  if (estado) {
+    queryKey.push('estado', estado);
+    endpoint = `/api/ordenes/estado/${estado}`;
+  } else if (filtro?.sinTecnico) {
+    queryKey.push('sinTecnico', true);
+    endpoint = '/api/ordenes?sinTecnico=true';
+  } else if (filtro?.tecnicoId != null) {
+    queryKey.push('tecnicoId', filtro.tecnicoId);
+    endpoint = `/api/ordenes?tecnicoId=${filtro.tecnicoId}`;
+  }
+
   return useQuery({
     queryKey,
-    queryFn: () =>
-      apiGet<OrdenTrabajo[]>(estado ? `/api/ordenes/estado/${estado}` : '/api/ordenes'),
+    queryFn: () => apiGet<OrdenTrabajo[]>(endpoint),
+    enabled,
   });
 }
 
@@ -141,5 +171,38 @@ export function useTarifas(filtro?: TarifaFiltro) {
   return useQuery({
     queryKey,
     queryFn: () => apiGet<Tarifa[]>(endpoint),
+  });
+}
+
+export function useFotosOrden(ordenId?: number) {
+  return useQuery({
+    queryKey: ['fotos', 'orden', ordenId],
+    queryFn: () => apiGet<FotoOrden[]>(`/api/ordenes/${ordenId}/fotos`),
+    enabled: ordenId != null && Number.isFinite(ordenId),
+  });
+}
+
+export function useSubirFotoOrden(ordenId?: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, etapa }: { file: File; etapa: EtapaFoto }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('etapa', etapa);
+      return apiPostForm<FotoOrden>(`/api/ordenes/${ordenId}/fotos`, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fotos', 'orden', ordenId] });
+    },
+  });
+}
+
+export function useEliminarFotoOrden(ordenId?: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fotoId: number) => apiDelete<unknown>(`/api/fotos/${fotoId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fotos', 'orden', ordenId] });
+    },
   });
 }

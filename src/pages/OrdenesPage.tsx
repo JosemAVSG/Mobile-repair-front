@@ -10,15 +10,17 @@ import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { Badge } from '../components/atoms/Badge';
 import { SearchField } from '../components/molecules/SearchField';
+import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { FacturaModal } from '../components/organisms/FacturaModal';
 import { DataTable, type Column } from '../components/organisms/DataTable';
-import { apiPost } from '../api/client';
+import { apiPost, apiPut } from '../api/client';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { isOrdenAtrasada } from '../utils/ordenes';
+import { useAuth } from '../hooks/useAuth';
 import type { OrdenTrabajo, Cliente, Dispositivo, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
-import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo, useTarifas } from '../hooks/useQueries';
+import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo, useTarifas, useTecnicos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -28,6 +30,7 @@ interface OrdenRow {
   id: number;
   cliente: string;
   dispositivo: string;
+  tecnico: string;
   estado: EstadoOrden;
   falloReportado: string | null;
   precioTotal: number | null;
@@ -76,21 +79,43 @@ export function OrdenesPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.rol === 'ADMIN';
 
-  // ───── Estado filter ─────
+  // ───── Estado filter / tabs ─────
 
   const [estadoFilter, setEstadoFilter] = useState<EstadoOrden | ''>('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroTecnico, setFiltroTecnico] = useState('');
   const [busqueda, setBusqueda] = useState('');
 
-  // Query key changes with the filter so TanStack Query refetches automatically
+  // Técnico: dos pestañas (Mis reparaciones / Disponibles)
+  const [tab, setTab] = useState<'mias' | 'disponibles'>('mias');
+
+  // Admin: todas las órdenes (filtradas por estado en el backend).
+  const adminQuery = useOrdenes(estadoFilter || undefined, undefined, isAdmin);
+
+  // Técnico: sus reparaciones y las disponibles (sin técnico asignado).
+  const misQuery = useOrdenes(
+    undefined,
+    { tecnicoId: user?.tecnicoId ?? undefined },
+    !isAdmin && user?.tecnicoId != null,
+  );
+  const disponiblesQuery = useOrdenes(undefined, { sinTecnico: true }, !isAdmin);
+
+  const activeQuery = isAdmin
+    ? adminQuery
+    : tab === 'mias'
+      ? misQuery
+      : disponiblesQuery;
+
   const {
     data: ordenes,
     isPending,
     isFetching,
     error: queryError,
     refetch,
-  } = useOrdenes(estadoFilter || undefined);
+  } = activeQuery;
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -105,9 +130,16 @@ export function OrdenesPage() {
   const { data: dispositivos } = useDispositivos();
   const { data: marcas } = useMarcas();
   const { data: modelos } = useModelos();
+  const { data: tecnicos } = useTecnicos();
 
   const createMutation = useMutation({
     mutationFn: (body: OrdenRequest) => apiPost<OrdenTrabajo>('/api/ordenes', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
+  });
+
+  const asignarMutation = useMutation({
+    mutationFn: ({ ordenId, tecnicoId }: { ordenId: number; tecnicoId: number }) =>
+      apiPut<OrdenTrabajo>(`/api/ordenes/${ordenId}/tecnico`, { tecnicoId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
   });
 
@@ -135,6 +167,12 @@ export function OrdenesPage() {
     return map;
   }, [modelos]);
 
+  const tecnicoMap = useMemo(() => {
+    const map = new Map<number, string>();
+    tecnicos?.forEach((t) => map.set(t.id, t.nombre));
+    return map;
+  }, [tecnicos]);
+
   // ───── Enriched rows ─────
 
   const rows = useMemo<OrdenRow[]>(() => {
@@ -147,6 +185,12 @@ export function OrdenesPage() {
         const tipo = orden.tipo ?? dispositivo?.tipo;
         return tipo === filtroTipo;
       });
+    }
+
+    if (filtroTecnico) {
+      ordenesList = ordenesList.filter(
+        (orden) => orden.tecnicoId === Number(filtroTecnico),
+      );
     }
 
     return ordenesList.map((orden) => {
@@ -171,6 +215,10 @@ export function OrdenesPage() {
         id: orden.id,
         cliente: cliente?.nombre ?? `Cliente #${orden.clienteId}`,
         dispositivo: dispLabel,
+        tecnico:
+          orden.tecnicoId != null
+            ? (tecnicoMap.get(orden.tecnicoId) ?? `Técnico #${orden.tecnicoId}`)
+            : '—',
         estado: orden.estado,
         falloReportado: orden.falloReportado,
         precioTotal: orden.precioTotal,
@@ -179,7 +227,7 @@ export function OrdenesPage() {
         atrasada: isOrdenAtrasada(orden),
       };
     });
-  }, [ordenes, filtroTipo, clienteMap, dispositivoMap, marcaMap, modeloMap]);
+  }, [ordenes, filtroTipo, filtroTecnico, clienteMap, dispositivoMap, marcaMap, modeloMap, tecnicoMap]);
 
   // ───── Columns ─────
 
@@ -187,6 +235,9 @@ export function OrdenesPage() {
     { key: 'id', label: 'ID', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
     { key: 'dispositivo', label: 'Dispositivo' },
+    ...(isAdmin
+      ? ([{ key: 'tecnico', label: 'Técnico', sortable: true }] as Column<OrdenRow>[])
+      : []),
     {
       key: 'estado',
       label: 'Estado',
@@ -219,6 +270,26 @@ export function OrdenesPage() {
       sortable: true,
       render: (row) => formatDateTime(row.fechaEntrada),
     },
+    // Solo para el técnico: botón "Asignarme" en la pestaña Disponibles
+    ...(!isAdmin && tab === 'disponibles'
+      ? ([
+          {
+            key: 'id',
+            label: 'Acciones',
+            render: (row: OrdenRow) => (
+              <Button
+                size="sm"
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setAsignTarget(ordenes?.find((o) => o.id === row.id) ?? null);
+                }}
+              >
+                Asignarme
+              </Button>
+            ),
+          },
+        ] as Column<OrdenRow>[])
+      : []),
   ];
 
   // ───── Create modal state ─────
@@ -237,6 +308,7 @@ export function OrdenesPage() {
   const [createNotas, setCreateNotas] = useState('');
   const [createTipoReparacion, setCreateTipoReparacion] = useState('');
   const [createPrecioRevision, setCreatePrecioRevision] = useState('');
+  const [createTecnicoId, setCreateTecnicoId] = useState<number | ''>('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<{
     cliente?: string;
@@ -248,6 +320,27 @@ export function OrdenesPage() {
 
   // ───── Stepper state ─────
   const [paso, setPaso] = useState(1);
+
+  // ───── Asignar (técnico: "Asignarme" en Disponibles) ─────
+  const [asignTarget, setAsignTarget] = useState<OrdenTrabajo | null>(null);
+  const [asignando, setAsignando] = useState(false);
+
+  const handleAsignar = useCallback(async () => {
+    if (!asignTarget || user?.tecnicoId == null) return;
+    setAsignando(true);
+    try {
+      await asignarMutation.mutateAsync({
+        ordenId: asignTarget.id,
+        tecnicoId: user.tecnicoId,
+      });
+      setAsignTarget(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al asignar';
+      alert(msg);
+    } finally {
+      setAsignando(false);
+    }
+  }, [asignTarget, user?.tecnicoId, asignarMutation]);
 
   // ───── Factura modal state ─────
   const [facturaOpen, setFacturaOpen] = useState(false);
@@ -319,6 +412,7 @@ export function OrdenesPage() {
       setCreateNotas('');
       setCreateTipoReparacion('');
       setCreatePrecioRevision('');
+      setCreateTecnicoId('');
       setFacturaOpen(false);
       setFacturaOrden(null);
       setCreateErrors({});
@@ -372,6 +466,7 @@ export function OrdenesPage() {
     setCreateNotas('');
     setCreateTipoReparacion('');
     setCreatePrecioRevision('');
+    setCreateTecnicoId('');
     setFacturaOpen(false);
     setFacturaOrden(null);
     setCreateErrors({});
@@ -415,6 +510,12 @@ export function OrdenesPage() {
         precioRevision: createPrecioRevision
           ? Number(createPrecioRevision)
           : undefined,
+        // Técnico: solo el admin elige; el técnico se autoasigna al crear.
+        tecnicoId: isAdmin
+          ? createTecnicoId !== ''
+            ? Number(createTecnicoId)
+            : undefined
+          : (user?.tecnicoId ?? undefined),
       };
       const created = await createMutation.mutateAsync(body);
       closeCreate();
@@ -439,8 +540,11 @@ export function OrdenesPage() {
     createNotas,
     createTipoReparacion,
     createPrecioRevision,
+    createTecnicoId,
     closeCreate,
     createMutation,
+    isAdmin,
+    user?.tecnicoId,
   ]);
 
   // ───── Row click ─────
@@ -490,7 +594,7 @@ export function OrdenesPage() {
             Reparaciones
           </h2>
           <p className="text-sm text-slate-500">
-            Gestión de reparaciones
+            {isAdmin ? 'Gestión de reparaciones' : 'Gestión de tus reparaciones'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -506,8 +610,33 @@ export function OrdenesPage() {
         </div>
       </div>
 
+      {/* Técnico: pestañas Mis reparaciones / Disponibles */}
+      {!isAdmin && (
+        <div className="flex w-fit items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+          {(
+            [
+              { value: 'mias', label: 'Mis reparaciones' },
+              { value: 'disponibles', label: 'Disponibles' },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTab(opt.value)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                tab === opt.value
+                  ? 'bg-primary text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-end gap-4">
         <div className="w-56">
           <Select
             label="Filtrar por Estado"
@@ -517,6 +646,7 @@ export function OrdenesPage() {
               setEstadoFilter(e.target.value as EstadoOrden | '')
             }
             placeholder=""
+            disabled={!isAdmin}
           />
         </div>
         <div className="w-56">
@@ -528,6 +658,22 @@ export function OrdenesPage() {
             onChange={(e) => setFiltroTipo(e.target.value)}
           />
         </div>
+        {isAdmin && (
+          <div className="w-56">
+            <Select
+              label="Filtrar por Técnico"
+              options={
+                tecnicos?.map((t) => ({
+                  value: String(t.id),
+                  label: t.nombre,
+                })) ?? []
+              }
+              placeholder="Todos los técnicos"
+              value={filtroTecnico}
+              onChange={(e) => setFiltroTecnico(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Error state */}
@@ -550,7 +696,13 @@ export function OrdenesPage() {
           columns={columns}
           data={rows}
           loading={loading}
-          emptyMessage="No hay reparaciones registradas"
+          emptyMessage={
+            isAdmin
+              ? 'No hay reparaciones registradas'
+              : tab === 'mias'
+                ? 'No tienes reparaciones asignadas'
+                : 'No hay reparaciones disponibles'
+          }
           keyExtractor={(row) => row.id}
           searchFilter={busqueda}
           onRowClick={handleRowClick}
@@ -763,6 +915,29 @@ export function OrdenesPage() {
           {/* Paso 3 — Costo y Confirmar */}
           {paso === 3 && (
             <>
+              {isAdmin && (
+                <FormField label="Técnico responsable">
+                  <Select
+                    options={
+                      tecnicos?.map((t) => ({
+                        value: String(t.id),
+                        label: `${t.nombre} (${t.username})`,
+                      })) ?? []
+                    }
+                    placeholder="Sin asignar"
+                    value={createTecnicoId ? String(createTecnicoId) : ''}
+                    onChange={(e) =>
+                      setCreateTecnicoId(
+                        e.target.value ? Number(e.target.value) : '',
+                      )
+                    }
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Opcional: se puede asignar después desde el detalle.
+                  </p>
+                </FormField>
+              )}
+
               <div className="border-t border-slate-200 pt-4">
                 <p className="mb-3 text-sm font-semibold text-slate-700">
                   Costo de Revisión
@@ -895,6 +1070,19 @@ export function OrdenesPage() {
             : null
         }
         onClose={() => setFacturaOpen(false)}
+      />
+
+      {/* ───── Confirmar Asignarme (técnico) ───── */}
+      <ConfirmDialog
+        isOpen={asignTarget !== null}
+        title="Asignar reparación"
+        message={`¿Quieres asignarte la reparación #${asignTarget?.id}?`}
+        confirmLabel="Asignarme"
+        cancelLabel="Cancelar"
+        variant="warning"
+        loading={asignando}
+        onConfirm={handleAsignar}
+        onCancel={() => setAsignTarget(null)}
       />
     </div>
   );

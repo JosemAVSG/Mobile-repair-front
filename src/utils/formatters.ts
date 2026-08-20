@@ -2,7 +2,17 @@
 // Labels (tipos y categorías)
 // ──────────────────────────────────────────────
 
-import { TipoDispositivo, TipoReparacion, CategoriaMarca } from '../types';
+import { TipoDispositivo, TipoReparacion, CategoriaMarca, type RolUsuario } from '../types';
+
+export const ROL_LABELS: Record<RolUsuario, string> = {
+  ADMIN: 'Administrador',
+  TECNICO: 'Técnico',
+};
+
+export const ROL_BADGE: Record<RolUsuario, 'info' | 'warning'> = {
+  ADMIN: 'info',
+  TECNICO: 'warning',
+};
 
 export const TIPO_DISPOSITIVO_LABELS: Record<TipoDispositivo, string> = {
   [TipoDispositivo.CELULAR]: 'Celular',
@@ -67,6 +77,12 @@ export function categoriaBadgeConfig(cat: CategoriaMarca): BadgeConfig {
         ? 'warning'
         : 'default';
   return { label: CATEGORIA_MARCA_LABELS[cat], variant };
+}
+
+export function rolBadgeConfig(rol: RolUsuario): BadgeConfig {
+  const variant: BadgeConfig['variant'] =
+    rol === 'ADMIN' ? 'info' : 'warning';
+  return { label: ROL_LABELS[rol], variant };
 }
 
 // ──────────────────────────────────────────────

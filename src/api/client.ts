@@ -94,6 +94,24 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return handleResponse<T>(res);
 }
 
+/**
+ * POST multipart/form-data — para subida de archivos. No se setea
+ * Content-Type para que el navegador agregue el boundary automáticamente.
+ */
+export async function apiPostForm<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(buildUrl(path), {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  return handleResponse<T>(res);
+}
+
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PUT',

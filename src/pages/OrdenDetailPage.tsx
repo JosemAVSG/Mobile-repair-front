@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
@@ -8,12 +8,16 @@ import { Modal } from '../components/atoms/Modal';
 import { Select } from '../components/atoms/Select';
 import { Input } from '../components/atoms/Input';
 import { Spinner } from '../components/atoms/Spinner';
+import { Icon } from '../components/atoms/Icon';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
+import { FacturaModal } from '../components/organisms/FacturaModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
+import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { apiPut, apiPost, ApiError } from '../api/client';
+import { useAuth } from '../hooks/useAuth';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import {
   buildWhatsAppLink,
@@ -23,7 +27,7 @@ import {
 } from '../utils/whatsapp';
 import { isOrdenAtrasada } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
-import type { OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
+import type { EtapaFoto, FotoOrden, OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
   useOrden,
@@ -34,6 +38,10 @@ import {
   useModelos,
   useHistorialOrden,
   useTarifas,
+  useTecnicos,
+  useFotosOrden,
+  useSubirFotoOrden,
+  useEliminarFotoOrden,
 } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -93,6 +101,15 @@ function normalizeEntrega(value: string): string {
 // Labels
 // ──────────────────────────────────────────────
 
+const MAX_FOTO_MB = 10;
+const MAX_FOTO_BYTES = MAX_FOTO_MB * 1024 * 1024;
+
+const ETAPAS_FOTO: { etapa: EtapaFoto; titulo: string; descripcion: string }[] = [
+  { etapa: 'ANTES', titulo: 'Antes', descripcion: 'Estado inicial del dispositivo' },
+  { etapa: 'DURANTE', titulo: 'Durante', descripcion: 'Durante la reparación' },
+  { etapa: 'DESPUES', titulo: 'Después', descripcion: 'Estado final del dispositivo' },
+];
+
 // ──────────────────────────────────────────────
 // OrdenDetailPage
 // ──────────────────────────────────────────────
@@ -104,6 +121,7 @@ export function OrdenDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { config } = useConfig();
+  const { user } = useAuth();
   const ordenId = Number(id);
 
   // ───── Data ─────
@@ -127,6 +145,32 @@ export function OrdenDetailPage() {
   // Catálogo de marcas y modelos para resolver nombres del equipo embebido
   const { data: marcas } = useMarcas();
   const { data: modelos } = useModelos();
+  const { data: tecnicos } = useTecnicos();
+
+  const esAdmin = user?.rol === 'ADMIN';
+
+  const tecnicoResponsable = useMemo(() => {
+    if (orden?.tecnicoId == null) return null;
+    return tecnicos?.find((t) => t.id === orden.tecnicoId) ?? null;
+  }, [orden?.tecnicoId, tecnicos]);
+
+  // Técnico que verá el select del admin en el detalle
+  const tecnicoOptions = useMemo(
+    () =>
+      tecnicos
+        ?.filter((t) => t.activo)
+        .map((t) => ({ value: String(t.id), label: `${t.nombre} (${t.username})` })) ?? [],
+    [tecnicos],
+  );
+
+  const [asignTecnicoSel, setAsignTecnicoSel] = useState('');
+  useEffect(() => {
+    if (orden?.tecnicoId != null) {
+      setAsignTecnicoSel(String(orden.tecnicoId));
+    } else {
+      setAsignTecnicoSel('');
+    }
+  }, [orden?.tecnicoId]);
 
   const marcaId = orden?.marcaId ?? (modelo ? modelo.marcaId : undefined);
   const marcaNombre = useMemo(() => {
@@ -197,6 +241,186 @@ export function OrdenDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['historial'] });
     },
   });
+
+  const asignarTecnicoMutation = useMutation({
+    mutationFn: ({ targetOrdenId, tecnicoId }: { targetOrdenId: number; tecnicoId: number | null }) =>
+      apiPut<OrdenTrabajo>(`/api/ordenes/${targetOrdenId}/tecnico`, { tecnicoId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
+
+  // ───── Fotos del dispositivo (data + mutations) ─────
+
+  const {
+    data: fotos = [],
+    isPending: fotosPending,
+    isFetching: fotosFetching,
+    error: fotosError,
+  } = useFotosOrden(ordenId);
+
+  const subirFotoMutation = useSubirFotoOrden(ordenId);
+  const eliminarFotoMutation = useEliminarFotoOrden(ordenId);
+
+  const fotosLoading = fotosPending || fotosFetching;
+  const fotosErrorMessage =
+    fotosError instanceof Error ? fotosError.message : String(fotosError);
+
+  const fotosPorEtapa = useMemo(() => {
+    const grupos: Record<EtapaFoto, FotoOrden[]> = {
+      ANTES: [],
+      DURANTE: [],
+      DESPUES: [],
+    };
+    for (const foto of fotos) {
+      grupos[foto.etapa].push(foto);
+    }
+    return grupos;
+  }, [fotos]);
+
+  // Solo ADMIN o el técnico asignado pueden subir/eliminar fotos; el resto
+  // ve la galería en modo solo lectura.
+  const puedeGestionarFotos = useMemo(
+    () =>
+      esAdmin ||
+      (orden?.tecnicoId != null &&
+        user?.tecnicoId != null &&
+        orden.tecnicoId === user.tecnicoId),
+    [esAdmin, orden?.tecnicoId, user?.tecnicoId],
+  );
+
+  // ───── Fotos del dispositivo (state) ─────
+
+  const [selectedFiles, setSelectedFiles] = useState<
+    Partial<Record<EtapaFoto, File>>
+  >({});
+  const [previews, setPreviews] = useState<
+    Partial<Record<EtapaFoto, string>>
+  >({});
+  const [uploadErrors, setUploadErrors] = useState<
+    Partial<Record<EtapaFoto, string>>
+  >({});
+  const [subiendoEtapa, setSubiendoEtapa] = useState<EtapaFoto | null>(null);
+  const [fotoAEliminar, setFotoAEliminar] = useState<FotoOrden | null>(null);
+  const fileInputRef = useRef<Partial<Record<EtapaFoto, HTMLInputElement | null>>>({});
+
+  // Libera los object URLs creados al previsualizar archivos.
+  useEffect(() => {
+    const urls = Object.values(previews);
+    return () => {
+      for (const url of urls) {
+        if (url) URL.revokeObjectURL(url);
+      }
+    };
+  }, [previews]);
+
+  const limpiarSeleccion = useCallback((etapa: EtapaFoto) => {
+    setSelectedFiles((prev) => {
+      const next = { ...prev };
+      delete next[etapa];
+      return next;
+    });
+    setPreviews((prev) => {
+      const next = { ...prev };
+      if (next[etapa]) URL.revokeObjectURL(next[etapa]!);
+      delete next[etapa];
+      return next;
+    });
+    const input = fileInputRef.current[etapa];
+    if (input) input.value = '';
+  }, []);
+
+  const handleSeleccionarArchivo = useCallback(
+    (etapa: EtapaFoto, file: File | undefined) => {
+      if (!file) return;
+      const formatoOk = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+      const tamOk = file.size <= MAX_FOTO_BYTES;
+      if (!formatoOk || !tamOk) {
+        setUploadErrors((prev) => ({
+          ...prev,
+          [etapa]: `Solo se permiten imágenes JPG, PNG o WEBP de hasta ${MAX_FOTO_MB} MB`,
+        }));
+        return;
+      }
+      setUploadErrors((prev) => ({ ...prev, [etapa]: undefined }));
+      setPreviews((prev) => {
+        if (prev[etapa]) URL.revokeObjectURL(prev[etapa]!);
+        return { ...prev, [etapa]: URL.createObjectURL(file) };
+      });
+      setSelectedFiles((prev) => ({ ...prev, [etapa]: file }));
+    },
+    [],
+  );
+
+  const handleSubirFoto = useCallback(
+    async (etapa: EtapaFoto) => {
+      const file = selectedFiles[etapa];
+      if (!file) return;
+      setSubiendoEtapa(etapa);
+      setUploadErrors((prev) => ({ ...prev, [etapa]: undefined }));
+      try {
+        await subirFotoMutation.mutateAsync({ file, etapa });
+        limpiarSeleccion(etapa);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Error al subir la foto';
+        setUploadErrors((prev) => ({ ...prev, [etapa]: msg }));
+      } finally {
+        setSubiendoEtapa(null);
+      }
+    },
+    [selectedFiles, subirFotoMutation, limpiarSeleccion],
+  );
+
+  const handleEliminarFoto = useCallback(async () => {
+    if (!fotoAEliminar) return;
+    try {
+      await eliminarFotoMutation.mutateAsync(fotoAEliminar.id);
+      setFotoAEliminar(null);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al eliminar la foto';
+      alert(msg);
+    }
+  }, [fotoAEliminar, eliminarFotoMutation]);
+
+  // ───── Técnico responsable state ─────
+
+  const [facturaOpen, setFacturaOpen] = useState(false);
+  const [confirmAsignarme, setConfirmAsignarme] = useState(false);
+  const [asignando, setAsignando] = useState(false);
+
+  const handleAsignarme = useCallback(async () => {
+    if (!orden || user?.tecnicoId == null) return;
+    setAsignando(true);
+    try {
+      await asignarTecnicoMutation.mutateAsync({
+        targetOrdenId: orden.id,
+        tecnicoId: user.tecnicoId,
+      });
+      setConfirmAsignarme(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al asignar';
+      alert(msg);
+    } finally {
+      setAsignando(false);
+    }
+  }, [orden, user?.tecnicoId, asignarTecnicoMutation]);
+
+  const handleAsignarSelect = useCallback(async () => {
+    if (!orden) return;
+    setAsignando(true);
+    try {
+      const tecnicoId = asignTecnicoSel !== '' ? Number(asignTecnicoSel) : null;
+      await asignarTecnicoMutation.mutateAsync({ targetOrdenId: orden.id, tecnicoId });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al asignar técnico';
+      alert(msg);
+    } finally {
+      setAsignando(false);
+    }
+  }, [orden, asignTecnicoSel, asignarTecnicoMutation]);
 
   // ───── Transition state ─────
 
@@ -667,6 +891,9 @@ export function OrdenDetailPage() {
           <Button variant="secondary" onClick={() => setTicketOpen(true)}>
             Ticket QR
           </Button>
+          <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
+            Factura
+          </Button>
         </div>
       </div>
 
@@ -735,6 +962,85 @@ export function OrdenDetailPage() {
         </div>
       </Card>
 
+      {/* ── Técnico responsable ── */}
+      <Card title="Técnico responsable">
+        {tecnicoResponsable ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                {tecnicoResponsable.nombre.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                  {tecnicoResponsable.nombre}
+                  {orden?.tecnicoId != null && orden.tecnicoId === user?.tecnicoId && (
+                    <Badge variant="info">Tú</Badge>
+                  )}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {tecnicoResponsable.correo ?? 'Sin correo registrado'}
+                </p>
+              </div>
+            </div>
+            {esAdmin && (
+              <div className="flex items-end gap-2">
+                <div className="w-56">
+                  <Select
+                    label="Cambiar técnico"
+                    options={tecnicoOptions}
+                    placeholder="Sin asignar"
+                    value={asignTecnicoSel}
+                    onChange={(e) => setAsignTecnicoSel(e.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => void handleAsignarSelect()}
+                  loading={asignando}
+                >
+                  Asignar
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-slate-500">Sin técnico asignado</p>
+            {user?.tecnicoId != null && (
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmAsignarme(true)}
+                loading={asignando}
+              >
+                Asignarme
+              </Button>
+            )}
+            {esAdmin && (
+              <div className="flex items-end gap-2">
+                <div className="w-56">
+                  <Select
+                    label="Asignar técnico"
+                    options={tecnicoOptions}
+                    placeholder="Seleccionar..."
+                    value={asignTecnicoSel}
+                    onChange={(e) => setAsignTecnicoSel(e.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => void handleAsignarSelect()}
+                  loading={asignando}
+                >
+                  Asignar
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* ── Equipo Section ── */}
       <Card title="Equipo">
         <div className="space-y-4">
@@ -779,6 +1085,120 @@ export function OrdenDetailPage() {
             </p>
           </div>
         </div>
+      </Card>
+
+      {/* ── Fotos del dispositivo ── */}
+      <Card title="Fotos del dispositivo">
+        {fotosLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner size="lg" />
+          </div>
+        ) : fotosError ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            Error al cargar las fotos: {fotosErrorMessage}
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {ETAPAS_FOTO.map(({ etapa, titulo, descripcion }) => {
+              const grupo = fotosPorEtapa[etapa];
+              const preview = previews[etapa];
+              return (
+                <div key={etapa}>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-slate-800">
+                      {titulo}
+                    </h4>
+                    <p className="text-xs text-slate-500">{descripcion}</p>
+                  </div>
+
+                  {puedeGestionarFotos && (
+                    <div className="mb-4 space-y-2">
+                      {preview ? (
+                        <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
+                          <img
+                            src={preview}
+                            alt="Vista previa"
+                            className="h-16 w-16 shrink-0 rounded object-cover"
+                          />
+                          <div className="flex flex-1 items-center gap-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void handleSubirFoto(etapa)}
+                              loading={subiendoEtapa === etapa}
+                            >
+                              Subir
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => limpiarSeleccion(etapa)}
+                              disabled={subiendoEtapa === etapa}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => fileInputRef.current[etapa]?.click()}
+                        >
+                          <Icon name="plus" size={16} /> Subir foto
+                        </Button>
+                      )}
+
+                      <input
+                        ref={(el) => {
+                          fileInputRef.current[etapa] = el;
+                        }}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleSeleccionarArchivo(etapa, e.target.files?.[0])
+                        }
+                      />
+
+                      {uploadErrors[etapa] && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                          {uploadErrors[etapa]}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {grupo.length > 0 ? (
+                    <div className="flex flex-wrap gap-3">
+                      {grupo.map((foto) => (
+                        <div key={foto.id} className="relative">
+                          <img
+                            src={foto.url}
+                            alt={`Foto ${titulo.toLowerCase()}`}
+                            className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
+                          />
+                          {puedeGestionarFotos && (
+                            <button
+                              type="button"
+                              title="Eliminar foto"
+                              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow hover:bg-red-700"
+                              onClick={() => setFotoAEliminar(foto)}
+                            >
+                              <Icon name="trash" size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">Sin fotos</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {/* ── Workflow Section ── */}
@@ -1011,6 +1431,42 @@ export function OrdenDetailPage() {
         marca={marcaEquipo}
         modelo={modeloEquipo}
         onClose={() => setTicketOpen(false)}
+      />
+
+      {/* ───── Factura Modal ───── */}
+      <FacturaModal
+        isOpen={facturaOpen}
+        orden={orden}
+        cliente={cliente ?? null}
+        marca={marcaEquipo}
+        modelo={modeloEquipo}
+        onClose={() => setFacturaOpen(false)}
+      />
+
+      {/* ───── Confirmar Asignarme ───── */}
+      <ConfirmDialog
+        isOpen={confirmAsignarme}
+        title="Asignar reparación"
+        message={`¿Quieres asignarte la reparación #${orden.id}?`}
+        confirmLabel="Asignarme"
+        cancelLabel="Cancelar"
+        variant="warning"
+        loading={asignando}
+        onConfirm={handleAsignarme}
+        onCancel={() => setConfirmAsignarme(false)}
+      />
+
+      {/* ───── Confirmar Eliminar Foto ───── */}
+      <ConfirmDialog
+        isOpen={fotoAEliminar !== null}
+        title="Eliminar foto"
+        message="¿Seguro que quieres eliminar esta foto? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        variant="danger"
+        loading={eliminarFotoMutation.isPending}
+        onConfirm={() => void handleEliminarFoto()}
+        onCancel={() => setFotoAEliminar(null)}
       />
     </div>
   );

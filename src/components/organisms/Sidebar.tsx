@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Icon, type IconName } from '../atoms/Icon';
 import { useConfig } from '../../context/ConfigContext';
+import { useAuth } from '../../hooks/useAuth';
 
 interface NavItem {
   path: string;
@@ -15,9 +16,13 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const navItems: NavItem[] = [
+const adminNavItems: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: 'home' },
   { path: '/dispositivos', label: 'Dispositivos', icon: 'smartphone' },
+  { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
+];
+
+const tecnicNavItems: NavItem[] = [
   { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
 ];
 
@@ -41,6 +46,12 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+// Acciones del área inferior (solo admin): Configuración + Técnicos
+const bottomItems: NavItem[] = [
+  { path: '/tecnicos', label: 'Técnicos', icon: 'users' },
+  { path: '/configuracion', label: 'Configuración', icon: 'settings' },
+];
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,6 +60,10 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { config } = useConfig();
+  const { user } = useAuth();
+  const isAdmin = user?.rol === 'ADMIN';
+
+  const navItems = isAdmin ? adminNavItems : tecnicNavItems;
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -136,90 +151,96 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               );
             })}
 
-            {navGroups.map((group) => {
-              const active = groupActive(group);
-              const open = openGroups[group.label] ?? false;
+            {isAdmin &&
+              navGroups.map((group) => {
+                const active = groupActive(group);
+                const open = openGroups[group.label] ?? false;
 
-              return (
-                <li key={group.label}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.label)}
-                    aria-expanded={open}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                      active
-                        ? 'bg-primary text-white'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <Icon
-                      name={group.icon}
-                      size={18}
-                      className={active ? 'text-white' : 'text-slate-400'}
-                    />
-                    <span className="flex-1 text-left">{group.label}</span>
-                    <Icon
-                      name={open ? 'chevron-down' : 'chevron-right'}
-                      size={16}
-                      className={active ? 'text-white' : 'text-slate-500'}
-                    />
-                  </button>
+                return (
+                  <li key={group.label}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.label)}
+                      aria-expanded={open}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                        active
+                          ? 'bg-primary text-white'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <Icon
+                        name={group.icon}
+                        size={18}
+                        className={active ? 'text-white' : 'text-slate-400'}
+                      />
+                      <span className="flex-1 text-left">{group.label}</span>
+                      <Icon
+                        name={open ? 'chevron-down' : 'chevron-right'}
+                        size={16}
+                        className={active ? 'text-white' : 'text-slate-500'}
+                      />
+                    </button>
 
-                  {open && (
-                    <ul className="mt-1 space-y-1 pl-4">
-                      {group.items.map((item) => {
-                        const itemActive = isActive(item.path);
+                    {open && (
+                      <ul className="mt-1 space-y-1 pl-4">
+                        {group.items.map((item) => {
+                          const itemActive = isActive(item.path);
 
-                        return (
-                          <li key={item.path}>
-                            <Link
-                              to={item.path}
-                              onClick={() => onClose()}
-                              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                itemActive
-                                  ? 'bg-primary/90 text-white'
-                                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                              }`}
-                            >
-                              <Icon
-                                name={item.icon}
-                                size={16}
-                                className={
-                                  itemActive ? 'text-white' : 'text-slate-500'
-                                }
-                              />
-                              {item.label}
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
+                          return (
+                            <li key={item.path}>
+                              <Link
+                                to={item.path}
+                                onClick={() => onClose()}
+                                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                  itemActive
+                                    ? 'bg-primary/90 text-white'
+                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                }`}
+                              >
+                                <Icon
+                                  name={item.icon}
+                                  size={16}
+                                  className={
+                                    itemActive ? 'text-white' : 'text-slate-500'
+                                  }
+                                />
+                                {item.label}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
           </ul>
         </nav>
 
-        {/* Bottom: configuración + footer (shrink-0: nunca se encoge ni se
-            pierde del viewport; el scroll vive solo en el nav) */}
-        <div className="mt-auto shrink-0 border-t border-slate-700 px-3 py-3">
-          <Link
-            to="/configuracion"
-            onClick={() => onClose()}
-            className={linkClasses(isActive('/configuracion'))}
-          >
-            <Icon
-              name="settings"
-              size={18}
-              className={isActive('/configuracion') ? 'text-white' : 'text-slate-400'}
-            />
-            Configuración
-          </Link>
-          <p className="mt-3 px-3 text-xs text-slate-500">
-            Sistema de gestión de reparaciones
-          </p>
-        </div>
+        {/* Bottom: configuración + técnicos (solo admin) + footer. Para el
+            técnico esta sección se oculta por completo. */}
+        {isAdmin && (
+          <div className="mt-auto shrink-0 border-t border-slate-700 px-3 py-3">
+            {bottomItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => onClose()}
+                className={linkClasses(isActive(item.path))}
+              >
+                <Icon
+                  name={item.icon}
+                  size={18}
+                  className={isActive(item.path) ? 'text-white' : 'text-slate-400'}
+                />
+                {item.label}
+              </Link>
+            ))}
+            <p className="mt-3 px-3 text-xs text-slate-500">
+              Sistema de gestión de reparaciones
+            </p>
+          </div>
+        )}
       </aside>
     </>
   );

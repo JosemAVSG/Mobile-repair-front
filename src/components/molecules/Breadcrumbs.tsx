@@ -67,6 +67,8 @@ function useCrumbs(
     if (id) crumbs.push({ label: `Reparación #${id}` });
   } else if (segments[0] === 'tarifas') crumbs.push({ label: 'Tarifas' });
   else if (segments[0] === 'repuestos') crumbs.push({ label: 'Repuestos' });
+  else if (segments[0] === 'tecnicos') crumbs.push({ label: 'Técnicos' });
+  else if (segments[0] === 'configuracion') crumbs.push({ label: 'Configuración' });
 
   return crumbs;
 }

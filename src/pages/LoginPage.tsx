@@ -10,7 +10,7 @@ import { useConfig } from '../context/ConfigContext';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const { config } = useConfig();
 
   const [username, setUsername] = useState('');
@@ -20,7 +20,7 @@ export function LoginPage() {
 
   // If already authenticated, redirect
   if (isAuthenticated) {
-    navigate('/', { replace: true });
+    navigate(user?.rol === 'ADMIN' ? '/' : '/reparaciones', { replace: true });
     return null;
   }
 
@@ -35,14 +35,15 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      const success = await login(username, password);
-      if (success) {
-        navigate('/', { replace: true });
-      } else {
-        setError('Usuario o contraseña incorrectos');
-      }
-    } catch {
-      setError('Error al iniciar sesión. Intenta de nuevo.');
+      const user = await login(username, password);
+      // El técnico no tiene dashboard: lo mandamos directo a sus reparaciones.
+      navigate(user.rol === 'ADMIN' ? '/' : '/reparaciones', { replace: true });
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Error al iniciar sesión. Intenta de nuevo.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ export function LoginPage() {
           <Input
             label="Usuario"
             type="text"
-            placeholder="admin"
+            placeholder="usuario"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"

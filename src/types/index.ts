@@ -11,6 +11,31 @@ export interface ApiResponse<T> {
 // Enums
 // ──────────────────────────────────────────────
 
+export type RolUsuario = 'ADMIN' | 'TECNICO';
+
+export type EtapaFoto = 'ANTES' | 'DURANTE' | 'DESPUES';
+
+export interface AuthUser {
+  id: number;
+  nombre: string;
+  correo?: string | null;
+  telefono?: string | null;
+  username: string;
+  rol: RolUsuario;
+  activo: boolean;
+  createdAt?: string;
+  /** Id del registro de Técnico asociado. El backend usa el mismo id del
+   *  usuario (todo usuario es una fila en `tecnicos`), por lo que coincide
+   *  con `id` en la práctica. */
+  tecnicoId?: number | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: AuthUser;
+  rol: RolUsuario;
+}
+
 export enum CategoriaMarca {
   CELULARES = 'CELULARES',
   LINEA_BLANCA = 'LINEA_BLANCA',
@@ -89,9 +114,21 @@ export interface Dispositivo {
   createdAt: string;
 }
 
+export interface Tecnico {
+  id: number;
+  nombre: string;
+  correo?: string | null;
+  telefono?: string | null;
+  username: string;
+  rol: RolUsuario;
+  activo: boolean;
+  createdAt?: string;
+}
+
 export interface OrdenTrabajo {
   id: number;
   clienteId: number;
+  tecnicoId?: number | null;
   dispositivoId?: number | null;
   marcaId?: number | null;
   modeloId?: number | null;
@@ -150,6 +187,14 @@ export interface HistorialEntry {
   createdAt: string;
 }
 
+export interface FotoOrden {
+  id: number;
+  ordenId: number;
+  etapa: EtapaFoto;
+  url: string;
+  createdAt: string;
+}
+
 // ──────────────────────────────────────────────
 // Request DTOs
 // ──────────────────────────────────────────────
@@ -184,6 +229,7 @@ export interface DispositivoRequest {
 
 export interface OrdenRequest {
   clienteId: number;
+  tecnicoId?: number | null;
   dispositivoId?: number;
   marcaId?: number;
   modeloId?: number;
@@ -207,6 +253,17 @@ export interface TarifaRequest {
   modeloId?: number;
   tipo: TipoReparacion;
   precio: number;
+}
+
+export interface TecnicoRequest {
+  nombre: string;
+  correo?: string;
+  telefono?: string;
+  username: string;
+  /** Obligatorio al crear; en edición, vacío/ausente = no cambiar. */
+  password?: string;
+  rol: RolUsuario;
+  activo: boolean;
 }
 
 export interface RepuestoRequest {
