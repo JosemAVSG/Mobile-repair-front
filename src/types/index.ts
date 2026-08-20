@@ -92,7 +92,12 @@ export interface Dispositivo {
 export interface OrdenTrabajo {
   id: number;
   clienteId: number;
-  dispositivoId: number;
+  dispositivoId?: number | null;
+  marcaId?: number | null;
+  modeloId?: number | null;
+  tipo?: TipoDispositivo | null;
+  numeroSerie?: string | null;
+  imei?: string | null;
   estado: EstadoOrden;
   falloReportado: string | null;
   precioTotal: number | null;
@@ -178,7 +183,12 @@ export interface DispositivoRequest {
 
 export interface OrdenRequest {
   clienteId: number;
-  dispositivoId: number;
+  dispositivoId?: number;
+  marcaId?: number;
+  modeloId?: number;
+  tipo?: TipoDispositivo;
+  numeroSerie?: string;
+  imei?: string;
   falloReportado?: string;
   notas?: string;
 }

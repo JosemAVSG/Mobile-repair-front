@@ -5,15 +5,15 @@ import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Modal } from '../components/atoms/Modal';
 import { Select } from '../components/atoms/Select';
-import { Spinner } from '../components/atoms/Spinner';
+import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost } from '../api/client';
-import { formatDateTime, formatCurrency, tipoDispositivoLabel } from '../utils/formatters';
-import type { OrdenTrabajo, Cliente, Dispositivo, Modelo, OrdenRequest } from '../types';
+import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
+import type { OrdenTrabajo, Cliente, Dispositivo, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo } from '../types';
-import { useOrdenes, useClientes, useDispositivos, useModelos, useDispositivosPorCliente } from '../hooks/useQueries';
+import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -90,6 +90,7 @@ export function OrdenesPage() {
 
   const { data: clientes } = useClientes();
   const { data: dispositivos } = useDispositivos();
+  const { data: marcas } = useMarcas();
   const { data: modelos } = useModelos();
 
   const createMutation = useMutation({
@@ -109,6 +110,12 @@ export function OrdenesPage() {
     return map;
   }, [dispositivos]);
 
+  const marcaMap = useMemo(() => {
+    const map = new Map<number, Marca>();
+    marcas?.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [marcas]);
+
   const modeloMap = useMemo(() => {
     const map = new Map<number, Modelo>();
     modelos?.forEach((m) => map.set(m.id, m));
@@ -122,21 +129,30 @@ export function OrdenesPage() {
 
     if (filtroTipo) {
       ordenesList = ordenesList.filter((orden) => {
-        const dispositivo = dispositivoMap.get(orden.dispositivoId);
-        return dispositivo?.tipo === filtroTipo;
+        const dispositivo =
+          orden.dispositivoId != null ? dispositivoMap.get(orden.dispositivoId) : undefined;
+        const tipo = orden.tipo ?? dispositivo?.tipo;
+        return tipo === filtroTipo;
       });
     }
 
     return ordenesList.map((orden) => {
       const cliente = clienteMap.get(orden.clienteId);
-      const dispositivo = dispositivoMap.get(orden.dispositivoId);
-      const modelo = dispositivo
-        ? modeloMap.get(dispositivo.modeloId)
-        : null;
+      const dispositivo =
+        orden.dispositivoId != null ? dispositivoMap.get(orden.dispositivoId) : undefined;
+      const modeloId = orden.modeloId ?? dispositivo?.modeloId;
+      const modelo = modeloId != null ? modeloMap.get(modeloId) : undefined;
+      const marca = modelo ? marcaMap.get(modelo.marcaId) : undefined;
 
-      const dispLabel = dispositivo
-        ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo} - ${modelo?.nombre ?? `Modelo #${dispositivo.modeloId}`}`
-        : `Dispositivo #${orden.dispositivoId}`;
+      const tipo = orden.tipo ?? dispositivo?.tipo;
+      const parts: string[] = [];
+      if (tipo) parts.push(tipoDispositivoLabel(tipo) ?? tipo);
+      if (marca) parts.push(marca.nombre);
+      if (modelo) parts.push(modelo.nombre);
+      else if (modeloId != null) parts.push(`Modelo #${modeloId}`);
+      const dispLabel =
+        parts.join(' - ') ||
+        (orden.dispositivoId != null ? `Dispositivo #${orden.dispositivoId}` : '—');
 
       return {
         id: orden.id,
@@ -148,7 +164,7 @@ export function OrdenesPage() {
         fechaEntrada: orden.fechaEntrada,
       };
     });
-  }, [ordenes, filtroTipo, clienteMap, dispositivoMap, modeloMap]);
+  }, [ordenes, filtroTipo, clienteMap, dispositivoMap, marcaMap, modeloMap]);
 
   // ───── Columns ─────
 
@@ -192,68 +208,113 @@ export function OrdenesPage() {
   const [createDispositivoId, setCreateDispositivoId] = useState<
     number | ''
   >('');
+  const [createMarcaId, setCreateMarcaId] = useState<number | ''>('');
+  const [createModeloId, setCreateModeloId] = useState<number | ''>('');
+  const [createTipo, setCreateTipo] = useState<TipoDispositivo | ''>('');
+  const [createImei, setCreateImei] = useState('');
+  const [createSerie, setCreateSerie] = useState('');
   const [createFallo, setCreateFallo] = useState('');
   const [createNotas, setCreateNotas] = useState('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<{
     cliente?: string;
-    dispositivo?: string;
+    marca?: string;
+    modelo?: string;
+    tipo?: string;
     general?: string;
   }>({});
 
-  // ───── Cascade: dispositivos by cliente ─────
+  // ───── Cascade: modelos by marca ─────
+
+  const modelosMarca = useMemo(
+    () =>
+      createMarcaId
+        ? (modelos ?? []).filter((m) => m.marcaId === createMarcaId)
+        : [],
+    [modelos, createMarcaId],
+  );
+
+  // ───── Preload from query params (dispositivoId / clienteId) ─────
+
+  const preloadDispositivoId = useMemo(() => {
+    const raw = searchParams.get('dispositivoId');
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : undefined;
+  }, [searchParams]);
 
   const {
-    data: dispositivosCliente,
-    isPending: dispsPending,
-    isFetching: dispsFetching,
-  } = useDispositivosPorCliente(createClienteId ? Number(createClienteId) : undefined);
-
-  const dispositivosClienteList = dispositivosCliente ?? [];
-  const loadingDisps = dispsPending || dispsFetching;
+    data: preloadedDispositivo,
+    isPending: preloadDispPending,
+    isFetching: preloadDispFetching,
+  } = useDispositivo(preloadDispositivoId);
 
   // ───── Open / close create modal ─────
 
   const openCreate = useCallback(
-    (preload?: { clienteId?: string; dispositivoId?: string }) => {
+    (preload?: { clienteId?: string; dispositivo?: Dispositivo }) => {
       const clienteVal = preload?.clienteId
         ? Number(preload.clienteId)
-        : '';
-      const dispositivoVal = preload?.dispositivoId
-        ? Number(preload.dispositivoId)
-        : '';
+        : preload?.dispositivo?.clienteId ?? '';
       setCreateClienteId(
         Number.isFinite(clienteVal) && clienteVal !== '' ? clienteVal : '',
       );
-      setCreateDispositivoId(
-        Number.isFinite(dispositivoVal) && dispositivoVal !== ''
-          ? dispositivoVal
-          : '',
+      const disp = preload?.dispositivo;
+      setCreateDispositivoId(disp ? disp.id : '');
+      setCreateMarcaId(
+        disp ? (modeloMap.get(disp.modeloId)?.marcaId ?? '') : '',
       );
+      setCreateModeloId(disp ? disp.modeloId : '');
+      setCreateTipo(disp ? disp.tipo : '');
+      setCreateImei(disp?.imei ?? '');
+      setCreateSerie(disp?.numeroSerie ?? '');
       setCreateFallo('');
       setCreateNotas('');
       setCreateErrors({});
       setCreateOpen(true);
     },
-    [],
+    [modeloMap],
   );
 
-  // Auto-open the create modal with preloads from query params, once on mount
+  // Auto-open the create modal with preloads from query params, once on mount.
   const preloadApplied = useRef(false);
   useEffect(() => {
     if (preloadApplied.current) return;
-    const dispositivoId = searchParams.get('dispositivoId');
-    const clienteId = searchParams.get('clienteId');
-    if (dispositivoId || clienteId) {
-      preloadApplied.current = true;
-      openCreate({ clienteId: clienteId ?? undefined, dispositivoId: dispositivoId ?? undefined });
+    const hasDispositivo = searchParams.has('dispositivoId');
+    const hasCliente = searchParams.has('clienteId');
+    if (!hasDispositivo && !hasCliente) return;
+    if (
+      hasDispositivo &&
+      preloadDispositivoId != null &&
+      (preloadDispPending || preloadDispFetching || modelos == null)
+    ) {
+      // wait until the dispositivo and the catálogo de modelos resolve
+      // to derive marca/modelo fields
+      return;
     }
-  }, [searchParams, openCreate]);
+    preloadApplied.current = true;
+    openCreate({
+      clienteId: searchParams.get('clienteId') ?? undefined,
+      dispositivo: preloadedDispositivo,
+    });
+  }, [
+    searchParams,
+    openCreate,
+    preloadDispositivoId,
+    preloadDispPending,
+    preloadDispFetching,
+    preloadedDispositivo,
+    modelos,
+  ]);
 
   const closeCreate = useCallback(() => {
     setCreateOpen(false);
     setCreateClienteId('');
     setCreateDispositivoId('');
+    setCreateMarcaId('');
+    setCreateModeloId('');
+    setCreateTipo('');
+    setCreateImei('');
+    setCreateSerie('');
     setCreateFallo('');
     setCreateNotas('');
     setCreateErrors({});
@@ -262,10 +323,16 @@ export function OrdenesPage() {
   // ───── Create submit ─────
 
   const handleCreate = useCallback(async () => {
-    const errors: { cliente?: string; dispositivo?: string } = {};
+    const errors: {
+      cliente?: string;
+      marca?: string;
+      modelo?: string;
+      tipo?: string;
+    } = {};
     if (!createClienteId) errors.cliente = 'Seleccione un cliente';
-    if (!createDispositivoId)
-      errors.dispositivo = 'Seleccione un dispositivo';
+    if (!createMarcaId) errors.marca = 'Seleccione una marca';
+    if (!createModeloId) errors.modelo = 'Seleccione un modelo';
+    if (!createTipo) errors.tipo = 'Seleccione un tipo';
     setCreateErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -273,7 +340,15 @@ export function OrdenesPage() {
     try {
       const body: OrdenRequest = {
         clienteId: createClienteId as number,
-        dispositivoId: createDispositivoId as number,
+        // When the modal was opened from an existing device (?dispositivoId=),
+        // link the order to that device instead of creating a duplicate one.
+        dispositivoId:
+          createDispositivoId !== '' ? Number(createDispositivoId) : undefined,
+        marcaId: createMarcaId as number,
+        modeloId: createModeloId as number,
+        tipo: createTipo as TipoDispositivo,
+        numeroSerie: createSerie.trim() || undefined,
+        imei: createImei.trim() || undefined,
         falloReportado: createFallo.trim() || undefined,
         notas: createNotas.trim() || undefined,
       };
@@ -289,6 +364,11 @@ export function OrdenesPage() {
   }, [
     createClienteId,
     createDispositivoId,
+    createMarcaId,
+    createModeloId,
+    createTipo,
+    createSerie,
+    createImei,
     createFallo,
     createNotas,
     closeCreate,
@@ -414,51 +494,78 @@ export function OrdenesPage() {
               onChange={(e) => {
                 const val = e.target.value;
                 setCreateClienteId(val ? Number(val) : '');
-                setCreateDispositivoId(''); // reset dispositivo on cliente change
               }}
               placeholder="Seleccionar cliente..."
             />
           </FormField>
 
-          <FormField
-            label="Dispositivo"
-            required
-            error={createErrors.dispositivo}
-          >
-            {loadingDisps ? (
-              <div className="flex items-center gap-2 py-2">
-                <Spinner size="sm" />
-                <span className="text-sm text-slate-400">
-                  Cargando dispositivos...
-                </span>
-              </div>
-            ) : (
-              <Select
-                options={dispositivosClienteList.map((d) => {
-                  const modelo = modeloMap.get(d.modeloId);
-                  const tipo = tipoDispositivoLabel(d.tipo) ?? d.tipo;
-                  const modeloInfo = modelo?.nombre ?? `#${d.modeloId}`;
-                  return {
-                    value: String(d.id),
-                    label: `${tipo} - ${modeloInfo}`,
-                  };
-                })}
-                value={
-                  createDispositivoId ? String(createDispositivoId) : ''
-                }
-                onChange={(e) =>
-                  setCreateDispositivoId(
-                    e.target.value ? Number(e.target.value) : '',
-                  )
-                }
-                placeholder={
-                  createClienteId
-                    ? 'Seleccionar dispositivo...'
-                    : 'Primero seleccione un cliente'
-                }
-                disabled={!createClienteId}
-              />
-            )}
+          <FormField label="Marca" required error={createErrors.marca}>
+            <Select
+              options={
+                marcas?.map((m) => ({
+                  value: String(m.id),
+                  label: m.nombre,
+                })) ?? []
+              }
+              value={createMarcaId ? String(createMarcaId) : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCreateMarcaId(val ? Number(val) : '');
+                setCreateModeloId(''); // reset modelo on marca change
+              }}
+              placeholder="Seleccionar marca..."
+            />
+          </FormField>
+
+          <FormField label="Modelo" required error={createErrors.modelo}>
+            <Select
+              options={modelosMarca.map((m) => ({
+                value: String(m.id),
+                label: m.nombre,
+              }))}
+              value={createModeloId ? String(createModeloId) : ''}
+              onChange={(e) =>
+                setCreateModeloId(
+                  e.target.value ? Number(e.target.value) : '',
+                )
+              }
+              placeholder={
+                createMarcaId
+                  ? 'Seleccionar modelo...'
+                  : 'Primero seleccione una marca'
+              }
+              disabled={!createMarcaId}
+            />
+          </FormField>
+
+          <FormField label="Tipo" required error={createErrors.tipo}>
+            <Select
+              options={Object.values(TipoDispositivo).map((t) => ({
+                value: t,
+                label: TIPO_DISPOSITIVO_LABELS[t] ?? t,
+              }))}
+              value={createTipo ? String(createTipo) : ''}
+              onChange={(e) =>
+                setCreateTipo(e.target.value as TipoDispositivo | '')
+              }
+              placeholder="Seleccionar tipo de dispositivo..."
+            />
+          </FormField>
+
+          <FormField label="IMEI (opcional)">
+            <Input
+              placeholder="IMEI del dispositivo"
+              value={createImei}
+              onChange={(e) => setCreateImei(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Número de Serie (opcional)">
+            <Input
+              placeholder="Número de serie"
+              value={createSerie}
+              onChange={(e) => setCreateSerie(e.target.value)}
+            />
           </FormField>
 
           <FormField label="Fallo Reportado">

@@ -21,6 +21,8 @@ import {
   useCliente,
   useDispositivo,
   useModelo,
+  useMarcas,
+  useModelos,
   useHistorialOrden,
 } from '../hooks/useQueries';
 
@@ -105,13 +107,29 @@ export function OrdenDetailPage() {
     data: dispositivo,
     isPending: dispositivoPending,
     isFetching: dispositivoFetching,
-  } = useDispositivo(orden?.dispositivoId);
+  } = useDispositivo(orden?.dispositivoId ?? undefined);
 
   const {
     data: modelo,
     isPending: modeloPending,
     isFetching: modeloFetching,
-  } = useModelo(dispositivo?.modeloId);
+  } = useModelo(orden?.modeloId ?? dispositivo?.modeloId);
+
+  // Catálogo de marcas y modelos para resolver nombres del equipo embebido
+  const { data: marcas } = useMarcas();
+  const { data: modelos } = useModelos();
+
+  const marcaId = orden?.marcaId ?? (modelo ? modelo.marcaId : undefined);
+  const marcaNombre = useMemo(() => {
+    if (marcaId == null) return undefined;
+    return marcas?.find((m) => m.id === marcaId)?.nombre;
+  }, [marcas, marcaId]);
+
+  const modeloNombre = useMemo(() => {
+    const mid = orden?.modeloId ?? dispositivo?.modeloId;
+    if (mid == null) return undefined;
+    return modelos?.find((m) => m.id === mid)?.nombre;
+  }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
 
   // Historial is optional — the endpoint may 404 for entities without events
   const {
@@ -370,8 +388,10 @@ export function OrdenDetailPage() {
             <p>
               <span className="font-medium text-slate-700">Dispositivo:</span>{' '}
               {dispositivo
-                ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo}${modelo ? ` - ${modelo.nombre}` : ` #${dispositivo.modeloId}`}`
-                : `#${orden.dispositivoId}`}
+                ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo}${modeloNombre ? ` - ${modeloNombre}` : ` #${dispositivo.modeloId}`}`
+                : orden.tipo || orden.modeloId || orden.marcaId
+                  ? `${orden.tipo ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo) : ''}${marcaNombre ? ` - ${marcaNombre}` : ''}${modeloNombre ? ` - ${modeloNombre}` : ''}`
+                  : '—'}
             </p>
             <p>
               <span className="font-medium text-slate-700">
@@ -420,6 +440,52 @@ export function OrdenDetailPage() {
               {orden.precioTotal != null
                 ? formatCurrency(orden.precioTotal)
                 : '—'}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── Equipo Section ── */}
+      <Card title="Equipo">
+        <div className="space-y-4">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Tipo:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.tipo
+                ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo)
+                : dispositivo
+                  ? (tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo)
+                  : '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">Marca:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {marcaNombre ??
+                (marcaId != null ? `Marca #${marcaId}` : '—')}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">Modelo:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {modeloNombre ??
+                (orden.modeloId != null || dispositivo?.modeloId != null
+                  ? `Modelo #${orden.modeloId ?? dispositivo?.modeloId}`
+                  : '—')}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">
+              Número de Serie:
+            </span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.numeroSerie ?? dispositivo?.numeroSerie ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">IMEI:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.imei ?? dispositivo?.imei ?? '—'}
             </p>
           </div>
         </div>
