@@ -103,6 +103,7 @@ export interface OrdenTrabajo {
   precioTotal: number | null;
   fechaEntrada: string;
   fechaSalida: string | null;
+  fechaEntrega?: string | null;
   notas: string | null;
   reparaciones: Reparacion[];
   createdAt: string;

@@ -58,7 +58,7 @@ export function DashboardPage() {
     : null;
 
   // Derive metrics and table rows
-  const { metricas, rows } = useMemo(() => {
+  const { metricas, rows, proximasEntregas, clienteMap } = useMemo(() => {
     const ordenes = ordenesReq.data ?? [];
     const clientes = clientesReq.data ?? [];
     const clienteMap = buildClienteMap(clientes);
@@ -89,9 +89,26 @@ export function DashboardPage() {
       fechaEntrada: o.fechaEntrada,
     }));
 
+    // Upcoming deliveries: agendadas y desde hoy, por fecha ascendente
+    const ahora = new Date().getTime();
+    const proximasEntregas = ordenes
+      .filter(
+        (o): o is OrdenTrabajo & { fechaEntrega: string } =>
+          o.fechaEntrega != null,
+      )
+      .filter((o) => new Date(o.fechaEntrega).getTime() >= ahora)
+      .sort(
+        (a, b) =>
+          new Date(a.fechaEntrega).getTime() -
+          new Date(b.fechaEntrega).getTime(),
+      )
+      .slice(0, 8);
+
     return {
       metricas: { activas, enReparacion, totalClientes, ingresos },
       rows,
+      proximasEntregas,
+      clienteMap,
     };
   }, [ordenesReq.data, clientesReq.data]);
 
@@ -156,6 +173,17 @@ export function DashboardPage() {
               <div
                 key={i}
                 className="h-10 w-full animate-pulse rounded bg-slate-100"
+              />
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Próximas Entregas">
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-12 w-full animate-pulse rounded bg-slate-100"
               />
             ))}
           </div>
@@ -256,6 +284,44 @@ export function DashboardPage() {
           emptyMessage="No hay órdenes registradas"
           onRowClick={(row) => navigate(`/ordenes/${row.id}`)}
         />
+      </Card>
+
+      {/* Próximas Entregas */}
+      <Card
+        title="Próximas Entregas"
+        subtitle="Órdenes con cita de entrega agendada"
+      >
+        {proximasEntregas.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay entregas agendadas</p>
+        ) : (
+          <div className="space-y-2">
+            {proximasEntregas.map((o) => (
+              <button
+                key={o.id}
+                onClick={() => navigate(`/ordenes/${o.id}`)}
+                className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50"
+              >
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-slate-800">
+                    {formatDate(o.fechaEntrega)}{' '}
+                    <span className="font-normal text-slate-500">
+                      {new Date(o.fechaEntrega).toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`}
+                  </p>
+                </div>
+                <p className="text-sm font-medium text-blue-600">
+                  Orden #{o.id}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Quick Actions */}

@@ -11,6 +11,7 @@ import { Spinner } from '../components/atoms/Spinner';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
+import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
 import { apiPut, apiPost, ApiError } from '../api/client';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
@@ -58,6 +59,24 @@ const TRANSITION_VARIANTS: Partial<Record<EstadoOrden, 'primary' | 'secondary' |
   [EstadoOrden.ESPERANDO_ENTREGA]: 'secondary',
   [EstadoOrden.ENTREGADO]: 'primary',
 };
+
+// ──────────────────────────────────────────────
+// Cita de entrega helpers
+// ──────────────────────────────────────────────
+
+/** ISO datetime → valor para <input type="datetime-local"> (YYYY-MM-DDTHH:mm) */
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** datetime-local (YYYY-MM-DDTHH:mm) → ISO con segundos (YYYY-MM-DDTHH:mm:ss) */
+function normalizeEntrega(value: string): string {
+  return value.length === 16 ? `${value}:00` : value;
+}
 
 // ──────────────────────────────────────────────
 // Labels
@@ -109,6 +128,16 @@ export function OrdenDetailPage() {
     return modelos?.find((m) => m.id === mid)?.nombre;
   }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
 
+  const marcaEquipo = useMemo(
+    () => marcas?.find((m) => m.id === marcaId) ?? null,
+    [marcas, marcaId],
+  );
+
+  const modeloEquipo = useMemo(() => {
+    const mid = orden?.modeloId ?? dispositivo?.modeloId;
+    return mid == null ? null : (modelos?.find((m) => m.id === mid) ?? null);
+  }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
+
   // Historial is optional — the endpoint may 404 for entities without events
   const { data: historial = [] } = useHistorialOrden(orden?.id);
 
@@ -148,6 +177,15 @@ export function OrdenDetailPage() {
     },
   });
 
+  const entregaMutation = useMutation({
+    mutationFn: ({ targetOrdenId, fechaEntrega }: { targetOrdenId: number; fechaEntrega: string | null }) =>
+      apiPut<OrdenTrabajo>(`/api/ordenes/${targetOrdenId}/entrega`, { fechaEntrega }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
+
   // ───── Transition state ─────
 
   const [transitioningTarget, setTransitioningTarget] =
@@ -173,6 +211,7 @@ export function OrdenDetailPage() {
   // ───── Reparacion modal ─────
 
   const [repModalOpen, setRepModalOpen] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
   const [repTipo, setRepTipo] = useState<TipoReparacion | ''>('');
   const [repDescripcion, setRepDescripcion] = useState('');
   const [repPrecio, setRepPrecio] = useState('');
@@ -262,6 +301,68 @@ export function OrdenDetailPage() {
       setRepSubmitting(false);
     }
   }, [repTipo, repDescripcion, repPrecio, tarifaAuto, orden, closeRepModal, addReparacionMutation]);
+
+  // ───── Cita de entrega modal ─────
+
+  const [entregaOpen, setEntregaOpen] = useState(false);
+  const [entregaFecha, setEntregaFecha] = useState('');
+  const [entregaError, setEntregaError] = useState<string | null>(null);
+  const [entregaAccion, setEntregaAccion] = useState<'guardar' | 'quitar' | null>(null);
+
+  const openEntregaModal = useCallback(() => {
+    setEntregaFecha(toDatetimeLocal(orden?.fechaEntrega));
+    setEntregaError(null);
+    setEntregaAccion(null);
+    setEntregaOpen(true);
+  }, [orden]);
+
+  const closeEntregaModal = useCallback(() => {
+    setEntregaOpen(false);
+    setEntregaError(null);
+    setEntregaAccion(null);
+  }, []);
+
+  const handleGuardarEntrega = useCallback(async () => {
+    if (!orden) return;
+    if (!entregaFecha) {
+      setEntregaError('Seleccione una fecha y hora de entrega');
+      return;
+    }
+    setEntregaAccion('guardar');
+    setEntregaError(null);
+    try {
+      await entregaMutation.mutateAsync({
+        targetOrdenId: orden.id,
+        fechaEntrega: normalizeEntrega(entregaFecha),
+      });
+      closeEntregaModal();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al agendar la entrega';
+      setEntregaError(msg);
+    } finally {
+      setEntregaAccion(null);
+    }
+  }, [orden, entregaFecha, entregaMutation, closeEntregaModal]);
+
+  const handleQuitarEntrega = useCallback(async () => {
+    if (!orden) return;
+    setEntregaAccion('quitar');
+    setEntregaError(null);
+    try {
+      await entregaMutation.mutateAsync({
+        targetOrdenId: orden.id,
+        fechaEntrega: null,
+      });
+      closeEntregaModal();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al quitar la cita de entrega';
+      setEntregaError(msg);
+    } finally {
+      setEntregaAccion(null);
+    }
+  }, [orden, entregaMutation, closeEntregaModal]);
 
   // ───── Reparaciones columns ─────
 
@@ -436,7 +537,20 @@ export function OrdenDetailPage() {
                 {formatDateTime(orden.fechaSalida)}
               </p>
             )}
+            <p>
+              <span className="font-medium text-slate-700">Entrega:</span>{' '}
+              {orden.fechaEntrega ? formatDateTime(orden.fechaEntrega) : '—'}
+            </p>
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button variant="secondary" onClick={openEntregaModal}>
+            Agendar Entrega
+          </Button>
+          <Button variant="secondary" onClick={() => setTicketOpen(true)}>
+            Ticket QR
+          </Button>
         </div>
       </div>
 
@@ -653,6 +767,68 @@ export function OrdenDetailPage() {
           </FormField>
         </div>
       </Modal>
+
+      {/* ───── Cita de Entrega Modal ───── */}
+      <Modal
+        isOpen={entregaOpen}
+        onClose={closeEntregaModal}
+        title="Agendar Entrega"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={closeEntregaModal}
+              disabled={entregaAccion !== null}
+            >
+              Cancelar
+            </Button>
+            {orden.fechaEntrega && (
+              <Button
+                variant="danger"
+                onClick={handleQuitarEntrega}
+                loading={entregaAccion === 'quitar'}
+                disabled={entregaAccion === 'guardar'}
+              >
+                Quitar Cita
+              </Button>
+            )}
+            <Button
+              onClick={handleGuardarEntrega}
+              loading={entregaAccion === 'guardar'}
+              disabled={entregaAccion === 'quitar'}
+            >
+              Guardar Cita
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormField
+            label="Fecha y hora de entrega"
+            required
+            error={entregaError ?? undefined}
+          >
+            <Input
+              type="datetime-local"
+              value={entregaFecha}
+              onChange={(e) => {
+                setEntregaFecha(e.target.value);
+                setEntregaError(null);
+              }}
+            />
+          </FormField>
+        </div>
+      </Modal>
+
+      {/* ───── Ticket QR Modal ───── */}
+      <TicketEquipoModal
+        isOpen={ticketOpen}
+        orden={orden}
+        marca={marcaEquipo}
+        modelo={modeloEquipo}
+        onClose={() => setTicketOpen(false)}
+      />
     </div>
   );
 }
