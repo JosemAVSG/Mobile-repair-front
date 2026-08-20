@@ -2,7 +2,7 @@
 // Labels (tipos y categorías)
 // ──────────────────────────────────────────────
 
-import { TipoDispositivo, CategoriaMarca } from '../types';
+import { TipoDispositivo, TipoReparacion, CategoriaMarca } from '../types';
 
 export const TIPO_DISPOSITIVO_LABELS: Record<TipoDispositivo, string> = {
   [TipoDispositivo.CELULAR]: 'Celular',
@@ -18,6 +18,23 @@ export const CATEGORIA_MARCA_LABELS: Record<CategoriaMarca, string> = {
   [CategoriaMarca.LINEA_BLANCA]: 'Línea Blanca',
   [CategoriaMarca.COMPUTADORAS]: 'Computadoras',
 };
+
+export const TIPO_REPARACION_LABELS: Record<TipoReparacion, string> = {
+  [TipoReparacion.PANTALLA]: 'Pantalla',
+  [TipoReparacion.BATERIA]: 'Batería',
+  [TipoReparacion.ALTAVOZ]: 'Altavoz',
+  [TipoReparacion.MICROFONO]: 'Micrófono',
+  [TipoReparacion.CARGADOR]: 'Cargador',
+  [TipoReparacion.BOTONES]: 'Botones',
+  [TipoReparacion.CÁMARA]: 'Cámara',
+  [TipoReparacion.PLACA]: 'Placa',
+  [TipoReparacion.SOFTWARE]: 'Software',
+  [TipoReparacion.OTRO]: 'Otro',
+};
+
+export function tipoReparacionLabel(tipo: TipoReparacion): string {
+  return TIPO_REPARACION_LABELS[tipo];
+}
 
 export function tipoDispositivoLabel(tipo: TipoDispositivo): string {
   return TIPO_DISPOSITIVO_LABELS[tipo];

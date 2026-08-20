@@ -13,7 +13,7 @@ import { StatusBadge } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
 import { apiPut, apiPost, ApiError } from '../api/client';
-import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel } from '../utils/formatters';
+import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import type { OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
@@ -24,6 +24,7 @@ import {
   useMarcas,
   useModelos,
   useHistorialOrden,
+  useTarifas,
 } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -62,19 +63,6 @@ const TRANSITION_VARIANTS: Partial<Record<EstadoOrden, 'primary' | 'secondary' |
 // Labels
 // ──────────────────────────────────────────────
 
-const tipoReparacionLabels: Record<TipoReparacion, string> = {
-  [TipoReparacion.PANTALLA]: 'Pantalla',
-  [TipoReparacion.BATERIA]: 'Batería',
-  [TipoReparacion.ALTAVOZ]: 'Altavoz',
-  [TipoReparacion.MICROFONO]: 'Micrófono',
-  [TipoReparacion.CARGADOR]: 'Cargador',
-  [TipoReparacion.BOTONES]: 'Botones',
-  [TipoReparacion.CÁMARA]: 'Cámara',
-  [TipoReparacion.PLACA]: 'Placa',
-  [TipoReparacion.SOFTWARE]: 'Software',
-  [TipoReparacion.OTRO]: 'Otro',
-};
-
 // ──────────────────────────────────────────────
 // OrdenDetailPage
 // ──────────────────────────────────────────────
@@ -99,21 +87,11 @@ export function OrdenDetailPage() {
   } = useOrden(ordenId);
 
   // Enrichment (non-critical — failures leave fallbacks in place)
-  const { data: cliente, isPending: clientePending, isFetching: clienteFetching } = useCliente(
-    orden?.clienteId,
-  );
+  const { data: cliente } = useCliente(orden?.clienteId);
 
-  const {
-    data: dispositivo,
-    isPending: dispositivoPending,
-    isFetching: dispositivoFetching,
-  } = useDispositivo(orden?.dispositivoId ?? undefined);
+  const { data: dispositivo } = useDispositivo(orden?.dispositivoId ?? undefined);
 
-  const {
-    data: modelo,
-    isPending: modeloPending,
-    isFetching: modeloFetching,
-  } = useModelo(orden?.modeloId ?? dispositivo?.modeloId);
+  const { data: modelo } = useModelo(orden?.modeloId ?? dispositivo?.modeloId);
 
   // Catálogo de marcas y modelos para resolver nombres del equipo embebido
   const { data: marcas } = useMarcas();
@@ -132,25 +110,13 @@ export function OrdenDetailPage() {
   }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
 
   // Historial is optional — the endpoint may 404 for entities without events
-  const {
-    data: historial = [],
-    isPending: historialPending,
-    isFetching: historialFetching,
-  } = useHistorialOrden(orden?.id);
+  const { data: historial = [] } = useHistorialOrden(orden?.id);
 
-  // Loading until the orden and its (optional) enrichment have settled,
-  // matching the previous full-page spinner flow.
-  const loading =
-    ordenPending ||
-    ordenFetching ||
-    clientePending ||
-    clienteFetching ||
-    dispositivoPending ||
-    dispositivoFetching ||
-    modeloPending ||
-    modeloFetching ||
-    historialPending ||
-    historialFetching;
+  // Loading only until the orden resolves. Enrichment queries (cliente,
+  // dispositivo, modelo, historial) are non-critical and may be disabled
+  // (e.g. orden without dispositivoId), so waiting on their isPending would
+  // block the page forever — they render with fallbacks once loaded.
+  const loading = ordenPending || ordenFetching;
 
   const error = useMemo(() => {
     if (!ordenError) return null;
@@ -216,6 +182,34 @@ export function OrdenDetailPage() {
     precio?: string;
   }>({});
 
+  // Tarifas para autocompletar el precio de una reparación según el equipo
+  const { data: tarifas } = useTarifas();
+
+  const tarifaAuto = useMemo(() => {
+    if (repTipo === '') return undefined;
+    const list = tarifas ?? [];
+    const marcaIdEq = marcaId != null ? Number(marcaId) : null;
+    const modeloIdEq =
+      orden?.modeloId ?? (dispositivo?.modeloId != null ? Number(dispositivo.modeloId) : null);
+    return list.find(
+      (t) =>
+        t.activa &&
+        t.tipo === repTipo &&
+        (modeloIdEq != null
+          ? t.modeloId === modeloIdEq
+          : marcaIdEq != null
+            ? t.modeloId == null && t.marcaId === marcaIdEq
+            : t.modeloId == null && t.marcaId == null),
+    );
+  }, [tarifas, repTipo, marcaId, orden?.modeloId, dispositivo?.modeloId]);
+
+  const precioAutoHint = useMemo(() => {
+    if (tarifaAuto) {
+      return `Precio automático: ${formatCurrency(tarifaAuto.precio)} (tarifa)`;
+    }
+    return null;
+  }, [tarifaAuto]);
+
   const openRepModal = useCallback(() => {
     setRepTipo('');
     setRepDescripcion('');
@@ -232,8 +226,17 @@ export function OrdenDetailPage() {
   const handleAddReparacion = useCallback(async () => {
     const errors: { tipo?: string; precio?: string } = {};
     if (!repTipo) errors.tipo = 'Seleccione un tipo de reparación';
-    if (!repPrecio || isNaN(Number(repPrecio)) || Number(repPrecio) <= 0) {
-      errors.precio = 'Ingrese un precio válido mayor a 0';
+
+    let precioFinal: number | null = null;
+    if (repPrecio !== '' && !isNaN(Number(repPrecio)) && Number(repPrecio) > 0) {
+      precioFinal = Number(repPrecio);
+    } else if (tarifaAuto) {
+      // Si no se escribió precio, resolver la tarifa automática del equipo
+      precioFinal = tarifaAuto.precio;
+    }
+
+    if (precioFinal == null) {
+      errors.precio = 'Ingrese un precio válido o seleccione un tipo con tarifa automática';
     }
     setRepErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -245,7 +248,7 @@ export function OrdenDetailPage() {
       const body: ReparacionRequest = {
         tipo: repTipo as TipoReparacion,
         descripcion: repDescripcion.trim() || undefined,
-        precio: Number(repPrecio),
+        precio: precioFinal as number,
       };
       await addReparacionMutation.mutateAsync({ ordenId: orden.id, body });
       closeRepModal();
@@ -258,7 +261,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepSubmitting(false);
     }
-  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, addReparacionMutation]);
+  }, [repTipo, repDescripcion, repPrecio, tarifaAuto, orden, closeRepModal, addReparacionMutation]);
 
   // ───── Reparaciones columns ─────
 
@@ -268,7 +271,7 @@ export function OrdenDetailPage() {
         key: 'tipo',
         label: 'Tipo',
         render: (row) => (
-          <Badge>{tipoReparacionLabels[row.tipo] ?? row.tipo}</Badge>
+          <Badge>{TIPO_REPARACION_LABELS[row.tipo] ?? row.tipo}</Badge>
         ),
       },
       {
@@ -280,6 +283,18 @@ export function OrdenDetailPage() {
         key: 'precio',
         label: 'Precio',
         render: (row) => formatCurrency(row.precio),
+      },
+      {
+        key: 'costoRepuesto',
+        label: 'Costo Repuesto',
+        render: (row) =>
+          row.costoRepuesto != null ? formatCurrency(row.costoRepuesto) : '—',
+      },
+      {
+        key: 'ganancia',
+        label: 'Ganancia',
+        render: (row) =>
+          row.ganancia != null ? formatCurrency(row.ganancia) : '—',
       },
       {
         key: 'createdAt',
@@ -308,6 +323,20 @@ export function OrdenDetailPage() {
   const availableTransitions = orden
     ? ESTADO_TRANSITIONS[orden.estado] ?? []
     : [];
+
+  const totalReparaciones = useMemo(
+    () => orden?.reparaciones.reduce((sum, r) => sum + r.precio, 0) ?? 0,
+    [orden],
+  );
+
+  const gananciaTotal = useMemo(() => {
+    if (!orden) return null;
+    const reparacionesConCosto = orden.reparaciones.filter(
+      (r) => r.ganancia != null,
+    );
+    if (reparacionesConCosto.length === 0) return null;
+    return reparacionesConCosto.reduce((sum, r) => sum + (r.ganancia ?? 0), 0);
+  }, [orden]);
 
   // ───── Render states ─────
 
@@ -442,6 +471,29 @@ export function OrdenDetailPage() {
                 : '—'}
             </p>
           </div>
+
+          {orden.reparaciones.length > 0 && (
+            <div className="border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  Total reparaciones
+                </span>
+                <span className="text-slate-700">
+                  {formatCurrency(totalReparaciones)}
+                </span>
+              </div>
+              {gananciaTotal != null && (
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="font-medium text-emerald-700">
+                    Ganancia estimada total
+                  </span>
+                  <span className="font-semibold text-emerald-700">
+                    {formatCurrency(gananciaTotal)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -566,7 +618,7 @@ export function OrdenDetailPage() {
             <Select
               options={Object.values(TipoReparacion).map((t) => ({
                 value: t,
-                label: tipoReparacionLabels[t] ?? t,
+                label: TIPO_REPARACION_LABELS[t] ?? t,
               }))}
               value={repTipo}
               onChange={(e) =>
@@ -586,7 +638,7 @@ export function OrdenDetailPage() {
             />
           </FormField>
 
-          <FormField label="Precio" required error={repErrors.precio}>
+          <FormField label="Precio" required={!tarifaAuto} error={repErrors.precio}>
             <Input
               type="number"
               step="0.01"
@@ -595,6 +647,9 @@ export function OrdenDetailPage() {
               value={repPrecio}
               onChange={(e) => setRepPrecio(e.target.value)}
             />
+            {precioAutoHint && (
+              <p className="mt-1 text-xs text-blue-600">{precioAutoHint}</p>
+            )}
           </FormField>
         </div>
       </Modal>

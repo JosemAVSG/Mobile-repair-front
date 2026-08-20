@@ -10,7 +10,7 @@ import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiPut, apiDelete } from '../api/client';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { buildMarcaMap, buildModeloMap, buildMarcaOptions, buildModeloOptions } from '../utils/maps';
 import type { Tarifa, TarifaRequest } from '../types';
 import { TipoReparacion } from '../types';
@@ -19,19 +19,6 @@ import { useTarifas, useMarcas, useModelos } from '../hooks/useQueries';
 // ──────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────
-
-const TIPO_REPARACION_LABELS: Record<TipoReparacion, string> = {
-  [TipoReparacion.PANTALLA]: 'Pantalla',
-  [TipoReparacion.BATERIA]: 'Batería',
-  [TipoReparacion.ALTAVOZ]: 'Altavoz',
-  [TipoReparacion.MICROFONO]: 'Micrófono',
-  [TipoReparacion.CARGADOR]: 'Cargador',
-  [TipoReparacion.BOTONES]: 'Botones',
-  [TipoReparacion.CÁMARA]: 'Cámara',
-  [TipoReparacion.PLACA]: 'Placa',
-  [TipoReparacion.SOFTWARE]: 'Software',
-  [TipoReparacion.OTRO]: 'Otro',
-};
 
 const TIPO_REPARACION_OPTIONS = Object.values(TipoReparacion).map((t) => ({
   value: t,

@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../components/organisms/DataTable';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente } from '../types';
 import { EstadoOrden } from '../types';
-import { useOrdenes, useRepuestos, useClientes } from '../hooks/useQueries';
+import { useOrdenes, useClientes } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -41,20 +41,16 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   const ordenesReq = useOrdenes();
-  const repuestosReq = useRepuestos();
   const clientesReq = useClientes();
 
   // Wait for all requests
   const loading =
     ordenesReq.isPending ||
     ordenesReq.isFetching ||
-    repuestosReq.isPending ||
-    repuestosReq.isFetching ||
     clientesReq.isPending ||
     clientesReq.isFetching;
 
-  const queryError =
-    ordenesReq.error ?? repuestosReq.error ?? clientesReq.error;
+  const queryError = ordenesReq.error ?? clientesReq.error;
   const error = queryError
     ? queryError instanceof Error
       ? queryError.message
@@ -64,7 +60,6 @@ export function DashboardPage() {
   // Derive metrics and table rows
   const { metricas, rows } = useMemo(() => {
     const ordenes = ordenesReq.data ?? [];
-    const repuestos = repuestosReq.data ?? [];
     const clientes = clientesReq.data ?? [];
     const clienteMap = buildClienteMap(clientes);
 
@@ -73,7 +68,7 @@ export function DashboardPage() {
     const enReparacion = ordenes.filter(
       (o) => o.estado === EstadoOrden.REPARACION,
     ).length;
-    const bajoStock = repuestos.filter((r) => r.bajoStock).length;
+    const totalClientes = clientes.length;
     const ingresos = ordenes
       .filter((o) => o.estado === EstadoOrden.ENTREGADO && o.precioTotal != null)
       .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
@@ -95,10 +90,10 @@ export function DashboardPage() {
     }));
 
     return {
-      metricas: { activas, enReparacion, bajoStock, ingresos },
+      metricas: { activas, enReparacion, totalClientes, ingresos },
       rows,
     };
-  }, [ordenesReq.data, repuestosReq.data, clientesReq.data]);
+  }, [ordenesReq.data, clientesReq.data]);
 
   // ───── Error ─────
 
@@ -119,7 +114,6 @@ export function DashboardPage() {
               variant="secondary"
               onClick={() => {
                 void ordenesReq.refetch();
-                void repuestosReq.refetch();
                 void clientesReq.refetch();
               }}
             >
@@ -142,7 +136,7 @@ export function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
               className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -238,10 +232,9 @@ export function DashboardPage() {
           value={metricas.enReparacion}
         />
         <MetricCard
-          icon="alert-circle"
-          label="Repuestos Bajos"
-          value={metricas.bajoStock}
-          variant={metricas.bajoStock > 0 ? 'warning' : 'default'}
+          icon="users"
+          label="Clientes"
+          value={metricas.totalClientes}
         />
         <MetricCard
           icon="dollar-sign"

@@ -114,6 +114,8 @@ export interface Reparacion {
   tipo: TipoReparacion;
   descripcion: string | null;
   precio: number;
+  costoRepuesto?: number | null;
+  ganancia?: number | null;
   createdAt: string;
 }
 
@@ -133,11 +135,9 @@ export interface Repuesto {
   descripcion: string | null;
   codigo: string;
   precioCosto: number;
-  precioVenta: number;
-  stockActual: number;
-  stockMinimo: number;
-  proveedorId: number | null;
-  bajoStock: boolean;
+  marcaId: number | null;
+  modeloId: number | null;
+  tipoReparacion: TipoReparacion;
   createdAt: string;
 }
 
@@ -191,6 +191,8 @@ export interface OrdenRequest {
   imei?: string;
   falloReportado?: string;
   notas?: string;
+  tipoReparacion?: TipoReparacion;
+  precioRevision?: number;
 }
 
 export interface ReparacionRequest {
@@ -211,8 +213,7 @@ export interface RepuestoRequest {
   descripcion?: string;
   codigo: string;
   precioCosto: number;
-  precioVenta: number;
-  stockActual: number;
-  stockMinimo: number;
-  proveedorId?: number;
+  marcaId?: number;
+  modeloId?: number;
+  tipoReparacion: TipoReparacion;
 }

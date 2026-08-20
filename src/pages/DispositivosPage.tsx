@@ -12,7 +12,7 @@ import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate, tipoBadgeConfig, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
 import { buildModeloMap, buildClienteMap, buildClienteOptions } from '../utils/maps';
-import type { Dispositivo, DispositivoRequest } from '../types';
+import type { Dispositivo, DispositivoRequest, Modelo } from '../types';
 import { TipoDispositivo } from '../types';
 import { useMarcas, useModelos, useClientes, useDispositivos } from '../hooks/useQueries';
 
@@ -98,6 +98,7 @@ export function DispositivosPage() {
 
   // Form fields
   const [tipo, setTipo] = useState<TipoDispositivo | ''>('');
+  const [marcaId, setMarcaId] = useState('');
   const [modeloId, setModeloId] = useState('');
   const [clienteId, setClienteId] = useState(clienteIdFilter);
   const [numeroSerie, setNumeroSerie] = useState('');
@@ -118,6 +119,11 @@ export function DispositivosPage() {
 
   // Enriched rows
   const modeloMap = useMemo(() => buildModeloMap(modelos ?? []), [modelos]);
+  const modeloObjMap = useMemo(() => {
+    const map = new Map<number, Modelo>();
+    modelos?.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [modelos]);
   const clienteMap = useMemo(() => buildClienteMap(clientes ?? []), [clientes]);
 
   const rows = useMemo<DispositivoRow[]>(() => {
@@ -155,6 +161,7 @@ export function DispositivosPage() {
   const openCreate = useCallback(() => {
     setEditTarget(null);
     setTipo('');
+    setMarcaId('');
     setModeloId('');
     setClienteId(clienteIdFilter);
     setNumeroSerie('');
@@ -172,6 +179,8 @@ export function DispositivosPage() {
   const openEdit = useCallback((dispositivo: Dispositivo) => {
     setEditTarget(dispositivo);
     setTipo(dispositivo.tipo);
+    const marcaDelModelo = modeloObjMap.get(dispositivo.modeloId)?.marcaId;
+    setMarcaId(marcaDelModelo != null ? String(marcaDelModelo) : '');
     setModeloId(String(dispositivo.modeloId));
     setClienteId(String(dispositivo.clienteId));
     setNumeroSerie(dispositivo.numeroSerie ?? '');
@@ -182,7 +191,7 @@ export function DispositivosPage() {
     setNotasTecnicas(dispositivo.notasTecnicas ?? '');
     setFieldErrors({});
     setModalOpen(true);
-  }, []);
+  }, [modeloObjMap]);
 
   // ───── Close modal ─────
 
@@ -190,6 +199,7 @@ export function DispositivosPage() {
     setModalOpen(false);
     setEditTarget(null);
     setTipo('');
+    setMarcaId('');
     setModeloId('');
     setClienteId(clienteIdFilter);
     setNumeroSerie('');
@@ -397,6 +407,8 @@ export function DispositivosPage() {
         submitting={submitting}
         tipo={tipo}
         setTipo={setTipo}
+        marcaId={marcaId}
+        setMarcaId={setMarcaId}
         modeloId={modeloId}
         setModeloId={setModeloId}
         clienteId={clienteId}

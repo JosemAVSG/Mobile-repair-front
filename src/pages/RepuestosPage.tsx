@@ -5,13 +5,26 @@ import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
+import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { SearchField } from '../components/molecules/SearchField';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost, apiPut, apiDelete } from '../api/client';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
+import { buildMarcaMap, buildModeloMap } from '../utils/maps';
 import type { Repuesto, RepuestoRequest } from '../types';
-import { useRepuestos, useRepuestosBajoStock } from '../hooks/useQueries';
+import { TipoReparacion } from '../types';
+import { useRepuestos, useMarcas, useModelos } from '../hooks/useQueries';
+
+// ──────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────
+
+const TIPO_REPARACION_OPTIONS = Object.values(TipoReparacion).map((t) => ({
+  value: t,
+  label: TIPO_REPARACION_LABELS[t],
+}));
 
 // ──────────────────────────────────────────────
 // Types
@@ -21,20 +34,18 @@ interface RepuestoRow {
   id: number;
   codigo: string;
   nombre: string;
-  stockActual: number;
-  stockMinimo: number;
+  descripcion: string | null;
   precioCosto: number;
-  precioVenta: number;
-  bajoStock: boolean;
+  marcaNombre: string;
+  modeloNombre: string;
+  tipoReparacion: TipoReparacion;
 }
 
 interface FormErrors {
   nombre?: string;
   codigo?: string;
   precioCosto?: string;
-  precioVenta?: string;
-  stockActual?: string;
-  stockMinimo?: string;
+  tipoReparacion?: string;
 }
 
 // ──────────────────────────────────────────────
@@ -43,13 +54,10 @@ interface FormErrors {
 
 export function RepuestosPage() {
   // ───── Filter state ─────
-  const [bajoStockOnly, setBajoStockOnly] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   // ───── Data fetching ─────
   const queryClient = useQueryClient();
-
-  const repuestosAll = useRepuestos();
-  const repuestosBajoStock = useRepuestosBajoStock();
 
   const {
     data: repuestos,
@@ -57,7 +65,7 @@ export function RepuestosPage() {
     isFetching,
     error: queryError,
     refetch,
-  } = bajoStockOnly ? repuestosBajoStock : repuestosAll;
+  } = useRepuestos(busqueda || undefined);
 
   const loading = isPending || isFetching;
   const error = queryError
@@ -65,6 +73,12 @@ export function RepuestosPage() {
       ? queryError.message
       : String(queryError)
     : null;
+
+  const marcasReq = useMarcas();
+  const modelosReq = useModelos();
+
+  const marcaMap = useMemo(() => buildMarcaMap(marcasReq.data ?? []), [marcasReq.data]);
+  const modeloMap = useMemo(() => buildModeloMap(modelosReq.data ?? []), [modelosReq.data]);
 
   const saveMutation = useMutation({
     mutationFn: (body: RepuestoRequest) =>
@@ -88,12 +102,19 @@ export function RepuestosPage() {
   const [editDescripcion, setEditDescripcion] = useState('');
   const [editCodigo, setEditCodigo] = useState('');
   const [editPrecioCosto, setEditPrecioCosto] = useState('');
-  const [editPrecioVenta, setEditPrecioVenta] = useState('');
-  const [editStockActual, setEditStockActual] = useState('');
-  const [editStockMinimo, setEditStockMinimo] = useState('');
-  const [editProveedorId, setEditProveedorId] = useState('');
+  const [editMarcaId, setEditMarcaId] = useState('');
+  const [editModeloId, setEditModeloId] = useState('');
+  const [editTipo, setEditTipo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
+
+  // Modelos filtered by selected marca
+  const filteredModeloOptions = useMemo(() => {
+    if (!editMarcaId) return [];
+    return (modelosReq.data ?? [])
+      .filter((m) => m.marcaId === Number(editMarcaId))
+      .map((m) => ({ value: String(m.id), label: m.nombre }));
+  }, [editMarcaId, modelosReq.data]);
 
   // ───── Delete state ─────
   const [deleteTarget, setDeleteTarget] = useState<Repuesto | null>(null);
@@ -108,18 +129,10 @@ export function RepuestosPage() {
     if (!editPrecioCosto || isNaN(Number(editPrecioCosto)) || Number(editPrecioCosto) < 0) {
       errors.precioCosto = 'Ingrese un precio de costo válido';
     }
-    if (!editPrecioVenta || isNaN(Number(editPrecioVenta)) || Number(editPrecioVenta) < 0) {
-      errors.precioVenta = 'Ingrese un precio de venta válido';
-    }
-    if (!editStockActual || isNaN(Number(editStockActual)) || !Number.isInteger(Number(editStockActual)) || Number(editStockActual) < 0) {
-      errors.stockActual = 'Ingrese un stock actual válido';
-    }
-    if (!editStockMinimo || isNaN(Number(editStockMinimo)) || !Number.isInteger(Number(editStockMinimo)) || Number(editStockMinimo) < 0) {
-      errors.stockMinimo = 'Ingrese un stock mínimo válido';
-    }
+    if (!editTipo) errors.tipoReparacion = 'Seleccione un tipo de reparación';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [editNombre, editCodigo, editPrecioCosto, editPrecioVenta, editStockActual, editStockMinimo]);
+  }, [editNombre, editCodigo, editPrecioCosto, editTipo]);
 
   // ───── Create / Update ─────
 
@@ -133,10 +146,9 @@ export function RepuestosPage() {
         descripcion: editDescripcion.trim() || undefined,
         codigo: editCodigo.trim(),
         precioCosto: Number(editPrecioCosto),
-        precioVenta: Number(editPrecioVenta),
-        stockActual: Number(editStockActual),
-        stockMinimo: Number(editStockMinimo),
-        proveedorId: editProveedorId ? Number(editProveedorId) : undefined,
+        marcaId: editMarcaId ? Number(editMarcaId) : undefined,
+        modeloId: editModeloId ? Number(editModeloId) : undefined,
+        tipoReparacion: editTipo as TipoReparacion,
       };
 
       if (editingRepuesto) {
@@ -156,8 +168,7 @@ export function RepuestosPage() {
     }
   }, [
     editNombre, editDescripcion, editCodigo,
-    editPrecioCosto, editPrecioVenta,
-    editStockActual, editStockMinimo, editProveedorId,
+    editPrecioCosto, editMarcaId, editModeloId, editTipo,
     editingRepuesto, validate, saveMutation,
   ]);
 
@@ -185,10 +196,9 @@ export function RepuestosPage() {
     setEditDescripcion('');
     setEditCodigo('');
     setEditPrecioCosto('');
-    setEditPrecioVenta('');
-    setEditStockActual('');
-    setEditStockMinimo('');
-    setEditProveedorId('');
+    setEditMarcaId('');
+    setEditModeloId('');
+    setEditTipo('');
     setFieldErrors({});
   }, []);
 
@@ -204,10 +214,9 @@ export function RepuestosPage() {
     setEditDescripcion(repuesto.descripcion ?? '');
     setEditCodigo(repuesto.codigo);
     setEditPrecioCosto(String(repuesto.precioCosto));
-    setEditPrecioVenta(String(repuesto.precioVenta));
-    setEditStockActual(String(repuesto.stockActual));
-    setEditStockMinimo(String(repuesto.stockMinimo));
-    setEditProveedorId(repuesto.proveedorId ? String(repuesto.proveedorId) : '');
+    setEditMarcaId(repuesto.marcaId != null ? String(repuesto.marcaId) : '');
+    setEditModeloId(repuesto.modeloId != null ? String(repuesto.modeloId) : '');
+    setEditTipo(repuesto.tipoReparacion);
     setFieldErrors({});
     setCreateOpen(true);
   }, []);
@@ -218,66 +227,36 @@ export function RepuestosPage() {
     resetForm();
   }, [resetForm]);
 
-  const toggleBajoStock = useCallback(() => {
-    setBajoStockOnly((prev) => !prev);
-  }, []);
-
   // ───── Columns ─────
 
   const columns: Column<RepuestoRow>[] = [
     { key: 'codigo', label: 'Código', sortable: true },
     { key: 'nombre', label: 'Nombre', sortable: true },
     {
-      key: 'stockActual',
-      label: 'Stock Actual',
-      sortable: true,
-      render: (row) => (
-        <span
-          className={`font-medium ${
-            row.stockActual <= row.stockMinimo
-              ? 'text-red-600'
-              : 'text-slate-700'
-          }`}
-        >
-          {row.stockActual}
-        </span>
-      ),
-    },
-    {
-      key: 'stockMinimo',
-      label: 'Stock Mínimo',
-      sortable: true,
-      render: (row) => (
-        <span
-          className={`font-medium ${
-            row.stockActual <= row.stockMinimo
-              ? 'text-red-600'
-              : 'text-slate-700'
-          }`}
-        >
-          {row.stockMinimo}
-        </span>
-      ),
-    },
-    {
       key: 'precioCosto',
-      label: 'Precio Costo',
+      label: 'Costo',
       sortable: true,
       render: (row) => formatCurrency(row.precioCosto),
     },
     {
-      key: 'precioVenta',
-      label: 'Precio Venta',
+      key: 'marcaNombre',
+      label: 'Marca',
       sortable: true,
-      render: (row) => formatCurrency(row.precioVenta),
+      render: (row) => row.marcaNombre,
     },
     {
-      key: 'bajoStock',
-      label: 'Estado',
+      key: 'modeloNombre',
+      label: 'Modelo',
+      sortable: true,
+      render: (row) => row.modeloNombre,
+    },
+    {
+      key: 'tipoReparacion',
+      label: 'Tipo Reparación',
       sortable: true,
       render: (row) => (
-        <Badge variant={row.bajoStock ? 'danger' : 'success'}>
-          {row.bajoStock ? 'Stock Bajo' : 'OK'}
+        <Badge variant="info">
+          {TIPO_REPARACION_LABELS[row.tipoReparacion] ?? row.tipoReparacion}
         </Badge>
       ),
     },
@@ -315,25 +294,21 @@ export function RepuestosPage() {
     },
   ];
 
-  // ───── Row styling for low stock ─────
-
-  const getRowClassName = useCallback((row: RepuestoRow): string => {
-    return row.bajoStock ? 'border-l-2 border-l-red-500 bg-red-50/30' : '';
-  }, []);
-
-  // Enriched rows (passthrough since Repuesto maps directly)
+  // Enriched rows
   const rows = useMemo<RepuestoRow[]>(() => {
     return (repuestos ?? []).map((r) => ({
       id: r.id,
       codigo: r.codigo,
       nombre: r.nombre,
-      stockActual: r.stockActual,
-      stockMinimo: r.stockMinimo,
+      descripcion: r.descripcion,
       precioCosto: r.precioCosto,
-      precioVenta: r.precioVenta,
-      bajoStock: r.bajoStock,
+      marcaNombre:
+        r.marcaId != null ? (marcaMap.get(r.marcaId) ?? `Marca #${r.marcaId}`) : '—',
+      modeloNombre:
+        r.modeloId != null ? (modeloMap.get(r.modeloId) ?? `Modelo #${r.modeloId}`) : '—',
+      tipoReparacion: r.tipoReparacion,
     }));
-  }, [repuestos]);
+  }, [repuestos, marcaMap, modeloMap]);
 
   // ───── Render ─────
 
@@ -344,23 +319,19 @@ export function RepuestosPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Repuestos</h2>
           <p className="text-sm text-slate-500">
-            Gestión de inventario de repuestos
+            Gestión de repuestos
           </p>
         </div>
-        <Button onClick={openCreate}>
-          Nuevo Repuesto
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-end gap-4">
-        <Button
-          variant={bajoStockOnly ? 'primary' : 'secondary'}
-          size="sm"
-          onClick={toggleBajoStock}
-        >
-          {bajoStockOnly ? 'Mostrar Todos' : 'Mostrar solo bajo stock'}
-        </Button>
+        <div className="flex items-center gap-3">
+          <SearchField
+            placeholder="Buscar por nombre..."
+            value={busqueda}
+            onChange={setBusqueda}
+          />
+          <Button onClick={openCreate}>
+            Nuevo Repuesto
+          </Button>
+        </div>
       </div>
 
       {/* Error state */}
@@ -383,13 +354,8 @@ export function RepuestosPage() {
           columns={columns}
           data={rows}
           loading={loading}
-          emptyMessage={
-            bajoStockOnly
-              ? 'No hay repuestos con stock bajo'
-              : 'No hay repuestos registrados'
-          }
+          emptyMessage="No hay repuestos registrados"
           keyExtractor={(row) => row.id}
-          getRowClassName={getRowClassName}
         />
       )}
 
@@ -450,47 +416,41 @@ export function RepuestosPage() {
             />
           </FormField>
 
-          <FormField label="Precio Venta" required error={fieldErrors.precioVenta}>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Ej: 29990"
-              value={editPrecioVenta}
-              onChange={(e) => setEditPrecioVenta(e.target.value)}
+          <FormField label="Tipo Reparación" required error={fieldErrors.tipoReparacion}>
+            <Select
+              options={TIPO_REPARACION_OPTIONS}
+              placeholder="Seleccionar tipo..."
+              value={editTipo}
+              onChange={(e) => setEditTipo(e.target.value)}
             />
           </FormField>
 
-          <FormField label="Stock Actual" required error={fieldErrors.stockActual}>
-            <Input
-              type="number"
-              step="1"
-              min="0"
-              placeholder="Ej: 10"
-              value={editStockActual}
-              onChange={(e) => setEditStockActual(e.target.value)}
+          <FormField label="Marca">
+            <Select
+              options={(marcasReq.data ?? []).map((m) => ({
+                value: String(m.id),
+                label: m.nombre,
+              }))}
+              placeholder="Seleccionar marca (opcional)..."
+              value={editMarcaId}
+              onChange={(e) => {
+                setEditMarcaId(e.target.value);
+                setEditModeloId('');
+              }}
             />
           </FormField>
 
-          <FormField label="Stock Mínimo" required error={fieldErrors.stockMinimo}>
-            <Input
-              type="number"
-              step="1"
-              min="0"
-              placeholder="Ej: 3"
-              value={editStockMinimo}
-              onChange={(e) => setEditStockMinimo(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="Proveedor ID">
-            <Input
-              type="number"
-              step="1"
-              min="0"
-              placeholder="ID del proveedor (opcional)..."
-              value={editProveedorId}
-              onChange={(e) => setEditProveedorId(e.target.value)}
+          <FormField label="Modelo">
+            <Select
+              options={filteredModeloOptions}
+              placeholder={
+                editMarcaId
+                  ? 'Seleccionar modelo (opcional)...'
+                  : 'Primero seleccione una marca'
+              }
+              value={editModeloId}
+              onChange={(e) => setEditModeloId(e.target.value)}
+              disabled={!editMarcaId}
             />
           </FormField>
         </div>

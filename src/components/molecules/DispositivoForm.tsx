@@ -5,7 +5,13 @@ import { Input } from '../atoms/Input';
 import { Select } from '../atoms/Select';
 import { FormField } from './FormField';
 import { TIPO_DISPOSITIVO_LABELS } from '../../utils/formatters';
-import { buildModeloOptions, buildClienteOptions } from '../../utils/maps';
+import {
+  buildModeloOptions,
+  buildClienteOptions,
+  buildMarcaOptions,
+  buildMarcasPorCategoria,
+  categoriaDeTipo,
+} from '../../utils/maps';
 import type { Cliente, Marca, Modelo } from '../../types';
 import { TipoDispositivo, CategoriaMarca } from '../../types';
 
@@ -16,6 +22,8 @@ interface DispositivoFormProps {
   submitting: boolean;
   tipo: TipoDispositivo | '';
   setTipo: (t: TipoDispositivo | '') => void;
+  marcaId: string;
+  setMarcaId: (v: string) => void;
   modeloId: string;
   setModeloId: (v: string) => void;
   clienteId: string;
@@ -64,20 +72,6 @@ function buildMarcaCategoriaMap(marcas: Marca[]): Map<number, CategoriaMarca> {
   return map;
 }
 
-function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
-  switch (tipo) {
-    case TipoDispositivo.CELULAR:
-      return CategoriaMarca.CELULARES;
-    case TipoDispositivo.COMPUTADORA:
-      return CategoriaMarca.COMPUTADORAS;
-    case TipoDispositivo.MICROONDAS:
-    case TipoDispositivo.NEVERA:
-    case TipoDispositivo.COCINA:
-    case TipoDispositivo.LAVADORA:
-      return CategoriaMarca.LINEA_BLANCA;
-  }
-}
-
 function NotasTextarea({
   value,
   onChange,
@@ -104,6 +98,8 @@ export function DispositivoForm({
   submitting,
   tipo,
   setTipo,
+  marcaId,
+  setMarcaId,
   modeloId,
   setModeloId,
   clienteId,
@@ -135,17 +131,27 @@ export function DispositivoForm({
     [marcas],
   );
 
+  const marcaOptions = useMemo(
+    () => buildMarcaOptions(buildMarcasPorCategoria(marcas ?? [], tipo)),
+    [marcas, tipo],
+  );
+
   const modeloOptions = useMemo(() => {
     const modelosList = modelos ?? [];
-    const listaFiltrada =
-      tipo !== ''
-        ? modelosList.filter((m) => {
-            const cat = marcaCategoriaMap.get(m.marcaId);
-            return cat === categoriaDeTipo(tipo as TipoDispositivo);
-          })
-        : modelosList;
+    let listaFiltrada = modelosList;
+    if (marcaId) {
+      listaFiltrada = listaFiltrada.filter(
+        (m) => m.marcaId === Number(marcaId),
+      );
+    } else if (tipo !== '') {
+      const categoria = categoriaDeTipo(tipo as TipoDispositivo);
+      listaFiltrada = listaFiltrada.filter((m) => {
+        const cat = marcaCategoriaMap.get(m.marcaId);
+        return cat === categoria;
+      });
+    }
     return buildModeloOptions(listaFiltrada);
-  }, [modelos, tipo, marcaCategoriaMap]);
+  }, [modelos, tipo, marcaId, marcaCategoriaMap]);
 
   const clienteOptions = useMemo(
     () => buildClienteOptions(clientes ?? []),
@@ -154,6 +160,7 @@ export function DispositivoForm({
 
   const handleTipoChange = (value: string) => {
     setTipo(value as TipoDispositivo | '');
+    setMarcaId('');
     setModeloId('');
     setNumeroSerie('');
     setImei('');
@@ -161,6 +168,11 @@ export function DispositivoForm({
     setTipoGas('');
     setVoltaje('');
     setNotasTecnicas('');
+  };
+
+  const handleMarcaChange = (value: string) => {
+    setMarcaId(value);
+    setModeloId('');
   };
 
   return (
@@ -196,12 +208,23 @@ export function DispositivoForm({
           />
         </FormField>
 
+        <FormField label="Marca">
+          <Select
+            options={marcaOptions}
+            placeholder={tipo ? 'Seleccionar marca...' : 'Primero seleccione un tipo'}
+            value={marcaId}
+            onChange={(e) => handleMarcaChange(e.target.value)}
+            disabled={!tipo}
+          />
+        </FormField>
+
         <FormField label="Modelo" required error={fieldErrors.modeloId}>
           <Select
             options={modeloOptions}
             placeholder="Seleccionar modelo..."
             value={modeloId}
             onChange={(e) => setModeloId(e.target.value)}
+            disabled={!marcaId || marcaOptions.length === 0}
           />
         </FormField>
 

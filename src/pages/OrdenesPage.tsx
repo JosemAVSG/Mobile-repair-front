@@ -8,12 +8,14 @@ import { Select } from '../components/atoms/Select';
 import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge } from '../components/molecules/StatusBadge';
+import { FacturaModal } from '../components/organisms/FacturaModal';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPost } from '../api/client';
-import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_DISPOSITIVO_LABELS } from '../utils/formatters';
+import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente, Dispositivo, Marca, Modelo, OrdenRequest } from '../types';
-import { EstadoOrden, TipoDispositivo } from '../types';
-import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo } from '../hooks/useQueries';
+import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
+import { buildMarcasPorCategoria } from '../utils/maps';
+import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo, useTarifas } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -54,6 +56,11 @@ const estadoOptions = [
 const tipoOptions = Object.values(TipoDispositivo).map((tipo) => ({
   value: tipo,
   label: tipoDispositivoLabel(tipo),
+}));
+
+const tipoReparacionOptions = Object.values(TipoReparacion).map((t) => ({
+  value: t,
+  label: TIPO_REPARACION_LABELS[t],
 }));
 
 // ──────────────────────────────────────────────
@@ -215,6 +222,8 @@ export function OrdenesPage() {
   const [createSerie, setCreateSerie] = useState('');
   const [createFallo, setCreateFallo] = useState('');
   const [createNotas, setCreateNotas] = useState('');
+  const [createTipoReparacion, setCreateTipoReparacion] = useState('');
+  const [createPrecioRevision, setCreatePrecioRevision] = useState('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<{
     cliente?: string;
@@ -224,7 +233,30 @@ export function OrdenesPage() {
     general?: string;
   }>({});
 
-  // ───── Cascade: modelos by marca ─────
+  // ───── Factura modal state ─────
+  const [facturaOpen, setFacturaOpen] = useState(false);
+  const [facturaOrden, setFacturaOrden] = useState<OrdenTrabajo | null>(null);
+
+  // ───── Tarifas para autocompletar precio de revisión ─────
+  const { data: tarifas } = useTarifas();
+
+  const tarifasEquipo = useMemo(() => {
+    if (!createMarcaId && !createModeloId) return [];
+    const list = tarifas ?? [];
+    return list.filter(
+      (t) =>
+        t.activa &&
+        (t.marcaId == null || (createMarcaId != null && t.marcaId === Number(createMarcaId))) &&
+        (t.modeloId == null || (createModeloId != null && t.modeloId === Number(createModeloId))),
+    );
+  }, [tarifas, createMarcaId, createModeloId]);
+
+  // ───── Cascade: marcas by tipo, modelos by marca ─────
+
+  const marcasFiltradas = useMemo(
+    () => buildMarcasPorCategoria(marcas ?? [], createTipo),
+    [marcas, createTipo],
+  );
 
   const modelosMarca = useMemo(
     () =>
@@ -269,6 +301,10 @@ export function OrdenesPage() {
       setCreateSerie(disp?.numeroSerie ?? '');
       setCreateFallo('');
       setCreateNotas('');
+      setCreateTipoReparacion('');
+      setCreatePrecioRevision('');
+      setFacturaOpen(false);
+      setFacturaOrden(null);
       setCreateErrors({});
       setCreateOpen(true);
     },
@@ -317,6 +353,10 @@ export function OrdenesPage() {
     setCreateSerie('');
     setCreateFallo('');
     setCreateNotas('');
+    setCreateTipoReparacion('');
+    setCreatePrecioRevision('');
+    setFacturaOpen(false);
+    setFacturaOrden(null);
     setCreateErrors({});
   }, []);
 
@@ -351,9 +391,17 @@ export function OrdenesPage() {
         imei: createImei.trim() || undefined,
         falloReportado: createFallo.trim() || undefined,
         notas: createNotas.trim() || undefined,
+        tipoReparacion: createTipoReparacion
+          ? (createTipoReparacion as TipoReparacion)
+          : undefined,
+        precioRevision: createPrecioRevision
+          ? Number(createPrecioRevision)
+          : undefined,
       };
-      await createMutation.mutateAsync(body);
+      const created = await createMutation.mutateAsync(body);
       closeCreate();
+      setFacturaOrden(created);
+      setFacturaOpen(true);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al crear orden';
@@ -371,6 +419,8 @@ export function OrdenesPage() {
     createImei,
     createFallo,
     createNotas,
+    createTipoReparacion,
+    createPrecioRevision,
     closeCreate,
     createMutation,
   ]);
@@ -499,21 +549,38 @@ export function OrdenesPage() {
             />
           </FormField>
 
+          <FormField label="Tipo" required error={createErrors.tipo}>
+            <Select
+              options={tipoOptions}
+              value={createTipo ? String(createTipo) : ''}
+              onChange={(e) => {
+                const val = e.target.value as TipoDispositivo | '';
+                setCreateTipo(val);
+                setCreateMarcaId('');
+                setCreateModeloId('');
+              }}
+              placeholder="Seleccionar tipo de dispositivo..."
+            />
+          </FormField>
+
           <FormField label="Marca" required error={createErrors.marca}>
             <Select
-              options={
-                marcas?.map((m) => ({
-                  value: String(m.id),
-                  label: m.nombre,
-                })) ?? []
-              }
+              options={marcasFiltradas.map((m) => ({
+                value: String(m.id),
+                label: m.nombre,
+              }))}
               value={createMarcaId ? String(createMarcaId) : ''}
               onChange={(e) => {
                 const val = e.target.value;
                 setCreateMarcaId(val ? Number(val) : '');
                 setCreateModeloId(''); // reset modelo on marca change
               }}
-              placeholder="Seleccionar marca..."
+              placeholder={
+                createTipo
+                  ? 'Seleccionar marca...'
+                  : 'Primero seleccione un tipo'
+              }
+              disabled={!createTipo}
             />
           </FormField>
 
@@ -535,20 +602,6 @@ export function OrdenesPage() {
                   : 'Primero seleccione una marca'
               }
               disabled={!createMarcaId}
-            />
-          </FormField>
-
-          <FormField label="Tipo" required error={createErrors.tipo}>
-            <Select
-              options={Object.values(TipoDispositivo).map((t) => ({
-                value: t,
-                label: TIPO_DISPOSITIVO_LABELS[t] ?? t,
-              }))}
-              value={createTipo ? String(createTipo) : ''}
-              onChange={(e) =>
-                setCreateTipo(e.target.value as TipoDispositivo | '')
-              }
-              placeholder="Seleccionar tipo de dispositivo..."
             />
           </FormField>
 
@@ -587,8 +640,86 @@ export function OrdenesPage() {
               onChange={(e) => setCreateNotas(e.target.value)}
             />
           </FormField>
+
+          {/* ── Costo de revisión (factura) ── */}
+          <div className="border-t border-slate-200 pt-4">
+            <p className="mb-3 text-sm font-semibold text-slate-700">
+              Costo de Revisión
+            </p>
+
+            {tarifasEquipo.length > 0 && (
+              <FormField label="Tarifa predefinida">
+                <Select
+                  options={tarifasEquipo.map((t) => ({
+                    value: String(t.id),
+                    label: `${TIPO_REPARACION_LABELS[t.tipo] ?? t.tipo} — ${formatCurrency(t.precio)}`,
+                  }))}
+                  placeholder="Seleccionar tarifa..."
+                  value=""
+                  onChange={(e) => {
+                    const tarifa = tarifasEquipo.find(
+                      (t) => String(t.id) === e.target.value,
+                    );
+                    if (!tarifa) return;
+                    setCreateTipoReparacion(tarifa.tipo);
+                    setCreatePrecioRevision(String(tarifa.precio));
+                  }}
+                />
+              </FormField>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Tipo de revisión">
+                <Select
+                  options={tipoReparacionOptions}
+                  placeholder="Seleccionar tipo..."
+                  value={createTipoReparacion}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCreateTipoReparacion(val);
+                    // Autocompletar precio si hay tarifa activa para este tipo/equipo
+                    if (val) {
+                      const match = tarifasEquipo.find(
+                        (t) => t.tipo === val,
+                      );
+                      if (match) setCreatePrecioRevision(String(match.precio));
+                    }
+                  }}
+                />
+              </FormField>
+
+              <FormField label="Precio (manual)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ej: 15000"
+                  value={createPrecioRevision}
+                  onChange={(e) => setCreatePrecioRevision(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </div>
         </div>
       </Modal>
+
+      {/* ───── Factura Modal ───── */}
+      <FacturaModal
+        isOpen={facturaOpen}
+        orden={facturaOrden}
+        cliente={facturaOrden ? (clienteMap.get(facturaOrden.clienteId) ?? null) : null}
+        marca={
+          facturaOrden
+            ? (marcaMap.get(facturaOrden.marcaId ?? 0) ?? null)
+            : null
+        }
+        modelo={
+          facturaOrden
+            ? (modeloMap.get(facturaOrden.modeloId ?? 0) ?? null)
+            : null
+        }
+        onClose={() => setFacturaOpen(false)}
+      />
     </div>
   );
 }

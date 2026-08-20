@@ -3,6 +3,30 @@
 // ──────────────────────────────────────────────
 
 import type { Cliente, Marca, Modelo } from '../types';
+import { TipoDispositivo, CategoriaMarca } from '../types';
+
+export function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
+  switch (tipo) {
+    case TipoDispositivo.CELULAR:
+      return CategoriaMarca.CELULARES;
+    case TipoDispositivo.COMPUTADORA:
+      return CategoriaMarca.COMPUTADORAS;
+    case TipoDispositivo.MICROONDAS:
+    case TipoDispositivo.NEVERA:
+    case TipoDispositivo.COCINA:
+    case TipoDispositivo.LAVADORA:
+      return CategoriaMarca.LINEA_BLANCA;
+  }
+}
+
+export function buildMarcasPorCategoria(
+  marcas: Marca[],
+  tipo: TipoDispositivo | '',
+): Marca[] {
+  if (tipo === '') return marcas;
+  const categoria = categoriaDeTipo(tipo);
+  return marcas.filter((m) => m.categoria === categoria);
+}
 
 export function buildMarcaMap(marcas: Marca[]): Map<number, string> {
   const map = new Map<number, string>();

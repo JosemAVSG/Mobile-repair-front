@@ -101,17 +101,13 @@ export function useHistorialOrden(ordenId?: number) {
   });
 }
 
-export function useRepuestos() {
+export function useRepuestos(nombre?: string) {
   return useQuery({
-    queryKey: ['repuestos'],
-    queryFn: () => apiGet<Repuesto[]>('/api/repuestos'),
-  });
-}
-
-export function useRepuestosBajoStock() {
-  return useQuery({
-    queryKey: ['repuestos', 'bajo-stock'],
-    queryFn: () => apiGet<Repuesto[]>('/api/repuestos/bajo-stock'),
+    queryKey: nombre ? ['repuestos', 'nombre', nombre] : ['repuestos'],
+    queryFn: () =>
+      apiGet<Repuesto[]>(
+        nombre ? `/api/repuestos?nombre=${encodeURIComponent(nombre)}` : '/api/repuestos',
+      ),
   });
 }
 
