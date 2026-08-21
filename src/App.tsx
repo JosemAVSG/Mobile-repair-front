@@ -28,11 +28,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Misma URL /reparaciones/:id para clientes (público) y usuarios autenticados.
-// Autenticado → detalle interno; sin sesión → timeline público de seguimiento.
-function RepairStatusRoute() {
+// Detalle interno dentro del layout para usuarios autenticados.
+function AuthenticatedRepairDetail() {
+  return (
+    <MainLayout>
+      <OrdenDetailPage />
+    </MainLayout>
+  );
+}
+
+// Redirección de compatibilidad para QR antiguos: si el cliente escanea
+// /reparaciones/:id sin sesión, lo mandamos a la ruta pública /estado/:id.
+function PublicRepairRedirect() {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <OrdenDetailPage /> : <PublicRepairStatusPage />;
+  const { id } = useParams<{ id: string }>();
+  if (isAuthenticated) {
+    return <AuthenticatedRepairDetail />;
+  }
+  return <Navigate to={`/estado/${id}`} replace />;
 }
 
 // Redirect de compatibilidad: /ordenes → /reparaciones (enlaces/QR emitidos)
@@ -48,8 +61,12 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Ruta compartida: pública o interna según autenticación */}
-      <Route path="reparaciones/:id" element={<RepairStatusRoute />} />
+      {/* /reparaciones/:id mantiene compatibilidad con QR antiguos.
+          Autenticado → detalle con layout; sin sesión → redirige a /estado/:id. */}
+      <Route path="reparaciones/:id" element={<PublicRepairRedirect />} />
+
+      {/* Ruta pública para clientes que escanean el QR. */}
+      <Route path="estado/:id" element={<PublicRepairStatusPage />} />
 
       <Route
         element={

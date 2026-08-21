@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../organisms/Sidebar';
 import { Header } from '../organisms/Header';
 import { Breadcrumbs } from '../molecules/Breadcrumbs';
 
-export function MainLayout() {
+interface MainLayoutProps {
+  children?: ReactNode;
+}
+
+export function MainLayout({ children }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -19,7 +23,7 @@ export function MainLayout() {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           <Breadcrumbs />
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </div>
     </div>

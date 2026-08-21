@@ -18,7 +18,6 @@ interface NavGroup {
 
 const adminNavItems: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: 'home' },
-  { path: '/dispositivos', label: 'Dispositivos', icon: 'smartphone' },
   { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
   { path: '/inventario', label: 'Inventario', icon: 'package' },
 ];
@@ -32,6 +31,7 @@ const navGroups: NavGroup[] = [
     label: 'Catálogo',
     icon: 'layers',
     items: [
+      { path: '/dispositivos', label: 'Dispositivos', icon: 'smartphone' },
       { path: '/marcas', label: 'Marcas', icon: 'tag' },
       { path: '/modelos', label: 'Modelos', icon: 'layers' },
       { path: '/clientes', label: 'Clientes', icon: 'users' },

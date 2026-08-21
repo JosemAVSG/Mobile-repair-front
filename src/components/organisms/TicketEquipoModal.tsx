@@ -53,7 +53,7 @@ export function TicketEquipoModal({
 
   const imei = orden.imei;
   const serie = orden.numeroSerie;
-  const qrValue = `${window.location.origin}/reparaciones/${orden.id}`;
+  const qrValue = `${window.location.origin}/estado/${orden.id}`;
 
   const printStyles = `
     @media print {
