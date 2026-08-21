@@ -4,20 +4,24 @@ import {
   useEffect,
   useCallback,
   useContext,
+  useMemo,
   type ReactNode,
 } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiGet } from '../api/client';
+import type { BackendShopConfig } from '../types';
 
 // ──────────────────────────────────────────────
 // Configuración del taller
 // ──────────────────────────────────────────────
 //
-// TODO(migración backend): `nombreTaller` y `logo` deben migrarse a un
-// endpoint de configuración del backend (GET/PUT /api/configuracion). Los
-// colores/tema (`colorPrimario`) permanecen SIEMPRE en localStorage, ya que
-// son una preferencia visual local del dispositivo y no necesitan
-// sincronización entre usuarios.
+// `colorPrimario` es una preferencia visual local del dispositivo: se guarda
+// SIEMPRE en localStorage y NUNCA se envía al backend.
 //
-// Por ahora todo se persiste en localStorage bajo la clave `taller-config`.
+// `nombreTaller` y `logo` son identidad del taller: se leen desde el endpoint
+// público `/api/configuracion/public`. Se conserva una única lectura del
+// legacy `taller-config` localStorage como fallback hasta que el backend
+// responda.
 
 export interface TallerConfig {
   nombreTaller: string;
@@ -33,12 +37,14 @@ export const DEFAULT_CONFIG: TallerConfig = {
 
 interface ConfigContextType {
   config: TallerConfig;
+  /** Actualiza preferencias locales (solo `colorPrimario` se persiste). */
   updateConfig: (parcial: Partial<TallerConfig>) => void;
 }
 
 export const ConfigContext = createContext<ConfigContextType | null>(null);
 
 const STORAGE_KEY = 'taller-config';
+const QUERY_KEY = ['configuracion', 'public'];
 
 // Variables CSS que consume Tailwind v4 (@theme inline en index.css)
 const CSS_PRIMARY = '--taller-primary';
@@ -67,30 +73,56 @@ function shadeColor(hex: string, percent: number): string {
 }
 
 /** Aplica los colores del taller como variables CSS en el documento. */
-function applyConfigTheme(config: TallerConfig): void {
+function applyConfigTheme(colorPrimario: string): void {
   const root = document.documentElement;
-  root.style.setProperty(CSS_PRIMARY, config.colorPrimario);
-  root.style.setProperty(CSS_PRIMARY_DARK, shadeColor(config.colorPrimario, -15));
+  root.style.setProperty(CSS_PRIMARY, colorPrimario);
+  root.style.setProperty(CSS_PRIMARY_DARK, shadeColor(colorPrimario, -15));
 }
 
-function loadFromStorage(): TallerConfig {
+/** Lee únicamente el color primario de localStorage. */
+function loadColorFromStorage(): string {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CONFIG;
+    if (!raw) return DEFAULT_CONFIG.colorPrimario;
+    const parsed = JSON.parse(raw) as Partial<TallerConfig>;
+    return (
+      typeof parsed.colorPrimario === 'string' &&
+      parsed.colorPrimario.trim() !== ''
+        ? parsed.colorPrimario
+        : DEFAULT_CONFIG.colorPrimario
+    );
+  } catch {
+    return DEFAULT_CONFIG.colorPrimario;
+  }
+}
+
+/**
+ * Lectura única de nombre/logo legacy desde `taller-config`.
+ * Se usa como `initialData` mientras llega la configuración del backend.
+ */
+function readLegacyShopIdentity(): BackendShopConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return {
+        nombreTaller: DEFAULT_CONFIG.nombreTaller,
+        logo: DEFAULT_CONFIG.logo,
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<TallerConfig>;
     return {
       nombreTaller:
-        typeof parsed.nombreTaller === 'string' && parsed.nombreTaller.trim() !== ''
+        typeof parsed.nombreTaller === 'string' &&
+        parsed.nombreTaller.trim() !== ''
           ? parsed.nombreTaller
           : DEFAULT_CONFIG.nombreTaller,
       logo: typeof parsed.logo === 'string' ? parsed.logo : DEFAULT_CONFIG.logo,
-      colorPrimario:
-        typeof parsed.colorPrimario === 'string' && parsed.colorPrimario.trim() !== ''
-          ? parsed.colorPrimario
-          : DEFAULT_CONFIG.colorPrimario,
     };
   } catch {
-    return DEFAULT_CONFIG;
+    return {
+      nombreTaller: DEFAULT_CONFIG.nombreTaller,
+      logo: DEFAULT_CONFIG.logo,
+    };
   }
 }
 
@@ -99,11 +131,32 @@ interface ConfigProviderProps {
 }
 
 export function ConfigProvider({ children }: ConfigProviderProps) {
-  const [config, setConfig] = useState<TallerConfig>(() => loadFromStorage());
+  const [colorPrimario, setColorPrimario] = useState<string>(() =>
+    loadColorFromStorage(),
+  );
+
+  // Identidad del taller desde backend; fallback legacy solo una vez.
+  const legacyIdentity = useMemo(() => readLegacyShopIdentity(), []);
+  const { data: backendConfig } = useQuery({
+    queryKey: QUERY_KEY,
+    queryFn: () => apiGet<BackendShopConfig>('/api/configuracion/public'),
+    initialData: legacyIdentity,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const config = useMemo<TallerConfig>(
+    () => ({
+      nombreTaller:
+        backendConfig?.nombreTaller ?? DEFAULT_CONFIG.nombreTaller,
+      logo: backendConfig?.logo ?? DEFAULT_CONFIG.logo,
+      colorPrimario,
+    }),
+    [backendConfig, colorPrimario],
+  );
 
   // Aplica el color primario en runtime cada vez que cambia
   useEffect(() => {
-    applyConfigTheme(config);
+    applyConfigTheme(config.colorPrimario);
   }, [config.colorPrimario]);
 
   // Mantiene el título del documento sincronizado con el nombre del taller
@@ -112,15 +165,19 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   }, [config.nombreTaller]);
 
   const updateConfig = useCallback((parcial: Partial<TallerConfig>) => {
-    setConfig((prev) => {
-      const next = { ...prev, ...parcial };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch (err) {
-        // Puede fallar si el logo (data URL) excede la cuota de localStorage
-        console.warn('No se pudo persistir la configuración del taller', err);
+    setColorPrimario((prev) => {
+      const nextColor = parcial.colorPrimario ?? prev;
+      if (nextColor !== prev) {
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ colorPrimario: nextColor }),
+          );
+        } catch (err) {
+          console.warn('No se pudo persistir el color del taller', err);
+        }
       }
-      return next;
+      return nextColor;
     });
   }, []);
 

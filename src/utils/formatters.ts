@@ -2,7 +2,14 @@
 // Labels (tipos y categorías)
 // ──────────────────────────────────────────────
 
-import { TipoDispositivo, TipoReparacion, CategoriaMarca, type RolUsuario } from '../types';
+import {
+  TipoDispositivo,
+  TipoReparacion,
+  CategoriaMarca,
+  type RolUsuario,
+  type EstadoStock,
+  type TipoMovimiento,
+} from '../types';
 
 export const ROL_LABELS: Record<RolUsuario, string> = {
   ADMIN: 'Administrador',
@@ -84,6 +91,23 @@ export function rolBadgeConfig(rol: RolUsuario): BadgeConfig {
     rol === 'ADMIN' ? 'info' : 'warning';
   return { label: ROL_LABELS[rol], variant };
 }
+
+export const ESTADO_STOCK_LABELS: Record<EstadoStock, string> = {
+  OK: 'OK',
+  BAJO: 'Bajo stock',
+  SIN_STOCK: 'Sin stock',
+};
+
+export const ESTADO_STOCK_VARIANTS: Record<EstadoStock, 'success' | 'warning' | 'danger'> = {
+  OK: 'success',
+  BAJO: 'warning',
+  SIN_STOCK: 'danger',
+};
+
+export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
+  COMPRA: 'Compra',
+  CONSUMO: 'Consumo',
+};
 
 // ──────────────────────────────────────────────
 // Formatters

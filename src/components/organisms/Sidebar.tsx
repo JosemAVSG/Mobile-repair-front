@@ -20,6 +20,7 @@ const adminNavItems: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: 'home' },
   { path: '/dispositivos', label: 'Dispositivos', icon: 'smartphone' },
   { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
+  { path: '/inventario', label: 'Inventario', icon: 'package' },
 ];
 
 const tecnicNavItems: NavItem[] = [

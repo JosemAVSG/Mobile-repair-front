@@ -112,6 +112,24 @@ export async function apiPostForm<T>(path: string, formData: FormData): Promise<
   return handleResponse<T>(res);
 }
 
+/**
+ * PUT multipart/form-data — para actualizar recursos con archivos (p.ej.
+ * logo del taller). Al igual que apiPostForm, no se setea Content-Type.
+ */
+export async function apiPutForm<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(buildUrl(path), {
+    method: 'PUT',
+    headers,
+    body: formData,
+  });
+  return handleResponse<T>(res);
+}
+
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PUT',

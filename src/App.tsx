@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { MainLayout } from './components/templates/MainLayout';
+import { RequireRole } from './components/auth/RequireRole';
 import { useAuth } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -10,11 +11,12 @@ import { ClienteDetailPage } from './pages/ClienteDetailPage';
 import { DispositivosPage } from './pages/DispositivosPage';
 import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
+import { PublicRepairStatusPage } from './pages/PublicRepairStatusPage';
 import { TarifasPage } from './pages/TarifasPage';
 import { RepuestosPage } from './pages/RepuestosPage';
 import { ConfiguracionPage } from './pages/ConfiguracionPage';
 import { TecnicosPage } from './pages/TecnicosPage';
-import type { RolUsuario } from './types';
+import { InventarioPage } from './pages/InventarioPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -26,26 +28,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Requiere que el usuario tenga uno de los roles indicados; si no, lo
- *  redirige a /reparaciones (la única página accesible para todo rol). */
-function RequireRole({
-  roles,
-  children,
-}: {
-  roles: RolUsuario[];
-  children: React.ReactNode;
-}) {
-  const { user } = useAuth();
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!roles.includes(user.rol)) {
-    return <Navigate to="/reparaciones" replace />;
-  }
-
-  return <>{children}</>;
+// Misma URL /reparaciones/:id para clientes (público) y usuarios autenticados.
+// Autenticado → detalle interno; sin sesión → timeline público de seguimiento.
+function RepairStatusRoute() {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <OrdenDetailPage /> : <PublicRepairStatusPage />;
 }
 
 // Redirect de compatibilidad: /ordenes → /reparaciones (enlaces/QR emitidos)
@@ -60,6 +47,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Ruta compartida: pública o interna según autenticación */}
+      <Route path="reparaciones/:id" element={<RepairStatusRoute />} />
 
       <Route
         element={
@@ -117,7 +107,6 @@ export default function App() {
           }
         />
         <Route path="reparaciones" element={<OrdenesPage />} />
-        <Route path="reparaciones/:id" element={<OrdenDetailPage />} />
         <Route path="ordenes" element={<RedirectToReparaciones />} />
         <Route path="ordenes/:id" element={<RedirectToReparaciones />} />
         <Route
@@ -133,6 +122,14 @@ export default function App() {
           element={
             <RequireRole roles={['ADMIN']}>
               <RepuestosPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="inventario"
+          element={
+            <RequireRole roles={['ADMIN']}>
+              <InventarioPage />
             </RequireRole>
           }
         />

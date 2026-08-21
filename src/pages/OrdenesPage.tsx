@@ -637,18 +637,19 @@ export function OrdenesPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-4">
-        <div className="w-56">
-          <Select
-            label="Filtrar por Estado"
-            options={estadoOptions}
-            value={estadoFilter}
-            onChange={(e) =>
-              setEstadoFilter(e.target.value as EstadoOrden | '')
-            }
-            placeholder=""
-            disabled={!isAdmin}
-          />
-        </div>
+        {isAdmin && (
+          <div className="w-56">
+            <Select
+              label="Filtrar por Estado"
+              options={estadoOptions}
+              value={estadoFilter}
+              onChange={(e) =>
+                setEstadoFilter(e.target.value as EstadoOrden | '')
+              }
+              placeholder=""
+            />
+          </div>
+        )}
         <div className="w-56">
           <Select
             label="Filtrar por Tipo de Dispositivo"

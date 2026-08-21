@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
@@ -18,6 +18,7 @@ import { OrderTimeline, type TimelineEvent } from '../components/molecules/Order
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { apiPut, apiPost, ApiError } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import { useCan } from '../hooks/useCan';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import {
   buildWhatsAppLink,
@@ -149,6 +150,12 @@ export function OrdenDetailPage() {
 
   const esAdmin = user?.rol === 'ADMIN';
 
+  const canViewOrden = useCan('orden:view', orden ?? undefined);
+  const canEditOrden = useCan('orden:edit', orden ?? undefined);
+  const canManageReparaciones = useCan('reparacion:manage', orden ?? undefined);
+  const canManageEntrega = useCan('entrega:manage', orden ?? undefined);
+  const canManageFotos = useCan('foto:manage', orden ?? undefined);
+
   const tecnicoResponsable = useMemo(() => {
     if (orden?.tecnicoId == null) return null;
     return tecnicos?.find((t) => t.id === orden.tecnicoId) ?? null;
@@ -207,6 +214,9 @@ export function OrdenDetailPage() {
     if (!ordenError) return null;
     if (ordenError instanceof ApiError && ordenError.status === 404) {
       return 'NOT_FOUND';
+    }
+    if (ordenError instanceof ApiError && ordenError.status === 403) {
+      return 'FORBIDDEN';
     }
     return ordenError instanceof Error
       ? ordenError.message
@@ -278,17 +288,6 @@ export function OrdenDetailPage() {
     }
     return grupos;
   }, [fotos]);
-
-  // Solo ADMIN o el técnico asignado pueden subir/eliminar fotos; el resto
-  // ve la galería en modo solo lectura.
-  const puedeGestionarFotos = useMemo(
-    () =>
-      esAdmin ||
-      (orden?.tecnicoId != null &&
-        user?.tecnicoId != null &&
-        orden.tecnicoId === user.tecnicoId),
-    [esAdmin, orden?.tecnicoId, user?.tecnicoId],
-  );
 
   // ───── Fotos del dispositivo (state) ─────
 
@@ -789,6 +788,10 @@ export function OrdenDetailPage() {
     );
   }
 
+  if (error === 'FORBIDDEN') {
+    return <Navigate to="/reparaciones" replace />;
+  }
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -880,20 +883,26 @@ export function OrdenDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" onClick={openEntregaModal}>
-            Agendar Entrega
-          </Button>
-          {cliente?.telefono && (
+          {canManageEntrega && (
+            <Button variant="secondary" onClick={openEntregaModal}>
+              Agendar Entrega
+            </Button>
+          )}
+          {canViewOrden && cliente?.telefono && (
             <Button variant="secondary" onClick={handleReenviarAviso}>
               Enviar por WhatsApp
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setTicketOpen(true)}>
-            Ticket QR
-          </Button>
-          <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
-            Factura
-          </Button>
+          {canViewOrden && (
+            <Button variant="secondary" onClick={() => setTicketOpen(true)}>
+              Ticket QR
+            </Button>
+          )}
+          {canViewOrden && (
+            <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
+              Factura
+            </Button>
+          )}
         </div>
       </div>
 
@@ -982,7 +991,7 @@ export function OrdenDetailPage() {
                 </p>
               </div>
             </div>
-            {esAdmin && (
+            {canEditOrden && (
               <div className="flex items-end gap-2">
                 <div className="w-56">
                   <Select
@@ -1007,7 +1016,7 @@ export function OrdenDetailPage() {
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-sm text-slate-500">Sin técnico asignado</p>
-            {user?.tecnicoId != null && (
+            {!esAdmin && user?.tecnicoId != null && (
               <Button
                 variant="secondary"
                 onClick={() => setConfirmAsignarme(true)}
@@ -1016,7 +1025,7 @@ export function OrdenDetailPage() {
                 Asignarme
               </Button>
             )}
-            {esAdmin && (
+            {canEditOrden && (
               <div className="flex items-end gap-2">
                 <div className="w-56">
                   <Select
@@ -1111,7 +1120,7 @@ export function OrdenDetailPage() {
                     <p className="text-xs text-slate-500">{descripcion}</p>
                   </div>
 
-                  {puedeGestionarFotos && (
+                  {canManageFotos && (
                     <div className="mb-4 space-y-2">
                       {preview ? (
                         <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
@@ -1178,7 +1187,7 @@ export function OrdenDetailPage() {
                             alt={`Foto ${titulo.toLowerCase()}`}
                             className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
                           />
-                          {puedeGestionarFotos && (
+                          {canManageFotos && (
                             <button
                               type="button"
                               title="Eliminar foto"
@@ -1202,7 +1211,7 @@ export function OrdenDetailPage() {
       </Card>
 
       {/* ── Workflow Section ── */}
-      {availableTransitions.length > 0 && (
+      {canEditOrden && availableTransitions.length > 0 && (
         <Card title="Flujo de Trabajo">
           <div className="flex flex-wrap gap-3">
             {availableTransitions.map((target) => (
@@ -1228,9 +1237,11 @@ export function OrdenDetailPage() {
             <p className="text-sm text-slate-500">
               {orden.reparaciones.length} reparación(es) registrada(s)
             </p>
-            <Button variant="secondary" size="sm" onClick={openRepModal}>
-              Agregar Reparación
-            </Button>
+            {canManageReparaciones && (
+              <Button variant="secondary" size="sm" onClick={openRepModal}>
+                Agregar Reparación
+              </Button>
+            )}
           </div>
 
           <DataTable<Reparacion>

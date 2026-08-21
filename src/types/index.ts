@@ -275,3 +275,126 @@ export interface RepuestoRequest {
   modeloId?: number;
   tipoReparacion: TipoReparacion;
 }
+
+// ──────────────────────────────────────────────
+// Shop config
+// ──────────────────────────────────────────────
+
+export interface BackendShopConfig {
+  nombreTaller: string;
+  logo: string | null;
+}
+
+export interface ShopConfigForm {
+  nombreTaller: string;
+  logo: File | string | null;
+}
+
+// ──────────────────────────────────────────────
+// Public repair status
+// ──────────────────────────────────────────────
+
+export type PublicStage =
+  | 'Ingresado'
+  | 'En reparación'
+  | 'Pendiente retiro'
+  | 'Finalizado';
+
+export type PublicRepairStatus = {
+  id: string;
+  numeroOrden: string;
+  cliente: { nombre: string; telefono?: string };
+  equipo: { modelo: string; marca?: string };
+  estadoOrden: EstadoOrden;
+  fechaEstimadaEntrega?: string;
+  fechaIngreso?: string;
+  observacionesPublicas?: string;
+};
+
+/** Mapeo de estados internos a etapas públicas del seguimiento. */
+export const ESTADO_TO_PUBLIC_STAGE: Record<EstadoOrden, PublicStage> = {
+  [EstadoOrden.REGISTRO]: 'Ingresado',
+  [EstadoOrden.DIAGNOSTICO]: 'Ingresado',
+  [EstadoOrden.REPARACION]: 'En reparación',
+  [EstadoOrden.ESPERANDO_REPUESTO]: 'En reparación',
+  [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'En reparación',
+  [EstadoOrden.ESPERANDO_ENTREGA]: 'Pendiente retiro',
+  [EstadoOrden.ENTREGADO]: 'Finalizado',
+};
+
+// ──────────────────────────────────────────────
+// Role-based access
+// ──────────────────────────────────────────────
+
+export type ActionPermission =
+  | 'orden:create'
+  | 'orden:view'
+  | 'orden:edit'
+  | 'reparacion:manage'
+  | 'entrega:manage'
+  | 'foto:manage';
+
+export interface CanResource {
+  tecnicoId?: number | null;
+}
+
+export interface RequireRoleProps {
+  roles: RolUsuario[];
+  fallback?: string;
+  children: React.ReactNode;
+}
+
+// ──────────────────────────────────────────────
+// Inventory management
+// ──────────────────────────────────────────────
+
+export type EstadoStock = 'OK' | 'BAJO' | 'SIN_STOCK';
+
+export type TipoMovimiento = 'COMPRA' | 'CONSUMO';
+
+export interface ProductoInventario {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion?: string | null;
+  stock: number;
+  stockMinimo: number;
+  estado: EstadoStock;
+  costoUnitario: number;
+  createdAt: string;
+}
+
+export interface MovimientoInventario {
+  id: number;
+  productoId: number;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  stockResultante: number;
+  ordenId?: number | null;
+  notas?: string | null;
+  createdAt: string;
+}
+
+export interface ProductoInventarioRequest {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  stock: number;
+  stockMinimo: number;
+  costoUnitario: number;
+}
+
+export interface MovimientoRequest {
+  productoId: number;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  ordenId?: number;
+  notas?: string;
+}
+
+export interface InventoryKpis {
+  totalProductos: number;
+  bajoStock: number;
+  sinStock: number;
+  valorTotalStock: number;
+}
