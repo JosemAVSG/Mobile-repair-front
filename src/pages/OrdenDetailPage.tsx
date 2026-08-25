@@ -1144,6 +1144,9 @@ export function OrdenDetailPage() {
             {ETAPAS_FOTO.map(({ etapa, titulo, descripcion }) => {
               const grupo = fotosPorEtapa[etapa];
               const preview = previews[etapa];
+              const etapaHabilitada = orden
+                ? puedeSubirFotoEtapa(etapa, orden.estado)
+                : false;
               return (
                 <div key={etapa}>
                   <div className="mb-3">
@@ -1229,7 +1232,7 @@ export function OrdenDetailPage() {
                             alt={`Foto ${titulo.toLowerCase()}`}
                             className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
                           />
-                          {canManageFotos && (
+                          {canManageFotos && etapaHabilitada && (
                             <button
                               type="button"
                               title="Eliminar foto"
