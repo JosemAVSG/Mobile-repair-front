@@ -17,10 +17,10 @@ import { apiPost, apiPut } from '../api/client';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { isOrdenAtrasada } from '../utils/ordenes';
 import { useAuth } from '../hooks/useAuth';
-import type { OrdenTrabajo, Cliente, Dispositivo, Marca, Modelo, OrdenRequest } from '../types';
+import type { OrdenTrabajo, Cliente, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
-import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDispositivo, useTarifas, useTecnicos } from '../hooks/useQueries';
+import { useOrdenes, useClientes, useMarcas, useModelos, useTarifas, useTecnicos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -29,7 +29,7 @@ import { useOrdenes, useClientes, useDispositivos, useMarcas, useModelos, useDis
 interface OrdenRow {
   id: number;
   cliente: string;
-  dispositivo: string;
+  equipo: string;
   tecnico: string;
   estado: EstadoOrden;
   falloReportado: string | null;
@@ -124,7 +124,6 @@ export function OrdenesPage() {
   // ───── Supporting data for enrichment ─────
 
   const { data: clientes } = useClientes();
-  const { data: dispositivos } = useDispositivos();
   const { data: marcas } = useMarcas();
   const { data: modelos } = useModelos();
   const { data: tecnicos } = useTecnicos();
@@ -145,12 +144,6 @@ export function OrdenesPage() {
     clientes?.forEach((c) => map.set(c.id, c));
     return map;
   }, [clientes]);
-
-  const dispositivoMap = useMemo(() => {
-    const map = new Map<number, Dispositivo>();
-    dispositivos?.forEach((d) => map.set(d.id, d));
-    return map;
-  }, [dispositivos]);
 
   const marcaMap = useMemo(() => {
     const map = new Map<number, Marca>();
@@ -177,9 +170,7 @@ export function OrdenesPage() {
 
     if (filtroTipo) {
       ordenesList = ordenesList.filter((orden) => {
-        const dispositivo =
-          orden.dispositivoId != null ? dispositivoMap.get(orden.dispositivoId) : undefined;
-        const tipo = orden.tipo ?? dispositivo?.tipo;
+        const tipo = orden.tipo;
         return tipo === filtroTipo;
       });
     }
@@ -192,26 +183,22 @@ export function OrdenesPage() {
 
     return ordenesList.map((orden) => {
       const cliente = clienteMap.get(orden.clienteId);
-      const dispositivo =
-        orden.dispositivoId != null ? dispositivoMap.get(orden.dispositivoId) : undefined;
-      const modeloId = orden.modeloId ?? dispositivo?.modeloId;
+      const modeloId = orden.modeloId;
       const modelo = modeloId != null ? modeloMap.get(modeloId) : undefined;
       const marca = modelo ? marcaMap.get(modelo.marcaId) : undefined;
 
-      const tipo = orden.tipo ?? dispositivo?.tipo;
+      const tipo = orden.tipo;
       const parts: string[] = [];
       if (tipo) parts.push(tipoDispositivoLabel(tipo) ?? tipo);
       if (marca) parts.push(marca.nombre);
       if (modelo) parts.push(modelo.nombre);
       else if (modeloId != null) parts.push(`Modelo #${modeloId}`);
-      const dispLabel =
-        parts.join(' - ') ||
-        (orden.dispositivoId != null ? `Dispositivo #${orden.dispositivoId}` : '—');
+      const dispLabel = parts.join(' - ') || '—';
 
       return {
         id: orden.id,
         cliente: cliente?.nombre ?? `Cliente #${orden.clienteId}`,
-        dispositivo: dispLabel,
+        equipo: dispLabel,
         tecnico:
           orden.tecnicoId != null
             ? (tecnicoMap.get(orden.tecnicoId) ?? `Técnico #${orden.tecnicoId}`)
@@ -224,14 +211,14 @@ export function OrdenesPage() {
         atrasada: isOrdenAtrasada(orden),
       };
     });
-  }, [ordenes, filtroTipo, filtroTecnico, clienteMap, dispositivoMap, marcaMap, modeloMap, tecnicoMap]);
+  }, [ordenes, filtroTipo, filtroTecnico, clienteMap, marcaMap, modeloMap, tecnicoMap]);
 
   // ───── Columns ─────
 
   const columns: Column<OrdenRow>[] = [
     { key: 'id', label: 'ID', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
-    { key: 'dispositivo', label: 'Dispositivo' },
+    { key: 'equipo', label: 'Equipo' },
     ...(isAdmin
       ? ([{ key: 'tecnico', label: 'Técnico', sortable: true }] as Column<OrdenRow>[])
       : []),
@@ -293,14 +280,15 @@ export function OrdenesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createClienteId, setCreateClienteId] = useState<number | ''>('');
-  const [createDispositivoId, setCreateDispositivoId] = useState<
-    number | ''
-  >('');
   const [createMarcaId, setCreateMarcaId] = useState<number | ''>('');
   const [createModeloId, setCreateModeloId] = useState<number | ''>('');
   const [createTipo, setCreateTipo] = useState<TipoDispositivo | ''>('');
   const [createImei, setCreateImei] = useState('');
   const [createSerie, setCreateSerie] = useState('');
+  const [createCapacidad, setCreateCapacidad] = useState('');
+  const [createTipoGas, setCreateTipoGas] = useState('');
+  const [createVoltaje, setCreateVoltaje] = useState('');
+  const [createNotasTecnicas, setCreateNotasTecnicas] = useState('');
   const [createFallo, setCreateFallo] = useState('');
   const [createNotas, setCreateNotas] = useState('');
   const [createTipoReparacion, setCreateTipoReparacion] = useState('');
@@ -372,39 +360,23 @@ export function OrdenesPage() {
     [modelos, createMarcaId],
   );
 
-  // ───── Preload from query params (dispositivoId / clienteId) ─────
-
-  const preloadDispositivoId = useMemo(() => {
-    const raw = searchParams.get('dispositivoId');
-    const n = raw ? Number(raw) : NaN;
-    return Number.isFinite(n) ? n : undefined;
-  }, [searchParams]);
-
-  const {
-    data: preloadedDispositivo,
-    isPending: preloadDispPending,
-    isFetching: preloadDispFetching,
-  } = useDispositivo(preloadDispositivoId);
-
   // ───── Open / close create modal ─────
 
   const openCreate = useCallback(
-    (preload?: { clienteId?: string; dispositivo?: Dispositivo }) => {
-      const clienteVal = preload?.clienteId
-        ? Number(preload.clienteId)
-        : preload?.dispositivo?.clienteId ?? '';
+    (preload?: { clienteId?: string }) => {
+      const clienteVal = preload?.clienteId ? Number(preload.clienteId) : '';
       setCreateClienteId(
         Number.isFinite(clienteVal) && clienteVal !== '' ? clienteVal : '',
       );
-      const disp = preload?.dispositivo;
-      setCreateDispositivoId(disp ? disp.id : '');
-      setCreateMarcaId(
-        disp ? (modeloMap.get(disp.modeloId)?.marcaId ?? '') : '',
-      );
-      setCreateModeloId(disp ? disp.modeloId : '');
-      setCreateTipo(disp ? disp.tipo : '');
-      setCreateImei(disp?.imei ?? '');
-      setCreateSerie(disp?.numeroSerie ?? '');
+      setCreateMarcaId('');
+      setCreateModeloId('');
+      setCreateTipo('');
+      setCreateImei('');
+      setCreateSerie('');
+      setCreateCapacidad('');
+      setCreateTipoGas('');
+      setCreateVoltaje('');
+      setCreateNotasTecnicas('');
       setCreateFallo('');
       setCreateNotas('');
       setCreateTipoReparacion('');
@@ -416,49 +388,30 @@ export function OrdenesPage() {
       setPaso(1);
       setCreateOpen(true);
     },
-    [modeloMap],
+    [],
   );
 
-  // Auto-open the create modal with preloads from query params, once on mount.
+  // Auto-open the create modal with clienteId from query params, once on mount.
   const preloadApplied = useRef(false);
   useEffect(() => {
     if (preloadApplied.current) return;
-    const hasDispositivo = searchParams.has('dispositivoId');
-    const hasCliente = searchParams.has('clienteId');
-    if (!hasDispositivo && !hasCliente) return;
-    if (
-      hasDispositivo &&
-      preloadDispositivoId != null &&
-      (preloadDispPending || preloadDispFetching || modelos == null)
-    ) {
-      // wait until the dispositivo and the catálogo de modelos resolve
-      // to derive marca/modelo fields
-      return;
-    }
+    if (!searchParams.has('clienteId')) return;
     preloadApplied.current = true;
-    openCreate({
-      clienteId: searchParams.get('clienteId') ?? undefined,
-      dispositivo: preloadedDispositivo,
-    });
-  }, [
-    searchParams,
-    openCreate,
-    preloadDispositivoId,
-    preloadDispPending,
-    preloadDispFetching,
-    preloadedDispositivo,
-    modelos,
-  ]);
+    openCreate({ clienteId: searchParams.get('clienteId') ?? undefined });
+  }, [searchParams, openCreate]);
 
   const closeCreate = useCallback(() => {
     setCreateOpen(false);
     setCreateClienteId('');
-    setCreateDispositivoId('');
     setCreateMarcaId('');
     setCreateModeloId('');
     setCreateTipo('');
     setCreateImei('');
     setCreateSerie('');
+    setCreateCapacidad('');
+    setCreateTipoGas('');
+    setCreateVoltaje('');
+    setCreateNotasTecnicas('');
     setCreateFallo('');
     setCreateNotas('');
     setCreateTipoReparacion('');
@@ -490,15 +443,15 @@ export function OrdenesPage() {
     try {
       const body: OrdenRequest = {
         clienteId: createClienteId as number,
-        // When the modal was opened from an existing device (?dispositivoId=),
-        // link the order to that device instead of creating a duplicate one.
-        dispositivoId:
-          createDispositivoId !== '' ? Number(createDispositivoId) : undefined,
         marcaId: createMarcaId as number,
         modeloId: createModeloId as number,
         tipo: createTipo as TipoDispositivo,
         numeroSerie: createSerie.trim() || undefined,
         imei: createImei.trim() || undefined,
+        capacidad: createCapacidad.trim() || undefined,
+        tipoGas: createTipoGas.trim() || undefined,
+        voltaje: createVoltaje.trim() || undefined,
+        notasTecnicas: createNotasTecnicas.trim() || undefined,
         falloReportado: createFallo.trim() || undefined,
         notas: createNotas.trim() || undefined,
         tipoReparacion: createTipoReparacion
@@ -527,12 +480,15 @@ export function OrdenesPage() {
     }
   }, [
     createClienteId,
-    createDispositivoId,
     createMarcaId,
     createModeloId,
     createTipo,
     createSerie,
     createImei,
+    createCapacidad,
+    createTipoGas,
+    createVoltaje,
+    createNotasTecnicas,
     createFallo,
     createNotas,
     createTipoReparacion,
@@ -880,6 +836,40 @@ export function OrdenesPage() {
                   placeholder="Número de serie"
                   value={createSerie}
                   onChange={(e) => setCreateSerie(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Capacidad (opcional)">
+                <Input
+                  placeholder="Ej: 128 GB, 200 L, etc."
+                  value={createCapacidad}
+                  onChange={(e) => setCreateCapacidad(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Tipo de Gas (opcional)">
+                <Input
+                  placeholder="Ej: R134a, R600a"
+                  value={createTipoGas}
+                  onChange={(e) => setCreateTipoGas(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Voltaje (opcional)">
+                <Input
+                  placeholder="Ej: 110V, 220V"
+                  value={createVoltaje}
+                  onChange={(e) => setCreateVoltaje(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Notas Técnicas (opcional)">
+                <textarea
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-blue-500 focus:ring-blue-500"
+                  rows={2}
+                  placeholder="Especificaciones técnicas adicionales del equipo"
+                  value={createNotasTecnicas}
+                  onChange={(e) => setCreateNotasTecnicas(e.target.value)}
                 />
               </FormField>
             </>

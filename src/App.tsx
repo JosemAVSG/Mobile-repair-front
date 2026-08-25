@@ -8,7 +8,6 @@ import { MarcasPage } from './pages/MarcasPage';
 import { ModelosPage } from './pages/ModelosPage';
 import { ClientesPage } from './pages/ClientesPage';
 import { ClienteDetailPage } from './pages/ClienteDetailPage';
-import { DispositivosPage } from './pages/DispositivosPage';
 import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
 import { PublicRepairStatusPage } from './pages/PublicRepairStatusPage';
@@ -112,14 +111,6 @@ export default function App() {
           element={
             <RequireRole roles={['ADMIN']}>
               <ClienteDetailPage />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="dispositivos"
-          element={
-            <RequireRole roles={['ADMIN']}>
-              <DispositivosPage />
             </RequireRole>
           }
         />

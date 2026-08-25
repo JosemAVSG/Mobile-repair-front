@@ -105,20 +105,6 @@ export interface Cliente {
   createdAt: string;
 }
 
-export interface Dispositivo {
-  id: number;
-  tipo: TipoDispositivo;
-  modeloId: number;
-  clienteId: number;
-  numeroSerie: string | null;
-  imei: string | null;
-  capacidad: string | null;
-  tipoGas: string | null;
-  voltaje: string | null;
-  notasTecnicas: string | null;
-  createdAt: string;
-}
-
 export interface Tecnico {
   id: number;
   nombre: string;
@@ -134,12 +120,15 @@ export interface OrdenTrabajo {
   id: number;
   clienteId: number;
   tecnicoId?: number | null;
-  dispositivoId?: number | null;
   marcaId?: number | null;
   modeloId?: number | null;
   tipo?: TipoDispositivo | null;
   numeroSerie?: string | null;
   imei?: string | null;
+  capacidad?: string | null;
+  tipoGas?: string | null;
+  voltaje?: string | null;
+  notasTecnicas?: string | null;
   estado: EstadoOrden;
   falloReportado: string | null;
   precioTotal: number | null;
@@ -220,27 +209,18 @@ export interface ClienteRequest {
   email?: string;
 }
 
-export interface DispositivoRequest {
-  tipo: TipoDispositivo;
-  modeloId: number;
+export interface OrdenRequest {
   clienteId: number;
+  tecnicoId?: number | null;
+  marcaId?: number;
+  modeloId?: number;
+  tipo?: TipoDispositivo;
   numeroSerie?: string;
   imei?: string;
   capacidad?: string;
   tipoGas?: string;
   voltaje?: string;
   notasTecnicas?: string;
-}
-
-export interface OrdenRequest {
-  clienteId: number;
-  tecnicoId?: number | null;
-  dispositivoId?: number;
-  marcaId?: number;
-  modeloId?: number;
-  tipo?: TipoDispositivo;
-  numeroSerie?: string;
-  imei?: string;
   falloReportado?: string;
   notas?: string;
   tipoReparacion?: TipoReparacion;

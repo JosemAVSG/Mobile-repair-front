@@ -34,7 +34,6 @@ import { EstadoOrden, TipoReparacion } from '../types';
 import {
   useOrden,
   useCliente,
-  useDispositivo,
   useModelo,
   useMarcas,
   useModelos,
@@ -131,9 +130,9 @@ const MAX_FOTO_MB = 10;
 const MAX_FOTO_BYTES = MAX_FOTO_MB * 1024 * 1024;
 
 const ETAPAS_FOTO: { etapa: EtapaFoto; titulo: string; descripcion: string }[] = [
-  { etapa: 'ANTES', titulo: 'Antes', descripcion: 'Estado inicial del dispositivo' },
+  { etapa: 'ANTES', titulo: 'Antes', descripcion: 'Estado inicial del equipo' },
   { etapa: 'DURANTE', titulo: 'Durante', descripcion: 'Durante la reparación' },
-  { etapa: 'DESPUES', titulo: 'Después', descripcion: 'Estado final del dispositivo' },
+  { etapa: 'DESPUES', titulo: 'Después', descripcion: 'Estado final del equipo' },
 ];
 
 // ──────────────────────────────────────────────
@@ -164,9 +163,7 @@ export function OrdenDetailPage() {
   // Enrichment (non-critical — failures leave fallbacks in place)
   const { data: cliente } = useCliente(orden?.clienteId);
 
-  const { data: dispositivo } = useDispositivo(orden?.dispositivoId ?? undefined);
-
-  const { data: modelo } = useModelo(orden?.modeloId ?? dispositivo?.modeloId);
+  const { data: modelo } = useModelo(orden?.modeloId ?? undefined);
 
   // Catálogo de marcas y modelos para resolver nombres del equipo embebido
   const { data: marcas } = useMarcas();
@@ -211,10 +208,10 @@ export function OrdenDetailPage() {
   }, [marcas, marcaId]);
 
   const modeloNombre = useMemo(() => {
-    const mid = orden?.modeloId ?? dispositivo?.modeloId;
+    const mid = orden?.modeloId;
     if (mid == null) return undefined;
     return modelos?.find((m) => m.id === mid)?.nombre;
-  }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
+  }, [modelos, orden?.modeloId]);
 
   const marcaEquipo = useMemo(
     () => marcas?.find((m) => m.id === marcaId) ?? null,
@@ -222,16 +219,15 @@ export function OrdenDetailPage() {
   );
 
   const modeloEquipo = useMemo(() => {
-    const mid = orden?.modeloId ?? dispositivo?.modeloId;
+    const mid = orden?.modeloId;
     return mid == null ? null : (modelos?.find((m) => m.id === mid) ?? null);
-  }, [modelos, orden?.modeloId, dispositivo?.modeloId]);
+  }, [modelos, orden?.modeloId]);
 
   // Historial is optional — the endpoint may 404 for entities without events
   const { data: historial = [] } = useHistorialOrden(orden?.id);
 
   // Loading only until the orden resolves. Enrichment queries (cliente,
-  // dispositivo, modelo, historial) are non-critical and may be disabled
-  // (e.g. orden without dispositivoId), so waiting on their isPending would
+  // modelo, historial) are non-critical, so waiting on their isPending would
   // block the page forever — they render with fallbacks once loaded.
   const loading = ordenPending || ordenFetching;
 
@@ -286,7 +282,7 @@ export function OrdenDetailPage() {
     },
   });
 
-  // ───── Fotos del dispositivo (data + mutations) ─────
+  // ───── Fotos del equipo (data + mutations) ─────
 
   const {
     data: fotos = [],
@@ -314,7 +310,7 @@ export function OrdenDetailPage() {
     return grupos;
   }, [fotos]);
 
-  // ───── Fotos del dispositivo (state) ─────
+  // ───── Fotos del equipo (state) ─────
 
   const [selectedFiles, setSelectedFiles] = useState<
     Partial<Record<EtapaFoto, File>>
@@ -488,8 +484,7 @@ export function OrdenDetailPage() {
     if (repTipo === '') return undefined;
     const list = tarifas ?? [];
     const marcaIdEq = marcaId != null ? Number(marcaId) : null;
-    const modeloIdEq =
-      orden?.modeloId ?? (dispositivo?.modeloId != null ? Number(dispositivo.modeloId) : null);
+    const modeloIdEq = orden?.modeloId ?? null;
     return list.find(
       (t) =>
         t.activa &&
@@ -500,7 +495,7 @@ export function OrdenDetailPage() {
             ? t.modeloId == null && t.marcaId === marcaIdEq
             : t.modeloId == null && t.marcaId == null),
     );
-  }, [tarifas, repTipo, marcaId, orden?.modeloId, dispositivo?.modeloId]);
+  }, [tarifas, repTipo, marcaId, orden?.modeloId]);
 
   const precioAutoHint = useMemo(() => {
     if (tarifaAuto) {
@@ -872,12 +867,10 @@ export function OrdenDetailPage() {
               {cliente?.nombre ?? `#${orden.clienteId}`}
             </p>
             <p>
-              <span className="font-medium text-slate-700">Dispositivo:</span>{' '}
-              {dispositivo
-                ? `${tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo}${modeloNombre ? ` - ${modeloNombre}` : ` #${dispositivo.modeloId}`}`
-                : orden.tipo || orden.modeloId || orden.marcaId
-                  ? `${orden.tipo ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo) : ''}${marcaNombre ? ` - ${marcaNombre}` : ''}${modeloNombre ? ` - ${modeloNombre}` : ''}`
-                  : '—'}
+              <span className="font-medium text-slate-700">Equipo:</span>{' '}
+              {orden.tipo || orden.modeloId || orden.marcaId
+                ? `${orden.tipo ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo) : ''}${marcaNombre ? ` - ${marcaNombre}` : ''}${modeloNombre ? ` - ${modeloNombre}` : ''}`
+                : '—'}
             </p>
             <p>
               <span className="font-medium text-slate-700">
@@ -1091,25 +1084,20 @@ export function OrdenDetailPage() {
             <p className="mt-1 text-sm text-slate-600">
               {orden.tipo
                 ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo)
-                : dispositivo
-                  ? (tipoDispositivoLabel(dispositivo.tipo) ?? dispositivo.tipo)
-                  : '—'}
+                : '—'}
             </p>
           </div>
           <div>
             <span className="text-sm font-medium text-slate-700">Marca:</span>
             <p className="mt-1 text-sm text-slate-600">
-              {marcaNombre ??
-                (marcaId != null ? `Marca #${marcaId}` : '—')}
+              {marcaNombre ?? (marcaId != null ? `Marca #${marcaId}` : '—')}
             </p>
           </div>
           <div>
             <span className="text-sm font-medium text-slate-700">Modelo:</span>
             <p className="mt-1 text-sm text-slate-600">
               {modeloNombre ??
-                (orden.modeloId != null || dispositivo?.modeloId != null
-                  ? `Modelo #${orden.modeloId ?? dispositivo?.modeloId}`
-                  : '—')}
+                (orden.modeloId != null ? `Modelo #${orden.modeloId}` : '—')}
             </p>
           </div>
           <div>
@@ -1117,20 +1105,44 @@ export function OrdenDetailPage() {
               Número de Serie:
             </span>
             <p className="mt-1 text-sm text-slate-600">
-              {orden.numeroSerie ?? dispositivo?.numeroSerie ?? '—'}
+              {orden.numeroSerie ?? '—'}
             </p>
           </div>
           <div>
             <span className="text-sm font-medium text-slate-700">IMEI:</span>
             <p className="mt-1 text-sm text-slate-600">
-              {orden.imei ?? dispositivo?.imei ?? '—'}
+              {orden.imei ?? '—'}
             </p>
           </div>
+          {orden.capacidad && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Capacidad:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.capacidad}</p>
+            </div>
+          )}
+          {orden.tipoGas && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Tipo de Gas:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.tipoGas}</p>
+            </div>
+          )}
+          {orden.voltaje && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Voltaje:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.voltaje}</p>
+            </div>
+          )}
+          {orden.notasTecnicas && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Notas Técnicas:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.notasTecnicas}</p>
+            </div>
+          )}
         </div>
       </Card>
 
-      {/* ── Fotos del dispositivo ── */}
-      <Card title="Fotos del dispositivo">
+      {/* ── Fotos del equipo ── */}
+      <Card title="Fotos del equipo">
         {fotosLoading ? (
           <div className="flex items-center justify-center py-8">
             <Spinner size="lg" />

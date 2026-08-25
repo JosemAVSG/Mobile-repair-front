@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPostForm } from '../api/client';
 import type {
   Cliente,
-  Dispositivo,
   EtapaFoto,
   FotoOrden,
   HistorialEntry,
@@ -51,29 +50,6 @@ export function useCliente(id?: number) {
   return useQuery({
     queryKey: ['clientes', id],
     queryFn: () => apiGet<Cliente>(`/api/clientes/${id}`),
-    enabled: id != null && Number.isFinite(id),
-  });
-}
-
-export function useDispositivos() {
-  return useQuery({
-    queryKey: ['dispositivos'],
-    queryFn: () => apiGet<Dispositivo[]>('/api/dispositivos'),
-  });
-}
-
-export function useDispositivosPorCliente(clienteId?: number) {
-  return useQuery({
-    queryKey: ['dispositivos', 'cliente', clienteId],
-    queryFn: () => apiGet<Dispositivo[]>(`/api/dispositivos/cliente/${clienteId}`),
-    enabled: clienteId != null && Number.isFinite(clienteId),
-  });
-}
-
-export function useDispositivo(id?: number) {
-  return useQuery({
-    queryKey: ['dispositivos', id],
-    queryFn: () => apiGet<Dispositivo>(`/api/dispositivos/${id}`),
     enabled: id != null && Number.isFinite(id),
   });
 }

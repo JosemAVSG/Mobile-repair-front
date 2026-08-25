@@ -31,7 +31,6 @@ const navGroups: NavGroup[] = [
     label: 'Catálogo',
     icon: 'layers',
     items: [
-      { path: '/dispositivos', label: 'Dispositivos', icon: 'smartphone' },
       { path: '/marcas', label: 'Marcas', icon: 'tag' },
       { path: '/modelos', label: 'Modelos', icon: 'layers' },
       { path: '/clientes', label: 'Clientes', icon: 'users' },

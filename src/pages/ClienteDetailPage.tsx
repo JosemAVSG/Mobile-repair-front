@@ -14,19 +14,7 @@ import { DataTable, type Column } from '../components/organisms/DataTable';
 import { apiPut, apiDelete } from '../api/client';
 import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters';
 import type { Cliente, ClienteRequest, OrdenTrabajo } from '../types';
-import { TipoDispositivo } from '../types';
-import { useCliente, useDispositivosPorCliente, useOrdenes } from '../hooks/useQueries';
-
-// ──────────────────────────────────────────────
-// Types
-// ──────────────────────────────────────────────
-
-interface DispositivoRow {
-  id: number;
-  tipo: TipoDispositivo;
-  modeloNombre: string;
-  identificador: string;
-}
+import { useCliente, useOrdenes, useMarcas, useModelos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Cliente Detail Page
@@ -54,15 +42,6 @@ export function ClienteDetailPage() {
       : String(queryError)
     : null;
 
-  // Fetch dispositivos by clienteId
-  const {
-    data: dispositivos,
-    isPending: dispPending,
-    isFetching: dispFetching,
-  } = useDispositivosPorCliente(idNum);
-
-  const loadingDisp = dispPending || dispFetching;
-
   // Fetch ordenes (filter client-side)
   const {
     data: ordenes,
@@ -71,6 +50,10 @@ export function ClienteDetailPage() {
   } = useOrdenes();
 
   const loadingOrd = ordPending || ordFetching;
+
+  // Catalog data for device column enrichment
+  const { data: marcas } = useMarcas();
+  const { data: modelos } = useModelos();
 
   const updateMutation = useMutation({
     mutationFn: (body: ClienteRequest) => apiPut<Cliente>(`/api/clientes/${cliente?.id}`, body),
@@ -89,7 +72,6 @@ export function ClienteDetailPage() {
   });
 
   // Tab state
-  const [tab, setTab] = useState<'dispositivos' | 'ordenes'>('dispositivos');
 
   // Filter ordenes by clienteId
   const ordenesCliente = useMemo(
@@ -97,17 +79,64 @@ export function ClienteDetailPage() {
     [ordenes, id],
   );
 
-  // Enriched dispositivo rows
-  const dispRows = useMemo<DispositivoRow[]>(() => {
-    return (dispositivos ?? []).map((d) => ({
-      id: d.id,
-      tipo: d.tipo,
-      modeloNombre: `Modelo #${d.modeloId}`,
-      identificador: d.imei ?? d.numeroSerie ?? '—',
-    }));
-  }, [dispositivos]);
+  // ───── Orden columns ─────
 
-  // Edit modal state
+  const ordColumns: Column<OrdenTrabajo>[] = [
+    { key: 'id', label: 'ID', sortable: true },
+    {
+      key: 'tipo',
+      label: 'Equipo / Tipo',
+      render: (row) => {
+        if (!row.tipo) return '—';
+        const cfg = tipoBadgeConfig(row.tipo);
+        return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
+      },
+    },
+    {
+      key: 'marcaId',
+      label: 'Marca',
+      render: (row) => {
+        if (row.marcaId == null) return '—';
+        const marca = marcas?.find((m) => m.id === row.marcaId);
+        return marca?.nombre ?? `#${row.marcaId}`;
+      },
+    },
+    {
+      key: 'modeloId',
+      label: 'Modelo',
+      render: (row) => {
+        if (row.modeloId == null) return '—';
+        const modelo = modelos?.find((m) => m.id === row.modeloId);
+        return modelo?.nombre ?? `#${row.modeloId}`;
+      },
+    },
+    {
+      key: 'imei',
+      label: 'IMEI / Serie',
+      render: (row) => row.imei ?? row.numeroSerie ?? '—',
+    },
+    {
+      key: 'estado',
+      label: 'Estado',
+      render: (row) => <StatusBadge estado={row.estado} />,
+    },
+    {
+      key: 'falloReportado',
+      label: 'Fallo Reportado',
+      render: (row) => row.falloReportado ?? '—',
+    },
+    {
+      key: 'precioTotal',
+      label: 'Total',
+      render: (row) => (row.precioTotal != null ? formatCurrency(row.precioTotal) : '—'),
+    },
+    {
+      key: 'fechaEntrada',
+      label: 'Fecha',
+      sortable: true,
+      render: (row) => formatDate(row.fechaEntrada),
+    },
+  ];
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editNombre, setEditNombre] = useState('');
   const [editTelefono, setEditTelefono] = useState('');
@@ -174,80 +203,6 @@ export function ClienteDetailPage() {
       setDeletingDetail(false);
     }
   }, [deleteMutation]);
-
-  // ───── Dispositivo columns ─────
-
-  const dispColumns: Column<DispositivoRow>[] = [
-    {
-      key: 'tipo',
-      label: 'Tipo',
-      render: (row) => {
-        const cfg = tipoBadgeConfig(row.tipo);
-        return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
-      },
-    },
-    { key: 'modeloNombre', label: 'Modelo' },
-    {
-      key: 'identificador',
-      label: 'IMEI / Serie',
-      render: (row) => row.identificador,
-    },
-    {
-      key: 'id',
-      label: 'Acciones',
-      render: (row) => (
-        <div className="flex gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
-              e.stopPropagation();
-              navigate(`/reparaciones?clienteId=${id}&dispositivoId=${row.id}`);
-            }}
-          >
-            Crear Reparación
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
-              e.stopPropagation();
-              navigate(`/dispositivos?clienteId=${id}`);
-            }}
-          >
-            Ver
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
-  // ───── Orden columns ─────
-
-  const ordColumns: Column<OrdenTrabajo>[] = [
-    { key: 'id', label: 'ID', sortable: true },
-    {
-      key: 'estado',
-      label: 'Estado',
-      render: (row) => <StatusBadge estado={row.estado} />,
-    },
-    {
-      key: 'falloReportado',
-      label: 'Fallo Reportado',
-      render: (row) => row.falloReportado ?? '—',
-    },
-    {
-      key: 'precioTotal',
-      label: 'Total',
-      render: (row) => (row.precioTotal != null ? formatCurrency(row.precioTotal) : '—'),
-    },
-    {
-      key: 'fechaEntrada',
-      label: 'Fecha',
-      sortable: true,
-      render: (row) => formatDate(row.fechaEntrada),
-    },
-  ];
 
   // ───── Render ─────
 
@@ -339,96 +294,36 @@ export function ClienteDetailPage() {
         </div>
       </Card>
 
-      {/* ───── Tabs ───── */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex gap-6">
-          <button
-            className={`pb-3 text-sm font-medium transition-colors ${
-              tab === 'dispositivos'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-            onClick={() => setTab('dispositivos')}
-          >
-            Dispositivos del Cliente
-          </button>
-          <button
-            className={`pb-3 text-sm font-medium transition-colors ${
-              tab === 'ordenes'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-            onClick={() => setTab('ordenes')}
-          >
+      {/* ───── Reparaciones ───── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">
             Reparaciones del Cliente
-          </button>
-        </nav>
+          </h3>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate(`/reparaciones?clienteId=${id}`)}
+          >
+            Nueva Reparación
+          </Button>
+        </div>
+
+        {loadingOrd ? (
+          <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <DataTable<OrdenTrabajo>
+            columns={ordColumns}
+            data={ordenesCliente}
+            loading={false}
+            emptyMessage="Este cliente no tiene reparaciones registradas"
+            keyExtractor={(row) => row.id}
+            onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
+          />
+        )}
       </div>
-
-      {/* ───── Dispositivos Tab ───── */}
-      {tab === 'dispositivos' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">
-              Dispositivos del Cliente
-            </h3>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate(`/dispositivos?clienteId=${id}`)}
-            >
-              Nuevo Dispositivo
-            </Button>
-          </div>
-
-          {loadingDisp ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner size="lg" />
-            </div>
-          ) : (
-            <DataTable<DispositivoRow>
-              columns={dispColumns}
-              data={dispRows}
-              loading={false}
-              emptyMessage="Este cliente no tiene dispositivos registrados"
-              keyExtractor={(row) => row.id}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ───── Reparaciones Tab ───── */}
-      {tab === 'ordenes' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">
-              Reparaciones del Cliente
-            </h3>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(`/reparaciones?clienteId=${id}`)}
-            >
-              Nueva Reparación
-            </Button>
-          </div>
-
-          {loadingOrd ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner size="lg" />
-            </div>
-          ) : (
-            <DataTable<OrdenTrabajo>
-              columns={ordColumns}
-              data={ordenesCliente}
-              loading={false}
-              emptyMessage="Este cliente no tiene reparaciones registradas"
-              keyExtractor={(row) => row.id}
-              onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
-            />
-          )}
-        </div>
-      )}
 
       {/* ───── Edit Modal ───── */}
       <Modal

@@ -60,8 +60,6 @@ function useCrumbs(
         : clienteNombre ?? `Cliente #${id}`;
       crumbs.push({ label });
     }
-  } else if (segments[0] === 'dispositivos') {
-    crumbs.push({ label: 'Dispositivos' });
   } else if (segments[0] === 'reparaciones' || segments[0] === 'ordenes') {
     crumbs.push({ label: 'Reparaciones', to: '/reparaciones' });
     if (id) crumbs.push({ label: `Reparación #${id}` });
