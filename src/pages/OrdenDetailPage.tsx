@@ -11,6 +11,7 @@ import { Spinner } from '../components/atoms/Spinner';
 import { Icon } from '../components/atoms/Icon';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
+import { puedeSubirFotoEtapa, FOTO_ETAPA_STATES } from '../utils/estados';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { FacturaModal } from '../components/organisms/FacturaModal';
@@ -1152,7 +1153,16 @@ export function OrdenDetailPage() {
                     <p className="text-xs text-slate-500">{descripcion}</p>
                   </div>
 
-                  {canManageFotos && (
+                  {canManageFotos && !etapaHabilitada && (
+                    <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Disponible cuando la orden esté en:{' '}
+                      {[...FOTO_ETAPA_STATES[etapa]]
+                        .map((e) => estadoConfig[e].label)
+                        .join(', ')}
+                    </p>
+                  )}
+
+                  {canManageFotos && etapaHabilitada && (
                     <div className="mb-4 space-y-2">
                       {preview ? (
                         <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">

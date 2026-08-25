@@ -1,4 +1,4 @@
-import { EstadoOrden } from '../types';
+import { EstadoOrden, type EtapaFoto } from '../types';
 
 // ──────────────────────────────────────────────
 // Agrupaciones de estados (fuente única)
@@ -32,6 +32,45 @@ export const REVENUE_STATES: ReadonlySet<EstadoOrden> = new Set([
   EstadoOrden.ENTREGADO,
   EstadoOrden.GARANTIA,
 ]);
+
+// ──────────────────────────────────────────────
+// Fotos por etapa del ciclo de vida
+// ──────────────────────────────────────────────
+
+/**
+ * Estados en los que tiene sentido capturar cada etapa fotográfica.
+ * Fuera de estos estados la subida/eliminación queda bloqueada en la UI.
+ */
+export const FOTO_ETAPA_STATES: Record<
+  EtapaFoto,
+  ReadonlySet<EstadoOrden>
+> = {
+  ANTES: new Set([
+    EstadoOrden.REGISTRO,
+    EstadoOrden.DIAGNOSTICO,
+    EstadoOrden.PRESUPUESTO_RECHAZADO,
+  ]),
+  DURANTE: new Set([
+    EstadoOrden.REPARACION,
+    EstadoOrden.ESPERANDO_REPUESTO,
+    EstadoOrden.CONTROL_CALIDAD,
+  ]),
+  DESPUES: new Set([
+    EstadoOrden.REPARACION_COMPLETADA,
+    EstadoOrden.CONTROL_CALIDAD,
+    EstadoOrden.ESPERANDO_ENTREGA,
+    EstadoOrden.PAGADO,
+    EstadoOrden.ENTREGADO,
+    EstadoOrden.GARANTIA,
+  ]),
+};
+
+export function puedeSubirFotoEtapa(
+  etapa: EtapaFoto,
+  estado: EstadoOrden,
+): boolean {
+  return FOTO_ETAPA_STATES[etapa].has(estado);
+}
 
 // Guardia de exhaustividad: al agregar un valor al enum,
 // este registro fuerza a revisar las agrupaciones de arriba.
