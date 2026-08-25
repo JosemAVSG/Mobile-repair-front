@@ -7,7 +7,7 @@ import { Modal } from '../components/atoms/Modal';
 import { Select } from '../components/atoms/Select';
 import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
-import { StatusBadge } from '../components/molecules/StatusBadge';
+import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import { Badge } from '../components/atoms/Badge';
 import { SearchField } from '../components/molecules/SearchField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
@@ -43,15 +43,12 @@ interface OrdenRow {
 // Helpers
 // ──────────────────────────────────────────────
 
-const ESTADO_LABELS: Record<EstadoOrden, string> = {
-  [EstadoOrden.REGISTRO]: 'Registrado',
-  [EstadoOrden.DIAGNOSTICO]: 'En Diagnóstico',
-  [EstadoOrden.REPARACION]: 'En Reparación',
-  [EstadoOrden.ESPERANDO_REPUESTO]: 'Esperando Repuesto',
-  [EstadoOrden.ESPERANDO_ENTREGA]: 'Esperando Entrega',
-  [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'Presupuesto Rechazado',
-  [EstadoOrden.ENTREGADO]: 'Entregado',
-};
+const ESTADO_LABELS: Record<EstadoOrden, string> = Object.fromEntries(
+  Object.values(EstadoOrden).map((estado) => [
+    estado,
+    estadoConfig[estado].label,
+  ]),
+) as Record<EstadoOrden, string>;
 
 const estadoOptions = [
   { value: '', label: 'Todas' },

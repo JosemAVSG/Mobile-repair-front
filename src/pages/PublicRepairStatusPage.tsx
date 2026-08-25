@@ -10,6 +10,7 @@ import {
   ESTADO_TO_PUBLIC_STAGE,
   type PublicRepairStatus,
   type PublicStage,
+  EstadoOrden,
 } from '../types';
 
 // ──────────────────────────────────────────────
@@ -19,9 +20,30 @@ import {
 const PUBLIC_STAGES: PublicStage[] = [
   'Ingresado',
   'En reparación',
-  'Pendiente retiro',
+  'Listo para retiro',
   'Finalizado',
 ];
+
+/** Estados fuera del flujo lineal: se muestran como banner, no como etapa. */
+const SPECIAL_STATE_BANNERS: Partial<
+  Record<
+    EstadoOrden,
+    { title: string; message: string; tone: 'danger' | 'neutral' }
+  >
+> = {
+  [EstadoOrden.PRESUPUESTO_RECHAZADO]: {
+    title: 'Presupuesto rechazado',
+    message:
+      'El presupuesto no fue aprobado por el cliente. La orden quedó detenida.',
+    tone: 'danger',
+  },
+  [EstadoOrden.DEVUELTO]: {
+    title: 'Equipo devuelto',
+    message:
+      'El equipo fue devuelto al cliente sin realizar la reparación.',
+    tone: 'neutral',
+  },
+};
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -192,7 +214,8 @@ function StageStepper({ activeStage }: { activeStage: PublicStage }) {
 }
 
 function RepairInfo({ repair }: { repair: PublicRepairStatus }) {
-  const activeStage = ESTADO_TO_PUBLIC_STAGE[repair.estadoOrden];
+  const specialBanner = SPECIAL_STATE_BANNERS[repair.estadoOrden];
+  const stage = ESTADO_TO_PUBLIC_STAGE[repair.estadoOrden];
 
   return (
     <div className="space-y-6">
@@ -232,10 +255,45 @@ function RepairInfo({ repair }: { repair: PublicRepairStatus }) {
       </section>
 
       <section>
-        <h3 className="mb-4 text-base font-semibold text-slate-900">
-          Seguimiento
-        </h3>
-        <StageStepper activeStage={activeStage} />
+        {specialBanner ? (
+          <div
+            className={`rounded-lg border p-4 ${
+              specialBanner.tone === 'danger'
+                ? 'border-red-100 bg-red-50'
+                : 'border-slate-200 bg-slate-100'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={`mt-0.5 shrink-0 ${
+                  specialBanner.tone === 'danger'
+                    ? 'text-red-600'
+                    : 'text-slate-500'
+                }`}
+              >
+                <Icon
+                  name={specialBanner.tone === 'danger' ? 'alert-circle' : 'info'}
+                  size={18}
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {specialBanner.title}
+                </p>
+                <p className="text-sm text-slate-700">{specialBanner.message}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          stage && (
+            <>
+              <h3 className="mb-4 text-base font-semibold text-slate-900">
+                Seguimiento
+              </h3>
+              <StageStepper activeStage={stage} />
+            </>
+          )
+        )}
       </section>
 
       {repair.fechaEstimadaEntrega && (

@@ -10,7 +10,7 @@ import { Input } from '../components/atoms/Input';
 import { Spinner } from '../components/atoms/Spinner';
 import { Icon } from '../components/atoms/Icon';
 import { FormField } from '../components/molecules/FormField';
-import { StatusBadge } from '../components/molecules/StatusBadge';
+import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { FacturaModal } from '../components/organisms/FacturaModal';
@@ -49,32 +49,56 @@ import {
 // Estado transition map
 // ──────────────────────────────────────────────
 
-const ESTADO_TRANSITIONS: Partial<Record<EstadoOrden, EstadoOrden[]>> = {
+// Espejo exacto de TransicionEstadoPolicy en el backend.
+const ESTADO_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
   [EstadoOrden.REGISTRO]: [EstadoOrden.DIAGNOSTICO],
   [EstadoOrden.DIAGNOSTICO]: [EstadoOrden.REPARACION, EstadoOrden.PRESUPUESTO_RECHAZADO],
-  [EstadoOrden.REPARACION]: [EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.ESPERANDO_ENTREGA],
+  [EstadoOrden.REPARACION]: [EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.REPARACION_COMPLETADA],
   [EstadoOrden.ESPERANDO_REPUESTO]: [EstadoOrden.REPARACION],
-  [EstadoOrden.ESPERANDO_ENTREGA]: [EstadoOrden.ENTREGADO],
-  [EstadoOrden.PRESUPUESTO_RECHAZADO]: [],
-  [EstadoOrden.ENTREGADO]: [],
+  [EstadoOrden.REPARACION_COMPLETADA]: [EstadoOrden.CONTROL_CALIDAD],
+  [EstadoOrden.CONTROL_CALIDAD]: [EstadoOrden.REPARACION, EstadoOrden.ESPERANDO_ENTREGA],
+  [EstadoOrden.ESPERANDO_ENTREGA]: [EstadoOrden.PAGADO],
+  [EstadoOrden.PAGADO]: [EstadoOrden.ENTREGADO],
+  [EstadoOrden.PRESUPUESTO_RECHAZADO]: [EstadoOrden.DEVUELTO],
+  [EstadoOrden.DEVUELTO]: [],
+  [EstadoOrden.ENTREGADO]: [EstadoOrden.GARANTIA],
+  [EstadoOrden.GARANTIA]: [],
 };
 
-const TRANSITION_LABELS: Partial<Record<EstadoOrden, string>> = {
-  [EstadoOrden.DIAGNOSTICO]: 'Pasar a Diagnóstico',
-  [EstadoOrden.REPARACION]: 'Pasar a Reparación',
-  [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'Rechazar Presupuesto',
-  [EstadoOrden.ESPERANDO_REPUESTO]: 'Esperar Repuesto',
-  [EstadoOrden.ESPERANDO_ENTREGA]: 'Esperar Entrega',
-  [EstadoOrden.ENTREGADO]: 'Marcar como Entregado',
+// Etiquetas por par origen:destino (permite matices según el estado actual).
+const TRANSITION_LABELS: Record<string, string> = {
+  'REGISTRO:DIAGNOSTICO': 'Iniciar Diagnóstico',
+  'DIAGNOSTICO:REPARACION': 'Aprobar y Reparar',
+  'DIAGNOSTICO:PRESUPUESTO_RECHAZADO': 'Rechazar Presupuesto',
+  'PRESUPUESTO_RECHAZADO:DEVUELTO': 'Devolver Equipo',
+  'REPARACION:ESPERANDO_REPUESTO': 'Esperando Repuesto',
+  'REPARACION:REPARACION_COMPLETADA': 'Finalizar Reparación',
+  'ESPERANDO_REPUESTO:REPARACION': 'Retomar Reparación',
+  'REPARACION_COMPLETADA:CONTROL_CALIDAD': 'Enviar a Control de Calidad',
+  'CONTROL_CALIDAD:REPARACION': 'Control Fallido — Reparar de Nuevo',
+  'CONTROL_CALIDAD:ESPERANDO_ENTREGA': 'Control OK — Lista para Retiro',
+  'ESPERANDO_ENTREGA:PAGADO': 'Registrar Pago',
+  'PAGADO:ENTREGADO': 'Marcar como Entregado',
+  'ENTREGADO:GARANTIA': 'Activar Garantía',
 };
 
-const TRANSITION_VARIANTS: Partial<Record<EstadoOrden, 'primary' | 'secondary' | 'danger' | 'ghost'>> = {
-  [EstadoOrden.DIAGNOSTICO]: 'primary',
-  [EstadoOrden.REPARACION]: 'primary',
-  [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'danger',
-  [EstadoOrden.ESPERANDO_REPUESTO]: 'secondary',
-  [EstadoOrden.ESPERANDO_ENTREGA]: 'secondary',
-  [EstadoOrden.ENTREGADO]: 'primary',
+const TRANSITION_VARIANTS: Record<
+  string,
+  'primary' | 'secondary' | 'danger' | 'ghost'
+> = {
+  'REGISTRO:DIAGNOSTICO': 'primary',
+  'DIAGNOSTICO:REPARACION': 'primary',
+  'DIAGNOSTICO:PRESUPUESTO_RECHAZADO': 'danger',
+  'PRESUPUESTO_RECHAZADO:DEVUELTO': 'secondary',
+  'REPARACION:ESPERANDO_REPUESTO': 'secondary',
+  'REPARACION:REPARACION_COMPLETADA': 'primary',
+  'ESPERANDO_REPUESTO:REPARACION': 'primary',
+  'REPARACION_COMPLETADA:CONTROL_CALIDAD': 'primary',
+  'CONTROL_CALIDAD:REPARACION': 'danger',
+  'CONTROL_CALIDAD:ESPERANDO_ENTREGA': 'primary',
+  'ESPERANDO_ENTREGA:PAGADO': 'primary',
+  'PAGADO:ENTREGADO': 'primary',
+  'ENTREGADO:GARANTIA': 'secondary',
 };
 
 // ──────────────────────────────────────────────
@@ -712,8 +736,16 @@ export function OrdenDetailPage() {
 
   // ───── Disponible transitions ─────
 
-  const availableTransitions = orden
-    ? ESTADO_TRANSITIONS[orden.estado] ?? []
+  const transitionActions = orden
+    ? (ESTADO_TRANSITIONS[orden.estado] ?? []).map((target) => ({
+        target,
+        label:
+          TRANSITION_LABELS[`${orden.estado}:${target}`] ??
+          estadoConfig[target].label,
+        variant:
+          TRANSITION_VARIANTS[`${orden.estado}:${target}`] ??
+          ('primary' as const),
+      }))
     : [];
 
   const totalReparaciones = useMemo(
@@ -1211,19 +1243,19 @@ export function OrdenDetailPage() {
       </Card>
 
       {/* ── Workflow Section ── */}
-      {canEditOrden && availableTransitions.length > 0 && (
+      {canEditOrden && transitionActions.length > 0 && (
         <Card title="Flujo de Trabajo">
           <div className="flex flex-wrap gap-3">
-            {availableTransitions.map((target) => (
+            {transitionActions.map(({ target, label, variant }) => (
               <Button
                 key={target}
-                variant={TRANSITION_VARIANTS[target] ?? 'primary'}
+                variant={variant}
                 onClick={() => handleTransition(target)}
                 loading={
                   transitioningTarget === target
                 }
               >
-                {TRANSITION_LABELS[target] ?? target}
+                {label}
               </Button>
             ))}
           </div>

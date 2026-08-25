@@ -56,9 +56,14 @@ export enum EstadoOrden {
   DIAGNOSTICO = 'DIAGNOSTICO',
   REPARACION = 'REPARACION',
   ESPERANDO_REPUESTO = 'ESPERANDO_REPUESTO',
+  REPARACION_COMPLETADA = 'REPARACION_COMPLETADA',
+  CONTROL_CALIDAD = 'CONTROL_CALIDAD',
   ESPERANDO_ENTREGA = 'ESPERANDO_ENTREGA',
+  PAGADO = 'PAGADO',
   PRESUPUESTO_RECHAZADO = 'PRESUPUESTO_RECHAZADO',
+  DEVUELTO = 'DEVUELTO',
   ENTREGADO = 'ENTREGADO',
+  GARANTIA = 'GARANTIA',
 }
 
 export enum TipoReparacion {
@@ -297,7 +302,7 @@ export interface ShopConfigForm {
 export type PublicStage =
   | 'Ingresado'
   | 'En reparación'
-  | 'Pendiente retiro'
+  | 'Listo para retiro'
   | 'Finalizado';
 
 export type PublicRepairStatus = {
@@ -311,15 +316,23 @@ export type PublicRepairStatus = {
   observacionesPublicas?: string;
 };
 
-/** Mapeo de estados internos a etapas públicas del seguimiento. */
-export const ESTADO_TO_PUBLIC_STAGE: Record<EstadoOrden, PublicStage> = {
+/**
+ * Mapeo de estados internos a etapas públicas del seguimiento.
+ * `null` = estado especial que se muestra como banner, no como etapa lineal.
+ */
+export const ESTADO_TO_PUBLIC_STAGE: Record<EstadoOrden, PublicStage | null> = {
   [EstadoOrden.REGISTRO]: 'Ingresado',
   [EstadoOrden.DIAGNOSTICO]: 'Ingresado',
   [EstadoOrden.REPARACION]: 'En reparación',
   [EstadoOrden.ESPERANDO_REPUESTO]: 'En reparación',
-  [EstadoOrden.PRESUPUESTO_RECHAZADO]: 'En reparación',
-  [EstadoOrden.ESPERANDO_ENTREGA]: 'Pendiente retiro',
+  [EstadoOrden.REPARACION_COMPLETADA]: 'En reparación',
+  [EstadoOrden.CONTROL_CALIDAD]: 'En reparación',
+  [EstadoOrden.ESPERANDO_ENTREGA]: 'Listo para retiro',
+  [EstadoOrden.PAGADO]: 'Listo para retiro',
+  [EstadoOrden.PRESUPUESTO_RECHAZADO]: null,
+  [EstadoOrden.DEVUELTO]: null,
   [EstadoOrden.ENTREGADO]: 'Finalizado',
+  [EstadoOrden.GARANTIA]: 'Finalizado',
 };
 
 // ──────────────────────────────────────────────

@@ -4,10 +4,10 @@ import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { MetricCard } from '../components/molecules/MetricCard';
 import { StatusBadge } from '../components/molecules/StatusBadge';
+import { ACTIVE_STATES, REPAIR_STATES, REVENUE_STATES } from '../utils/estados';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente } from '../types';
-import { EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
 import { useConfig } from '../context/ConfigContext';
 
@@ -65,14 +65,16 @@ export function DashboardPage() {
     const clientes = clientesReq.data ?? [];
     const clienteMap = buildClienteMap(clientes);
 
-    const activas = ordenes.filter((o) => o.estado !== EstadoOrden.ENTREGADO)
+    const activas = ordenes.filter((o) => ACTIVE_STATES.has(o.estado))
       .length;
     const enReparacion = ordenes.filter(
-      (o) => o.estado === EstadoOrden.REPARACION,
+      (o) => REPAIR_STATES.has(o.estado),
     ).length;
     const totalClientes = clientes.length;
     const ingresos = ordenes
-      .filter((o) => o.estado === EstadoOrden.ENTREGADO && o.precioTotal != null)
+      .filter(
+        (o) => REVENUE_STATES.has(o.estado) && o.precioTotal != null,
+      )
       .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
 
     // Last 10 orders, newest first
