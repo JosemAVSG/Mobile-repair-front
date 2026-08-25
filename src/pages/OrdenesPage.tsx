@@ -823,45 +823,64 @@ export function OrdenesPage() {
                 />
               </FormField>
 
-              <FormField label="IMEI (opcional)">
-                <Input
-                  placeholder="IMEI del dispositivo"
-                  value={createImei}
-                  onChange={(e) => setCreateImei(e.target.value)}
-                />
-              </FormField>
+              {/* Campos condicionados por tipo de equipo: un celular no
+                  tiene voltaje/gas, una cocina no tiene IMEI. */}
+              {createTipo === 'CELULAR' && (
+                <FormField label="IMEI (opcional)">
+                  <Input
+                    placeholder="IMEI del dispositivo"
+                    value={createImei}
+                    onChange={(e) => setCreateImei(e.target.value)}
+                  />
+                </FormField>
+              )}
 
-              <FormField label="Número de Serie (opcional)">
-                <Input
-                  placeholder="Número de serie"
-                  value={createSerie}
-                  onChange={(e) => setCreateSerie(e.target.value)}
-                />
-              </FormField>
+              {(createTipo === 'CELULAR' || createTipo === 'COMPUTADORA') && (
+                <FormField label="Número de Serie (opcional)">
+                  <Input
+                    placeholder="Número de serie"
+                    value={createSerie}
+                    onChange={(e) => setCreateSerie(e.target.value)}
+                  />
+                </FormField>
+              )}
 
-              <FormField label="Capacidad (opcional)">
-                <Input
-                  placeholder="Ej: 128 GB, 200 L, etc."
-                  value={createCapacidad}
-                  onChange={(e) => setCreateCapacidad(e.target.value)}
-                />
-              </FormField>
+              {createTipo && (
+                <FormField label="Capacidad (opcional)">
+                  <Input
+                    placeholder={
+                      createTipo === 'CELULAR' || createTipo === 'COMPUTADORA'
+                        ? 'Ej: 128 GB, 256 GB'
+                        : 'Ej: 200 L, 30 L'
+                    }
+                    value={createCapacidad}
+                    onChange={(e) => setCreateCapacidad(e.target.value)}
+                  />
+                </FormField>
+              )}
 
-              <FormField label="Tipo de Gas (opcional)">
-                <Input
-                  placeholder="Ej: R134a, R600a"
-                  value={createTipoGas}
-                  onChange={(e) => setCreateTipoGas(e.target.value)}
-                />
-              </FormField>
+              {(createTipo === 'MICROONDAS' ||
+                createTipo === 'NEVERA' ||
+                createTipo === 'COCINA' ||
+                createTipo === 'LAVADORA') && (
+                <>
+                  <FormField label="Tipo de Gas (opcional)">
+                    <Input
+                      placeholder="Ej: R134a, R600a"
+                      value={createTipoGas}
+                      onChange={(e) => setCreateTipoGas(e.target.value)}
+                    />
+                  </FormField>
 
-              <FormField label="Voltaje (opcional)">
-                <Input
-                  placeholder="Ej: 110V, 220V"
-                  value={createVoltaje}
-                  onChange={(e) => setCreateVoltaje(e.target.value)}
-                />
-              </FormField>
+                  <FormField label="Voltaje (opcional)">
+                    <Input
+                      placeholder="Ej: 110V, 220V"
+                      value={createVoltaje}
+                      onChange={(e) => setCreateVoltaje(e.target.value)}
+                    />
+                  </FormField>
+                </>
+              )}
 
               <FormField label="Notas Técnicas (opcional)">
                 <textarea
