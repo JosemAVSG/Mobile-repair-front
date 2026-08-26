@@ -1,13 +1,27 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { MetricCard } from '../components/molecules/MetricCard';
-import { StatusBadge } from '../components/molecules/StatusBadge';
-import { ACTIVE_STATES, REPAIR_STATES, REVENUE_STATES } from '../utils/estados';
+import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
+import {
+  ACTIVE_STATES,
+  REPAIR_STATES,
+  REVENUE_STATES,
+  TERMINAL_STATES,
+} from '../utils/estados';
 import { DataTable, type Column } from '../components/organisms/DataTable';
 import { formatDate, formatCurrency } from '../utils/formatters';
-import type { OrdenTrabajo, Cliente } from '../types';
+import type { OrdenTrabajo, Cliente, EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
 import { useConfig } from '../context/ConfigContext';
 
@@ -60,61 +74,89 @@ export function DashboardPage() {
     : null;
 
   // Derive metrics and table rows
-  const { metricas, rows, proximasEntregas, clienteMap } = useMemo(() => {
-    const ordenes = ordenesReq.data ?? [];
-    const clientes = clientesReq.data ?? [];
-    const clienteMap = buildClienteMap(clientes);
+  const { metricas, rows, proximasEntregas, clienteMap, chartData } =
+    useMemo(() => {
+      const ordenes = ordenesReq.data ?? [];
+      const clientes = clientesReq.data ?? [];
+      const clienteMap = buildClienteMap(clientes);
 
-    const activas = ordenes.filter((o) => ACTIVE_STATES.has(o.estado))
-      .length;
-    const enReparacion = ordenes.filter(
-      (o) => REPAIR_STATES.has(o.estado),
-    ).length;
-    const totalClientes = clientes.length;
-    const ingresos = ordenes
-      .filter(
-        (o) => REVENUE_STATES.has(o.estado) && o.precioTotal != null,
-      )
-      .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
+      const activas = ordenes.filter((o) => ACTIVE_STATES.has(o.estado))
+        .length;
+      const enReparacion = ordenes.filter(
+        (o) => REPAIR_STATES.has(o.estado),
+      ).length;
+      const totalClientes = clientes.length;
+      const ingresos = ordenes
+        .filter(
+          (o) => REVENUE_STATES.has(o.estado) && o.precioTotal != null,
+        )
+        .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
 
-    // Last 10 orders, newest first
-    const last10 = [...ordenes]
-      .sort(
-        (a, b) =>
-          new Date(b.fechaEntrada).getTime() -
-          new Date(a.fechaEntrada).getTime(),
-      )
-      .slice(0, 10);
+      // Entregados (terminal)
+      const entregados = ordenes.filter((o) =>
+        TERMINAL_STATES.has(o.estado),
+      ).length;
 
-    const rows: OrdenRow[] = last10.map((o) => ({
-      id: o.id,
-      cliente: clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`,
-      estado: o.estado,
-      fechaEntrada: o.fechaEntrada,
-    }));
+      // Last 10 orders, newest first
+      const last10 = [...ordenes]
+        .sort(
+          (a, b) =>
+            new Date(b.fechaEntrada).getTime() -
+            new Date(a.fechaEntrada).getTime(),
+        )
+        .slice(0, 10);
 
-    // Upcoming deliveries: agendadas y desde hoy, por fecha ascendente
-    const ahora = new Date().getTime();
-    const proximasEntregas = ordenes
-      .filter(
-        (o): o is OrdenTrabajo & { fechaEntrega: string } =>
-          o.fechaEntrega != null,
-      )
-      .filter((o) => new Date(o.fechaEntrega).getTime() >= ahora)
-      .sort(
-        (a, b) =>
-          new Date(a.fechaEntrega).getTime() -
-          new Date(b.fechaEntrega).getTime(),
-      )
-      .slice(0, 8);
+      const rows: OrdenRow[] = last10.map((o) => ({
+        id: o.id,
+        cliente: clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`,
+        estado: o.estado,
+        fechaEntrada: o.fechaEntrada,
+      }));
 
-    return {
-      metricas: { activas, enReparacion, totalClientes, ingresos },
-      rows,
-      proximasEntregas,
-      clienteMap,
-    };
-  }, [ordenesReq.data, clientesReq.data]);
+      // Upcoming deliveries: agendadas y desde hoy, por fecha ascendente
+      const ahora = new Date().getTime();
+      const proximasEntregas = ordenes
+        .filter(
+          (o): o is OrdenTrabajo & { fechaEntrega: string } =>
+            o.fechaEntrega != null,
+        )
+        .filter((o) => new Date(o.fechaEntrega).getTime() >= ahora)
+        .sort(
+          (a, b) =>
+            new Date(a.fechaEntrega).getTime() -
+            new Date(b.fechaEntrega).getTime(),
+        )
+        .slice(0, 8);
+
+      // Chart data: orders grouped by state
+      const variantToColor: Record<string, string> = {
+        success: '#10b981',
+        warning: '#f59e0b',
+        danger: '#ef4444',
+        info: '#3b82f6',
+        default: '#94a3b8',
+      };
+      const stateCounts = new Map<EstadoOrden, number>();
+      for (const o of ordenes) {
+        stateCounts.set(o.estado, (stateCounts.get(o.estado) ?? 0) + 1);
+      }
+      const chartData = Object.entries(estadoConfig)
+        .map(([key, cfg]) => ({
+          name: cfg.label,
+          count: stateCounts.get(key as EstadoOrden) ?? 0,
+          color: variantToColor[cfg.variant] ?? '#94a3b8',
+        }))
+        .filter((d) => d.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      return {
+        metricas: { activas, enReparacion, totalClientes, ingresos, entregados },
+        rows,
+        proximasEntregas,
+        clienteMap,
+        chartData,
+      };
+    }, [ordenesReq.data, clientesReq.data]);
 
   // ───── Error ─────
 
@@ -252,7 +294,7 @@ export function DashboardPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <MetricCard
           icon="clipboard"
           label="Reparaciones Activas"
@@ -262,6 +304,11 @@ export function DashboardPage() {
           icon="smartphone"
           label="En Reparación"
           value={metricas.enReparacion}
+        />
+        <MetricCard
+          icon="check-circle"
+          label="Entregados"
+          value={metricas.entregados}
         />
         <MetricCard
           icon="users"
@@ -279,75 +326,117 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Recent Orders */}
-      <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
-        <DataTable<OrdenRow>
-          columns={columns}
-          data={rows}
-          keyExtractor={(row) => row.id}
-          emptyMessage="No hay reparaciones registradas"
-          onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
-        />
-      </Card>
+      {/* Chart + Recent Orders */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Bar Chart */}
+        <Card title="Órdenes por Estado" subtitle="Distribución actual">
+          {chartData.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay datos</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
+                >
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={130}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#f1f5f9' }}
+                    formatter={(value) => [`${value} órdenes`, '']}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={20}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
 
-      {/* Próximas Entregas */}
-      <Card
-        title="Próximas Entregas"
-        subtitle="Reparaciones con cita de entrega agendada"
-      >
-        {proximasEntregas.length === 0 ? (
-          <p className="text-sm text-slate-500">No hay entregas agendadas</p>
-        ) : (
-          <div className="space-y-2">
-            {proximasEntregas.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => navigate(`/reparaciones/${o.id}`)}
-                className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50"
-              >
-                <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-slate-800">
-                    {formatDate(o.fechaEntrega)}{' '}
-                    <span className="font-normal text-slate-500">
-                      {new Date(o.fechaEntrega).toLocaleTimeString('es-ES', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`}
-                  </p>
-                </div>
-                <p className="text-sm font-medium text-blue-600">
-                  Reparación #{o.id}
-                </p>
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Quick Actions */}
-      <Card title="Acciones Rápidas">
-        <div className="flex flex-wrap gap-3">
-          <Button onClick={() => navigate('/reparaciones')}>
-            Nueva Reparación
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/repuestos')}
-          >
-            Ver Repuestos
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/clientes')}
-          >
-            Nuevo Cliente
-          </Button>
+        {/* Recent Orders */}
+        <div className="lg:col-span-2">
+          <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
+            <DataTable<OrdenRow>
+              columns={columns}
+              data={rows}
+              keyExtractor={(row) => row.id}
+              emptyMessage="No hay reparaciones registradas"
+              onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
+            />
+          </Card>
         </div>
-      </Card>
+      </div>
+
+      {/* Próximas Entregas + Acciones Rápidas (2-column grid) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card
+          title="Próximas Entregas"
+          subtitle="Reparaciones con cita de entrega agendada"
+        >
+          {proximasEntregas.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay entregas agendadas</p>
+          ) : (
+            <div className="space-y-2">
+              {proximasEntregas.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => navigate(`/reparaciones/${o.id}`)}
+                  className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-slate-800">
+                      {formatDate(o.fechaEntrega)}{' '}
+                      <span className="font-normal text-slate-500">
+                        {new Date(o.fechaEntrega).toLocaleTimeString('es-ES', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-blue-600">
+                    Reparación #{o.id}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Acciones Rápidas">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => navigate('/reparaciones')}>
+              Nueva Reparación
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/repuestos')}
+            >
+              Ver Repuestos
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/clientes')}
+            >
+              Nuevo Cliente
+            </Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
