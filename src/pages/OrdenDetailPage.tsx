@@ -249,8 +249,13 @@ export function OrdenDetailPage() {
   // ───── Mutations ─────
 
   const transitionMutation = useMutation({
-    mutationFn: ({ id: targetId, target }: { id: number; target: EstadoOrden }) =>
-      apiPut<OrdenTrabajo>(`/api/ordenes/${targetId}/estado?estado=${target}`, {}),
+    mutationFn: ({ id: targetId, target, descuentoDiagnostico }: { id: number; target: EstadoOrden; descuentoDiagnostico?: boolean }) => {
+      let url = `/api/ordenes/${targetId}/estado?estado=${target}`;
+      if (descuentoDiagnostico != null) {
+        url += `&descuentoDiagnostico=${descuentoDiagnostico}`;
+      }
+      return apiPut<OrdenTrabajo>(url, {});
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -448,13 +453,16 @@ export function OrdenDetailPage() {
 
   const [transitioningTarget, setTransitioningTarget] =
     useState<EstadoOrden | null>(null);
+  const [descuentoModalOpen, setDescuentoModalOpen] = useState(false);
+  const [descuentoPendingTarget, setDescuentoPendingTarget] =
+    useState<EstadoOrden | null>(null);
 
-  const handleTransition = useCallback(
-    async (target: EstadoOrden) => {
+  const executeTransition = useCallback(
+    async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
       if (!orden) return;
       setTransitioningTarget(target);
       try {
-        await transitionMutation.mutateAsync({ id: orden.id, target });
+        await transitionMutation.mutateAsync({ id: orden.id, target, descuentoDiagnostico });
       } catch (err: unknown) {
         const msg =
           err instanceof Error ? err.message : 'Error al cambiar estado';
@@ -465,6 +473,36 @@ export function OrdenDetailPage() {
     },
     [orden, transitionMutation],
   );
+
+  const handleTransition = useCallback(
+    async (target: EstadoOrden) => {
+      if (!orden) return;
+      // Intercept DIAGNOSTICO → REPARACION to ask about diagnostic discount
+      if (orden.estado === EstadoOrden.DIAGNOSTICO && target === EstadoOrden.REPARACION) {
+        setDescuentoPendingTarget(target);
+        setDescuentoModalOpen(true);
+        return;
+      }
+      await executeTransition(target);
+    },
+    [orden, executeTransition],
+  );
+
+  const confirmTransition = useCallback(
+    async (descuento: boolean) => {
+      setDescuentoModalOpen(false);
+      if (descuentoPendingTarget) {
+        await executeTransition(descuentoPendingTarget, descuento);
+      }
+      setDescuentoPendingTarget(null);
+    },
+    [descuentoPendingTarget, executeTransition],
+  );
+
+  const cancelTransition = useCallback(() => {
+    setDescuentoModalOpen(false);
+    setDescuentoPendingTarget(null);
+  }, []);
 
   // ───── Reparacion modal ─────
 
@@ -755,7 +793,24 @@ export function OrdenDetailPage() {
       {
         key: 'precio',
         label: 'Precio',
-        render: (row) => formatCurrency(row.precio),
+        render: (row) => (
+          <span
+            className={
+              orden?.descuentoDiagnostico &&
+              row.descripcion === 'Revisión inicial'
+                ? 'text-slate-400 line-through'
+                : ''
+            }
+          >
+            {formatCurrency(row.precio)}
+            {orden?.descuentoDiagnostico &&
+              row.descripcion === 'Revisión inicial' && (
+                <span className="ml-1 text-xs text-amber-600">
+                  (descontado)
+                </span>
+              )}
+          </span>
+        ),
       },
       {
         key: 'costoRepuesto',
@@ -806,14 +861,24 @@ export function OrdenDetailPage() {
     : [];
 
   const totalReparaciones = useMemo(
-    () => orden?.reparaciones.reduce((sum, r) => sum + r.precio, 0) ?? 0,
+    () =>
+      orden?.reparaciones
+        .filter(
+          (r) =>
+            !orden.descuentoDiagnostico ||
+            r.descripcion !== 'Revisión inicial',
+        )
+        .reduce((sum, r) => sum + r.precio, 0) ?? 0,
     [orden],
   );
 
   const gananciaTotal = useMemo(() => {
     if (!orden) return null;
     const reparacionesConCosto = orden.reparaciones.filter(
-      (r) => r.ganancia != null,
+      (r) =>
+        r.ganancia != null &&
+        (!orden.descuentoDiagnostico ||
+          r.descripcion !== 'Revisión inicial'),
     );
     if (reparacionesConCosto.length === 0) return null;
     return reparacionesConCosto.reduce((sum, r) => sum + (r.ganancia ?? 0), 0);
@@ -821,7 +886,13 @@ export function OrdenDetailPage() {
 
   const costoMateriales = useMemo(
     () =>
-      orden?.reparaciones.reduce((sum, r) => sum + (r.costoRepuesto ?? 0), 0) ??
+      orden?.reparaciones
+        .filter(
+          (r) =>
+            !orden.descuentoDiagnostico ||
+            r.descripcion !== 'Revisión inicial',
+        )
+        .reduce((sum, r) => sum + (r.costoRepuesto ?? 0), 0) ??
       0,
     [orden],
   );
@@ -1378,6 +1449,35 @@ export function OrdenDetailPage() {
           <OrderTimeline events={timelineEvents} />
         </Card>
       )}
+
+      {/* ───── Descuento Diagnóstico Modal ───── */}
+      <Modal
+        isOpen={descuentoModalOpen}
+        onClose={cancelTransition}
+        title="Descuento de Diagnóstico"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={cancelTransition}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={() => confirmTransition(true)}>
+              Sí, descontar diagnóstico
+            </Button>
+            <Button variant="ghost" onClick={() => confirmTransition(false)}>
+              No, cobrar todo
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          El cliente aprobó el presupuesto. ¿Desea descontar el precio del diagnóstico del total?
+        </p>
+        <p className="text-xs text-slate-400 mt-2">
+          Si elige <strong>Sí</strong>, solo se cobra la reparación + repuestos.
+          Si elige <strong>No</strong>, se cobra diagnóstico + reparación + repuestos.
+        </p>
+      </Modal>
 
       {/* ───── Add Reparacion Modal ───── */}
       <Modal

@@ -132,6 +132,7 @@ export interface OrdenTrabajo {
   estado: EstadoOrden;
   falloReportado: string | null;
   precioTotal: number | null;
+  descuentoDiagnostico?: boolean;
   fechaEntrada: string;
   fechaSalida: string | null;
   fechaEntrega?: string | null;
