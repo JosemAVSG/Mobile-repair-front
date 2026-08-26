@@ -10,7 +10,8 @@ import { Spinner } from '../components/atoms/Spinner';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { StatusBadge } from '../components/molecules/StatusBadge';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPut, apiDelete } from '../api/client';
 import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters';
 import type { Cliente, ClienteRequest, OrdenTrabajo } from '../types';
@@ -314,13 +315,43 @@ export function ClienteDetailPage() {
             <Spinner size="lg" />
           </div>
         ) : (
-          <DataTable<OrdenTrabajo>
+          <EntityList<OrdenTrabajo>
             columns={ordColumns}
             data={ordenesCliente}
             loading={false}
             emptyMessage="Este cliente no tiene reparaciones registradas"
             keyExtractor={(row) => row.id}
             onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
+            viewToggle={false}
+            storageKey="vista-cliente-ordenes"
+            renderCard={(row) => {
+              const tipoCfg = row.tipo ? tipoBadgeConfig(row.tipo) : null;
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-700">
+                      #{row.id}
+                    </span>
+                    <StatusBadge estado={row.estado} />
+                  </div>
+                  <div className="mt-2">
+                    {tipoCfg && (
+                      <Badge variant={tipoCfg.variant}>{tipoCfg.label}</Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                    <span className="text-sm font-semibold text-slate-800">
+                      {row.precioTotal != null
+                        ? formatCurrency(row.precioTotal)
+                        : '—'}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {formatDate(row.fechaEntrada)}
+                    </span>
+                  </div>
+                </>
+              );
+            }}
           />
         )}
       </div>

@@ -9,7 +9,8 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { buildMarcaMap, buildModeloMap } from '../utils/maps';
@@ -315,20 +316,22 @@ export function RepuestosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Repuestos</h2>
           <p className="text-sm text-slate-500">
             Gestión de repuestos
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <SearchField
-            placeholder="Buscar por nombre..."
-            value={busqueda}
-            onChange={setBusqueda}
-          />
-          <Button onClick={openCreate}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="w-full sm:w-64">
+            <SearchField
+              placeholder="Buscar por nombre..."
+              value={busqueda}
+              onChange={setBusqueda}
+            />
+          </div>
+          <Button onClick={openCreate} className="w-full sm:w-auto">
             Nuevo Repuesto
           </Button>
         </div>
@@ -348,14 +351,69 @@ export function RepuestosPage() {
         </Card>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<RepuestoRow>
+        <EntityList<RepuestoRow>
           columns={columns}
           data={rows}
           loading={loading}
+          searchFilter={busqueda}
           emptyMessage="No hay repuestos registrados"
           keyExtractor={(row) => row.id}
+          storageKey="vista-repuestos"
+          renderCard={(row) => {
+            const repuesto = (repuestos ?? []).find((r) => r.id === row.id);
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate text-base font-semibold text-slate-900">
+                    {row.nombre}
+                  </p>
+                  <Badge variant="info">
+                    {TIPO_REPARACION_LABELS[row.tipoReparacion] ??
+                      row.tipoReparacion}
+                  </Badge>
+                </div>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                  {row.codigo}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-800">
+                    {formatCurrency(row.precioCosto)}
+                  </span>
+                  <span className="truncate text-xs text-slate-500">
+                    {[row.marcaNombre, row.modeloNombre]
+                      .filter((v) => v && v !== '—')
+                      .join(' · ') || '—'}
+                  </span>
+                </div>
+                {repuesto && (
+                  <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-2.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        openEdit(repuesto);
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setDeleteTarget(repuesto);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  </div>
+                )}
+              </>
+            );
+          }}
         />
       )}
 

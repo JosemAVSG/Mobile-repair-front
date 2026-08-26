@@ -8,7 +8,8 @@ import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate } from '../utils/formatters';
 import type { Cliente, ClienteRequest } from '../types';
@@ -209,18 +210,22 @@ export function ClientesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Clientes</h2>
           <p className="text-sm text-slate-500">Gestión de clientes</p>
         </div>
-        <div className="flex items-center gap-3">
-          <SearchField
-            placeholder="Buscar cliente..."
-            value={busqueda}
-            onChange={setBusqueda}
-          />
-          <Button onClick={openCreate}>Nuevo Cliente</Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="w-full sm:w-64">
+            <SearchField
+              placeholder="Buscar cliente..."
+              value={busqueda}
+              onChange={setBusqueda}
+            />
+          </div>
+          <Button onClick={openCreate} className="w-full sm:w-auto">
+            Nuevo Cliente
+          </Button>
         </div>
       </div>
 
@@ -238,9 +243,9 @@ export function ClientesPage() {
         </Card>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<Cliente>
+        <EntityList<Cliente>
           columns={columns}
           data={clientes ?? []}
           loading={loading}
@@ -248,6 +253,48 @@ export function ClientesPage() {
           emptyMessage="No hay clientes registrados"
           keyExtractor={(row) => row.id}
           onRowClick={handleRowClick}
+          storageKey="vista-clientes"
+          renderCard={(cliente) => (
+            <>
+              <p className="truncate text-base font-semibold text-slate-900">
+                {cliente.nombre}
+              </p>
+              <div className="mt-1 space-y-0.5 text-sm text-slate-600">
+                {cliente.telefono && <p>{cliente.telefono}</p>}
+                {cliente.email && <p className="truncate">{cliente.email}</p>}
+                {!cliente.telefono && !cliente.email && (
+                  <p className="text-slate-400">Sin contacto registrado</p>
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                <span className="text-xs text-slate-500">
+                  Creado {formatDate(cliente.createdAt)}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      openEdit(cliente);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setDeleteTarget(cliente);
+                    }}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         />
       )}
 

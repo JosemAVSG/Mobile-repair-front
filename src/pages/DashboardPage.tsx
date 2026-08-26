@@ -18,7 +18,8 @@ import {
   REVENUE_STATES,
   TERMINAL_STATES,
 } from '../utils/estados';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import type { OrdenTrabajo, Cliente, EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
@@ -380,15 +381,18 @@ export function DashboardPage() {
           label="Clientes"
           value={metricas.totalClientes}
         />
-        <MetricCard
-          icon="dollar-sign"
-          label={esTodo ? 'Ingresos Totales' : `Ingresos (${periodoLabel})`}
-          value={
-            metricas.ingresos > 0
-              ? formatCurrency(metricas.ingresos)
-              : '$0'
-          }
-        />
+        {/* En mobile ocupa las dos columnas; en desktop vuelve a 1/5 */}
+        <div className="col-span-2 lg:col-span-1">
+          <MetricCard
+            icon="dollar-sign"
+            label={esTodo ? 'Ingresos Totales' : `Ingresos (${periodoLabel})`}
+            value={
+              metricas.ingresos > 0
+                ? formatCurrency(metricas.ingresos)
+                : '$0'
+            }
+          />
+        </div>
       </div>
 
       {/* Próximas Entregas + Acciones Rápidas (2-column grid) */}
@@ -498,12 +502,32 @@ export function DashboardPage() {
         {/* Recent Orders */}
         <div className="lg:col-span-2">
           <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
-            <DataTable<OrdenRow>
+            <EntityList<OrdenRow>
               columns={columns}
               data={rows}
               keyExtractor={(row) => row.id}
               emptyMessage="No hay reparaciones registradas"
               onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
+              viewToggle={false}
+              storageKey="vista-dashboard-recientes"
+              renderCard={(row) => (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-700">
+                      #{row.id}
+                    </span>
+                    <StatusBadge estado={row.estado} />
+                  </div>
+                  <p className="mt-2 truncate text-base font-semibold text-slate-900">
+                    {row.cliente}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                    <span className="text-xs text-slate-500">
+                      {formatDate(row.fechaEntrada)}
+                    </span>
+                  </div>
+                </>
+              )}
             />
           </Card>
         </div>

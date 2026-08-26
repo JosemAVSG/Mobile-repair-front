@@ -9,7 +9,8 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiPut, apiDelete } from '../api/client';
 import { formatDate, rolBadgeConfig } from '../utils/formatters';
 import type { Tecnico, TecnicoRequest, RolUsuario } from '../types';
@@ -265,14 +266,19 @@ export function TecnicosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Técnicos</h2>
           <p className="text-sm text-slate-500">
             Gestión de usuarios y técnicos del taller
           </p>
         </div>
-        <Button onClick={openCreate}>Nuevo Técnico</Button>
+        <Button
+          onClick={openCreate}
+          className="w-full sm:w-auto"
+        >
+          Nuevo Técnico
+        </Button>
       </div>
 
       {/* Search */}
@@ -300,15 +306,67 @@ export function TecnicosPage() {
         </Card>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<Tecnico>
+        <EntityList<Tecnico>
           columns={columns}
           data={tecnicos ?? []}
           loading={loading}
           searchFilter={busqueda}
           emptyMessage="No hay técnicos registrados"
           keyExtractor={(row) => row.id}
+          storageKey="vista-tecnicos"
+          renderCard={(tecnico) => {
+            const rolCfg = rolBadgeConfig(tecnico.rol);
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-slate-900">
+                      {tecnico.nombre}
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      @{tecnico.username}
+                    </p>
+                  </div>
+                  <Badge variant={rolCfg.variant}>{rolCfg.label}</Badge>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  {tecnico.activo ? (
+                    <Badge variant="success">Activo</Badge>
+                  ) : (
+                    <Badge variant="danger">Inactivo</Badge>
+                  )}
+                  <span className="text-xs text-slate-500">
+                    {tecnico.createdAt ? formatDate(tecnico.createdAt) : '—'}
+                  </span>
+                </div>
+                <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-2.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      openEdit(tecnico);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setDeleteTarget(tecnico);
+                    }}
+                    disabled={currentUser?.id === tecnico.id}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              </>
+            );
+          }}
         />
       )}
 

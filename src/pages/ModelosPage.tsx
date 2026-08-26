@@ -8,7 +8,8 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { Badge } from '../components/atoms/Badge';
 import { apiPost, apiDelete } from '../api/client';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
@@ -232,14 +233,17 @@ export function ModelosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Modelos</h2>
           <p className="text-sm text-slate-500">
             Gestión de modelos por marca
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="w-full sm:w-auto"
+        >
           Nuevo Modelo
         </Button>
       </div>
@@ -287,15 +291,51 @@ export function ModelosPage() {
         </Card>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<ModeloRow>
+        <EntityList<ModeloRow>
           columns={columns}
           data={rows}
           loading={loading}
           searchFilter={busqueda}
           emptyMessage="No hay modelos registrados"
           keyExtractor={(row) => row.id}
+          storageKey="vista-modelos"
+          renderCard={(row) => {
+            const cfg = row.marcaCategoria
+              ? categoriaBadgeConfig(row.marcaCategoria)
+              : null;
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate text-base font-semibold text-slate-900">
+                    {row.nombre}
+                  </p>
+                  {cfg && <Badge variant={cfg.variant}>{cfg.label}</Badge>}
+                </div>
+                <p className="mt-1 text-sm text-slate-600">{row.marcaNombre}</p>
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                  <span className="text-xs text-slate-500">
+                    Creado {formatDate(row.createdAt)}
+                  </span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      // Reconstruct full Modelo from row
+                      const target = (modelos ?? []).find(
+                        (m) => m.id === row.id,
+                      );
+                      if (target) setDeleteTarget(target);
+                    }}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              </>
+            );
+          }}
         />
       )}
 

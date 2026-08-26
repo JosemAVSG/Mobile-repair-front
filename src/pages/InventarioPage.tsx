@@ -6,7 +6,8 @@ import { Select } from '../components/atoms/Select';
 import { MetricCard } from '../components/molecules/MetricCard';
 import { SearchField } from '../components/molecules/SearchField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { InventoryAlertBanner } from '../components/organisms/InventoryAlertBanner';
 import { ProductoInventarioModal } from '../components/organisms/ProductoInventarioModal';
 import { MovimientoInventarioModal } from '../components/organisms/MovimientoInventarioModal';
@@ -328,15 +329,87 @@ export function InventarioPage() {
         </div>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!errorMessage && (
-        <DataTable<ProductoRow>
+        <EntityList<ProductoRow>
           columns={columns}
           data={rows}
           loading={productosLoading}
           emptyMessage="No hay productos registrados"
           searchFilter={busqueda}
           keyExtractor={(row) => row.id}
+          storageKey="vista-inventario"
+          renderCard={(row) => {
+            const producto = (productos ?? []).find((p) => p.id === row.id);
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-slate-900">
+                      {row.nombre}
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      {row.codigo}
+                    </p>
+                  </div>
+                  <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
+                    {ESTADO_STOCK_LABELS[row.estado]}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+                  <span
+                    className={
+                      row.stock === 0
+                        ? 'font-semibold text-red-600'
+                        : 'font-medium text-slate-700'
+                    }
+                  >
+                    Stock: {row.stock}{' '}
+                    <span className="font-normal text-slate-400">
+                      (mín. {row.stockMinimo})
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-slate-600">
+                    {formatCurrency(row.costoUnitario)}
+                  </span>
+                </div>
+                {producto && (
+                  <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        openEditProducto(producto);
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        openMovimientoModal(producto);
+                      }}
+                    >
+                      Movimiento
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setDeleteTarget(producto);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  </div>
+                )}
+              </>
+            );
+          }}
         />
       )}
 

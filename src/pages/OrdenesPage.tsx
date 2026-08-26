@@ -12,7 +12,8 @@ import { Badge } from '../components/atoms/Badge';
 import { SearchField } from '../components/molecules/SearchField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { FacturaModal } from '../components/organisms/FacturaModal';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiPut } from '../api/client';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { isOrdenAtrasada } from '../utils/ordenes';
@@ -276,6 +277,12 @@ export function OrdenesPage() {
       : []),
   ];
 
+  const emptyMessage = isAdmin
+    ? 'No hay reparaciones registradas'
+    : tab === 'mias'
+      ? 'No tienes reparaciones asignadas'
+      : 'No hay reparaciones disponibles';
+
   // ───── Create modal state ─────
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -527,7 +534,7 @@ export function OrdenesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">
             Reparaciones
@@ -536,16 +543,29 @@ export function OrdenesPage() {
             {isAdmin ? 'Gestión de reparaciones' : 'Gestión de tus reparaciones'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <SearchField
-            placeholder="Buscar por ID, cliente, equipo o fallo..."
-            value={busqueda}
-            onChange={setBusqueda}
-          />
-          <Button variant="secondary" onClick={() => void refetch()}>
-            Refrescar
-          </Button>
-          <Button onClick={() => openCreate()}>Nueva Reparación</Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="w-full sm:w-72">
+            <SearchField
+              placeholder="Buscar por ID, cliente, equipo o fallo..."
+              value={busqueda}
+              onChange={setBusqueda}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => void refetch()}
+              className="flex-1 sm:flex-none"
+            >
+              Refrescar
+            </Button>
+            <Button
+              onClick={() => openCreate()}
+              className="flex-1 sm:flex-none"
+            >
+              Nueva Reparación
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -630,23 +650,70 @@ export function OrdenesPage() {
         </Card>
       )}
 
-      {/* Data table */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<OrdenRow>
+        <EntityList<OrdenRow>
           columns={columns}
           data={rows}
           loading={loading}
-          emptyMessage={
-            isAdmin
-              ? 'No hay reparaciones registradas'
-              : tab === 'mias'
-                ? 'No tienes reparaciones asignadas'
-                : 'No hay reparaciones disponibles'
-          }
+          emptyMessage={emptyMessage}
           keyExtractor={(row) => row.id}
           searchFilter={busqueda}
           onRowClick={handleRowClick}
           getRowClassName={(row) => (row.atrasada ? 'bg-red-50/70' : '')}
+          viewToggle
+          storageKey="vista-reparaciones"
+          renderCard={(row) => (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-700">
+                  #{row.id}
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  {row.atrasada && <Badge variant="danger">Atrasada</Badge>}
+                  <StatusBadge estado={row.estado} />
+                </span>
+              </div>
+
+              <p className="mt-2 truncate text-base font-semibold text-slate-900">
+                {row.cliente}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-slate-600">
+                {row.equipo}
+              </p>
+              {row.falloReportado && (
+                <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                  {row.falloReportado}
+                </p>
+              )}
+
+              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                <span className="text-sm font-semibold text-slate-800">
+                  {row.precioTotal != null
+                    ? formatCurrency(row.precioTotal)
+                    : '—'}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {formatDateTime(row.fechaEntrada)}
+                </span>
+              </div>
+
+              {!isAdmin && tab === 'disponibles' && (
+                <Button
+                  size="sm"
+                  className="mt-3 w-full"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setAsignTarget(
+                      ordenes?.find((o) => o.id === row.id) ?? null,
+                    );
+                  }}
+                >
+                  Asignarme
+                </Button>
+              )}
+            </>
+          )}
         />
       )}
 

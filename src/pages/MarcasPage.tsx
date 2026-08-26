@@ -9,7 +9,8 @@ import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
-import { DataTable, type Column } from '../components/organisms/DataTable';
+import { type Column } from '../components/organisms/DataTable';
+import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiDelete } from '../api/client';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
@@ -181,12 +182,15 @@ export function MarcasPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Marcas</h2>
           <p className="text-sm text-slate-500">Gestión de marcas de dispositivos</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="w-full sm:w-auto"
+        >
           Nueva Marca
         </Button>
       </div>
@@ -225,15 +229,44 @@ export function MarcasPage() {
         </Card>
       )}
 
-      {/* Data table (error does not block data if already loaded) */}
+      {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
       {!error && (
-        <DataTable<Marca>
+        <EntityList<Marca>
           columns={columns}
           data={rows}
           loading={loading}
           searchFilter={busqueda}
           emptyMessage="No hay marcas registradas"
           keyExtractor={(row) => row.id}
+          storageKey="vista-marcas"
+          renderCard={(marca) => {
+            const cfg = categoriaBadgeConfig(marca.categoria);
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate text-base font-semibold text-slate-900">
+                    {marca.nombre}
+                  </p>
+                  <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                  <span className="text-xs text-slate-500">
+                    Creado {formatDate(marca.createdAt)}
+                  </span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setDeleteTarget(marca);
+                    }}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              </>
+            );
+          }}
         />
       )}
 
