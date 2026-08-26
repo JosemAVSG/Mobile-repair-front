@@ -135,12 +135,15 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     loadColorFromStorage(),
   );
 
-  // Identidad del taller desde backend; fallback legacy solo una vez.
+  // Identidad del taller desde backend. El legacy de localStorage se usa como
+  // placeholder mientras carga, pero NUNCA como `initialData`: eso marcaría el
+  // default como "fresco" y React Query no consultaría la API hasta pasar el
+  // staleTime (el default sobrescribía la API al recargar).
   const legacyIdentity = useMemo(() => readLegacyShopIdentity(), []);
   const { data: backendConfig } = useQuery({
     queryKey: QUERY_KEY,
     queryFn: () => apiGet<BackendShopConfig>('/api/configuracion/public'),
-    initialData: legacyIdentity,
+    placeholderData: legacyIdentity,
     staleTime: 5 * 60 * 1000,
   });
 
