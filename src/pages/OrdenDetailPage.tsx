@@ -1640,6 +1640,14 @@ export function OrdenDetailPage() {
             {formatCurrency(repCompleteCostoPreview)}
           </span>
         </div>
+        {repPrecioReal && (
+          <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2 text-sm">
+            <span className="font-semibold text-slate-700">Total a cobrar:</span>
+            <span className="font-bold text-emerald-700">
+              {formatCurrency(Number(repPrecioReal) + repCompleteCostoPreview)}
+            </span>
+          </div>
+        )}
       </Modal>
 
       {/* ───── Add Reparacion Modal ───── */}
