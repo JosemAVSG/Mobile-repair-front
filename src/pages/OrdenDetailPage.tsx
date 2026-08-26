@@ -457,6 +457,14 @@ export function OrdenDetailPage() {
   const [descuentoPendingTarget, setDescuentoPendingTarget] =
     useState<EstadoOrden | null>(null);
 
+  // ───── Repuestos al completar reparación ─────
+  const [repuestosModalOpen, setRepuestosModalOpen] = useState(false);
+  const [repuestosPendingReparacionId, setRepuestosPendingReparacionId] =
+    useState<number | null>(null);
+  const [repCompleteSearch, setRepCompleteSearch] = useState('');
+  const [repCompleteSelectedIds, setRepCompleteSelectedIds] = useState<Set<number>>(new Set());
+  const [repCompleteSubmitting, setRepCompleteSubmitting] = useState(false);
+
   const executeTransition = useCallback(
     async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
       if (!orden) return;
@@ -483,6 +491,22 @@ export function OrdenDetailPage() {
         setDescuentoModalOpen(true);
         return;
       }
+      // Intercept REPARACION → REPARACION_COMPLETADA to select parts used
+      if (orden.estado === EstadoOrden.REPARACION && target === EstadoOrden.REPARACION_COMPLETADA) {
+        // Find the last repair (the one currently being worked on)
+        const lastRepair = orden.reparaciones[orden.reparaciones.length - 1];
+        if (lastRepair) {
+          setRepuestosPendingReparacionId(lastRepair.id);
+          // Pre-select parts already associated with this repair
+          const existingIds = new Set(
+            (lastRepair.repuestos ?? []).map((r) => r.repuestoId).filter((id): id is number => id != null),
+          );
+          setRepCompleteSelectedIds(existingIds);
+          setRepCompleteSearch('');
+          setRepuestosModalOpen(true);
+          return;
+        }
+      }
       await executeTransition(target);
     },
     [orden, executeTransition],
@@ -499,10 +523,55 @@ export function OrdenDetailPage() {
     [descuentoPendingTarget, executeTransition],
   );
 
+  // ───── Mutation: update repair parts ─────
+  const updateRepuestosMutation = useMutation({
+    mutationFn: ({
+      ordenId: oId,
+      reparacionId: rId,
+      repuestoIds,
+    }: {
+      ordenId: number;
+      reparacionId: number;
+      repuestoIds: number[];
+    }) => apiPut<Reparacion>(`/api/ordenes/${oId}/reparaciones/${rId}/repuestos`, repuestoIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
+
   const cancelTransition = useCallback(() => {
     setDescuentoModalOpen(false);
     setDescuentoPendingTarget(null);
+    setRepuestosModalOpen(false);
+    setRepuestosPendingReparacionId(null);
+    setRepCompleteSelectedIds(new Set());
+    setRepCompleteSearch('');
   }, []);
+
+  const confirmRepuestos = useCallback(async () => {
+    if (!orden || repuestosPendingReparacionId == null) return;
+    setRepCompleteSubmitting(true);
+    try {
+      await updateRepuestosMutation.mutateAsync({
+        ordenId: orden.id,
+        reparacionId: repuestosPendingReparacionId,
+        repuestoIds: Array.from(repCompleteSelectedIds),
+      });
+      setRepuestosModalOpen(false);
+      setRepuestosPendingReparacionId(null);
+      setRepCompleteSelectedIds(new Set());
+      setRepCompleteSearch('');
+      // Now advance the state
+      await executeTransition(EstadoOrden.REPARACION_COMPLETADA);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al guardar repuestos';
+      alert(msg);
+    } finally {
+      setRepCompleteSubmitting(false);
+    }
+  }, [orden, repuestosPendingReparacionId, repCompleteSelectedIds, updateRepuestosMutation, executeTransition]);
 
   // ───── Reparacion modal ─────
 
@@ -577,6 +646,32 @@ export function OrdenDetailPage() {
 
   const toggleRepuesto = useCallback((id: number) => {
     setSelectedRepuestoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Repuestos-complete modal: filtered list + preview
+  const repCompleteFiltered = useMemo(() => {
+    const term = repCompleteSearch.trim().toLowerCase();
+    if (!term) return repuestos;
+    return repuestos.filter((r) => r.nombre.toLowerCase().includes(term));
+  }, [repuestos, repCompleteSearch]);
+
+  const repCompleteSelected = useMemo(
+    () => repuestos.filter((r) => repCompleteSelectedIds.has(r.id)),
+    [repuestos, repCompleteSelectedIds],
+  );
+
+  const repCompleteCostoPreview = useMemo(
+    () => repCompleteSelected.reduce((sum, r) => sum + r.precioCosto, 0),
+    [repCompleteSelected],
+  );
+
+  const toggleRepComplete = useCallback((id: number) => {
+    setRepCompleteSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -1477,6 +1572,85 @@ export function OrdenDetailPage() {
           Si elige <strong>Sí</strong>, solo se cobra la reparación + repuestos.
           Si elige <strong>No</strong>, se cobra diagnóstico + reparación + repuestos.
         </p>
+      </Modal>
+
+      {/* ───── Repuestos al Completar Reparación Modal ───── */}
+      <Modal
+        isOpen={repuestosModalOpen}
+        onClose={cancelTransition}
+        title="Repuestos utilizados"
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={cancelTransition}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={confirmRepuestos}
+              loading={repCompleteSubmitting}
+            >
+              Guardar y finalizar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 mb-3">
+          Seleccione los repuestos utilizados en esta reparación:
+        </p>
+        <Input
+          type="text"
+          placeholder="Buscar repuesto..."
+          value={repCompleteSearch}
+          onChange={(e) => setRepCompleteSearch(e.target.value)}
+        />
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 p-2">
+          {repuestosPending ? (
+            <div className="flex items-center justify-center py-4">
+              <Spinner size="sm" />
+            </div>
+          ) : repCompleteFiltered.length === 0 ? (
+            <p className="py-2 text-center text-sm text-slate-500">
+              {repCompleteSearch.trim()
+                ? 'No se encontraron repuestos'
+                : 'No hay repuestos disponibles'}
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {repCompleteFiltered.map((repuesto) => {
+                const inputId = `rep-complete-${repuesto.id}`;
+                const checked = repCompleteSelectedIds.has(repuesto.id);
+                return (
+                  <label
+                    key={repuesto.id}
+                    htmlFor={inputId}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-slate-50"
+                  >
+                    <input
+                      id={inputId}
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={checked}
+                      onChange={() => toggleRepComplete(repuesto.id)}
+                    />
+                    <span className="flex-1 text-sm text-slate-700">
+                      {repuesto.nombre}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {formatCurrency(repuesto.precioCosto)}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <span className="text-slate-600">Costo de repuestos:</span>
+          <span className="font-medium text-slate-800">
+            {formatCurrency(repCompleteCostoPreview)}
+          </span>
+        </div>
       </Modal>
 
       {/* ───── Add Reparacion Modal ───── */}
