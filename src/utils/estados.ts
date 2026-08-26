@@ -9,7 +9,6 @@ const ALL_STATES = Object.values(EstadoOrden);
 /** Estados que cierran el ciclo de la orden en el taller. */
 export const TERMINAL_STATES: ReadonlySet<EstadoOrden> = new Set([
   EstadoOrden.ENTREGADO,
-  EstadoOrden.GARANTIA,
   EstadoOrden.DEVUELTO,
 ]);
 

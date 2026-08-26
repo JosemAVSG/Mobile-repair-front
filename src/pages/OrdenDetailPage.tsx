@@ -63,7 +63,7 @@ const ESTADO_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
   [EstadoOrden.PRESUPUESTO_RECHAZADO]: [EstadoOrden.DEVUELTO],
   [EstadoOrden.DEVUELTO]: [],
   [EstadoOrden.ENTREGADO]: [EstadoOrden.GARANTIA],
-  [EstadoOrden.GARANTIA]: [],
+  [EstadoOrden.GARANTIA]: [EstadoOrden.ENTREGADO],
 };
 
 // Etiquetas por par origen:destino (permite matices según el estado actual).
@@ -82,6 +82,7 @@ const TRANSITION_LABELS: Record<string, string> = {
   'ESPERANDO_ENTREGA:PAGADO': 'Registrar Pago',
   'PAGADO:ENTREGADO': 'Marcar como Entregado',
   'ENTREGADO:GARANTIA': 'Activar Garantía',
+  'GARANTIA:ENTREGADO': 'Re-entregar',
 };
 
 const TRANSITION_VARIANTS: Record<
@@ -102,6 +103,7 @@ const TRANSITION_VARIANTS: Record<
   'ESPERANDO_ENTREGA:PAGADO': 'primary',
   'PAGADO:ENTREGADO': 'primary',
   'ENTREGADO:GARANTIA': 'secondary',
+  'GARANTIA:ENTREGADO': 'primary',
 };
 
 // ──────────────────────────────────────────────

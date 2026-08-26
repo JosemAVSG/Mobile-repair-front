@@ -110,17 +110,44 @@ export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
 };
 
 // ──────────────────────────────────────────────
+// Currency detection
+// ──────────────────────────────────────────────
+
+/** Maps locale country codes to their default currency ISO 4217. */
+const CURRENCY_MAP: Record<string, string> = {
+  CO: 'COP',
+  CL: 'CLP',
+  MX: 'MXN',
+  AR: 'ARS',
+  PE: 'PEN',
+  VE: 'VES',
+  EC: 'USD',
+  PA: 'USD',
+  US: 'USD',
+  ES: 'EUR',
+};
+
+function detectCurrency(locale: string): string {
+  const parts = locale.split('-');
+  const country = parts[1]?.toUpperCase();
+  return (country && CURRENCY_MAP[country]) ?? 'USD';
+}
+
+// ──────────────────────────────────────────────
 // Formatters
 // ──────────────────────────────────────────────
 
 /**
- * Format a number as currency in CLP (Chilean Peso).
- * Example: 1234.56 → "$1.234,56"
+ * Format a number as currency using the user's browser locale.
+ * Example (es-CO): 60000 → "$60.000"
+ * Example (en-US): 60000 → "$60,000"
  */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('es-CL', {
+  const locale = navigator.language || 'es-CO';
+  const currency = detectCurrency(locale);
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'CLP',
+    currency,
     maximumFractionDigits: 0,
   }).format(amount);
 }
