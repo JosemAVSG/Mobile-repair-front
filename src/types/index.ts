@@ -140,6 +140,13 @@ export interface OrdenTrabajo {
   createdAt: string;
 }
 
+export interface RepuestoSnapshot {
+  id: number;
+  repuestoId: number | null;
+  nombre: string;
+  precioCosto: number;
+}
+
 export interface Reparacion {
   id: number;
   ordenId: number;
@@ -148,6 +155,7 @@ export interface Reparacion {
   precio: number;
   costoRepuesto?: number | null;
   ganancia?: number | null;
+  repuestos?: RepuestoSnapshot[];
   createdAt: string;
 }
 
@@ -231,6 +239,7 @@ export interface ReparacionRequest {
   tipo: TipoReparacion;
   descripcion?: string;
   precio: number;
+  repuestoIds?: number[];
 }
 
 export interface TarifaRequest {

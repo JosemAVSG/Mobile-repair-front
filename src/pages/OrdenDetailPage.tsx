@@ -43,6 +43,7 @@ import {
   useFotosOrden,
   useSubirFotoOrden,
   useEliminarFotoOrden,
+  useRepuestos,
 } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -169,6 +170,7 @@ export function OrdenDetailPage() {
   const { data: marcas } = useMarcas();
   const { data: modelos } = useModelos();
   const { data: tecnicos } = useTecnicos();
+  const { data: repuestos = [], isPending: repuestosPending } = useRepuestos();
 
   const esAdmin = user?.rol === 'ADMIN';
 
@@ -476,6 +478,8 @@ export function OrdenDetailPage() {
     tipo?: string;
     precio?: string;
   }>({});
+  const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<Set<number>>(new Set());
+  const [repuestoSearch, setRepuestoSearch] = useState('');
 
   // Tarifas para autocompletar el precio de una reparación según el equipo
   const { data: tarifas } = useTarifas();
@@ -504,11 +508,51 @@ export function OrdenDetailPage() {
     return null;
   }, [tarifaAuto]);
 
+  const filteredRepuestos = useMemo(() => {
+    const term = repuestoSearch.trim().toLowerCase();
+    if (!term) return repuestos;
+    return repuestos.filter((r) => r.nombre.toLowerCase().includes(term));
+  }, [repuestos, repuestoSearch]);
+
+  const selectedRepuestos = useMemo(
+    () => repuestos.filter((r) => selectedRepuestoIds.has(r.id)),
+    [repuestos, selectedRepuestoIds],
+  );
+
+  const costoRepuestosPreview = useMemo(
+    () => selectedRepuestos.reduce((sum, r) => sum + r.precioCosto, 0),
+    [selectedRepuestos],
+  );
+
+  const precioFinalPreview = useMemo(() => {
+    if (repPrecio !== '' && !isNaN(Number(repPrecio)) && Number(repPrecio) > 0) {
+      return Number(repPrecio);
+    }
+    if (tarifaAuto) return tarifaAuto.precio;
+    return null;
+  }, [repPrecio, tarifaAuto]);
+
+  const gananciaPreview = useMemo(() => {
+    if (precioFinalPreview == null) return null;
+    return precioFinalPreview - costoRepuestosPreview;
+  }, [precioFinalPreview, costoRepuestosPreview]);
+
+  const toggleRepuesto = useCallback((id: number) => {
+    setSelectedRepuestoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const openRepModal = useCallback(() => {
     setRepTipo('');
     setRepDescripcion('');
     setRepPrecio('');
     setRepErrors({});
+    setSelectedRepuestoIds(new Set());
+    setRepuestoSearch('');
     setRepModalOpen(true);
   }, []);
 
@@ -543,6 +587,7 @@ export function OrdenDetailPage() {
         tipo: repTipo as TipoReparacion,
         descripcion: repDescripcion.trim() || undefined,
         precio: precioFinal as number,
+        repuestoIds: Array.from(selectedRepuestoIds),
       };
       await addReparacionMutation.mutateAsync({ ordenId: orden.id, body });
       closeRepModal();
@@ -555,7 +600,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepSubmitting(false);
     }
-  }, [repTipo, repDescripcion, repPrecio, tarifaAuto, orden, closeRepModal, addReparacionMutation]);
+  }, [repTipo, repDescripcion, repPrecio, tarifaAuto, orden, closeRepModal, addReparacionMutation, selectedRepuestoIds]);
 
   // ───── Cita de entrega modal ─────
 
@@ -690,6 +735,22 @@ export function OrdenDetailPage() {
         key: 'descripcion',
         label: 'Descripción',
         render: (row) => row.descripcion ?? '—',
+      },
+      {
+        key: 'repuestos',
+        label: 'Repuestos',
+        render: (row) =>
+          row.repuestos && row.repuestos.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {row.repuestos.map((snapshot) => (
+                <Badge key={snapshot.id}>
+                  {snapshot.nombre} ({formatCurrency(snapshot.precioCosto)})
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            '—'
+          ),
       },
       {
         key: 'precio',
@@ -1376,6 +1437,72 @@ export function OrdenDetailPage() {
             {precioAutoHint && (
               <p className="mt-1 text-xs text-blue-600">{precioAutoHint}</p>
             )}
+          </FormField>
+
+          <FormField label="Repuestos utilizados">
+            <Input
+              type="text"
+              placeholder="Buscar repuesto..."
+              value={repuestoSearch}
+              onChange={(e) => setRepuestoSearch(e.target.value)}
+            />
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2">
+              {repuestosPending ? (
+                <div className="flex items-center justify-center py-4">
+                  <Spinner size="sm" />
+                </div>
+              ) : filteredRepuestos.length === 0 ? (
+                <p className="py-2 text-sm text-slate-500">
+                  {repuestoSearch.trim()
+                    ? 'No se encontraron repuestos'
+                    : 'No hay repuestos disponibles'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredRepuestos.map((repuesto) => {
+                    const inputId = `repuesto-${repuesto.id}`;
+                    const checked = selectedRepuestoIds.has(repuesto.id);
+                    return (
+                      <label
+                        key={repuesto.id}
+                        htmlFor={inputId}
+                        className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-slate-50"
+                      >
+                        <input
+                          id={inputId}
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          checked={checked}
+                          onChange={() => toggleRepuesto(repuesto.id)}
+                        />
+                        <span className="flex-1 text-sm text-slate-700">
+                          {repuesto.nombre}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {formatCurrency(repuesto.precioCosto)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="mt-2 flex flex-col gap-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Costo de repuestos:</span>
+                <span className="font-medium text-slate-800">
+                  {formatCurrency(costoRepuestosPreview)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Ganancia estimada:</span>
+                <span className="font-medium text-emerald-700">
+                  {gananciaPreview != null
+                    ? formatCurrency(gananciaPreview)
+                    : '—'}
+                </span>
+              </div>
+            </div>
           </FormField>
         </div>
       </Modal>
