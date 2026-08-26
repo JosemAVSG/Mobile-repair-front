@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PieChart,
@@ -35,6 +35,17 @@ interface OrdenRow {
   fechaEntrada: string;
 }
 
+/** Períodos disponibles para el filtro temporal del dashboard. */
+type Periodo = 'hoy' | '7d' | 'mes' | 'anio' | 'todo';
+
+const PERIODOS: { value: Periodo; label: string }[] = [
+  { value: 'hoy', label: 'Hoy' },
+  { value: '7d', label: '7 días' },
+  { value: 'mes', label: 'Este mes' },
+  { value: 'anio', label: 'Este año' },
+  { value: 'todo', label: 'Todo' },
+];
+
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
@@ -47,6 +58,27 @@ function buildClienteMap(clientes: Cliente[]): Map<number, string> {
   return map;
 }
 
+/** Inicio del período en ms; `todo` devuelve null (sin límite). */
+function inicioPeriodo(p: Periodo): number | null {
+  const now = new Date();
+  switch (p) {
+    case 'hoy':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    case '7d':
+      return new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - 6,
+      ).getTime();
+    case 'mes':
+      return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    case 'anio':
+      return new Date(now.getFullYear(), 0, 1).getTime();
+    case 'todo':
+      return null;
+  }
+}
+
 // ──────────────────────────────────────────────
 // Dashboard Page
 // ──────────────────────────────────────────────
@@ -54,6 +86,7 @@ function buildClienteMap(clientes: Cliente[]): Map<number, string> {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { config } = useConfig();
+  const [periodo, setPeriodo] = useState<Periodo>('todo');
 
   const ordenesReq = useOrdenes();
   const clientesReq = useClientes();
@@ -78,6 +111,16 @@ export function DashboardPage() {
       const ordenes = ordenesReq.data ?? [];
       const clientes = clientesReq.data ?? [];
       const clienteMap = buildClienteMap(clientes);
+      const desde = inicioPeriodo(periodo);
+
+      // Métricas temporales (ingresos, entregados, chart) se filtran por
+      // fechaEntrada; activas/enReparación/clientes son estado actual global.
+      const ordenesPeriodo =
+        desde == null
+          ? ordenes
+          : ordenes.filter(
+              (o) => new Date(o.fechaEntrada).getTime() >= desde,
+            );
 
       const activas = ordenes.filter((o) => ACTIVE_STATES.has(o.estado))
         .length;
@@ -85,14 +128,14 @@ export function DashboardPage() {
         (o) => REPAIR_STATES.has(o.estado),
       ).length;
       const totalClientes = clientes.length;
-      const ingresos = ordenes
+      const ingresos = ordenesPeriodo
         .filter(
           (o) => REVENUE_STATES.has(o.estado) && o.precioTotal != null,
         )
         .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
 
-      // Entregados (terminal)
-      const entregados = ordenes.filter((o) =>
+      // Entregados (terminal) en el período
+      const entregados = ordenesPeriodo.filter((o) =>
         TERMINAL_STATES.has(o.estado),
       ).length;
 
@@ -136,7 +179,7 @@ export function DashboardPage() {
         default: '#94a3b8',
       };
       const stateCounts = new Map<EstadoOrden, number>();
-      for (const o of ordenes) {
+      for (const o of ordenesPeriodo) {
         stateCounts.set(o.estado, (stateCounts.get(o.estado) ?? 0) + 1);
       }
       const chartData = Object.entries(estadoConfig)
@@ -155,7 +198,7 @@ export function DashboardPage() {
         clienteMap,
         chartData,
       };
-    }, [ordenesReq.data, clientesReq.data]);
+    }, [ordenesReq.data, clientesReq.data, periodo]);
 
   // ───── Error ─────
 
@@ -284,12 +327,35 @@ export function DashboardPage() {
     },
   ];
 
+  const periodoLabel =
+    PERIODOS.find((p) => p.value === periodo)?.label ?? 'Todo';
+  const esTodo = periodo === 'todo';
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
-        <p className="text-sm text-slate-500">Panel de Control</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+          <p className="text-sm text-slate-500">Panel de Control</p>
+        </div>
+
+        {/* Filtro temporal */}
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {PERIODOS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriodo(p.value)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                periodo === p.value
+                  ? 'bg-primary text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -306,7 +372,7 @@ export function DashboardPage() {
         />
         <MetricCard
           icon="check-circle"
-          label="Entregados"
+          label={esTodo ? 'Entregados' : `Entregados (${periodoLabel})`}
           value={metricas.entregados}
         />
         <MetricCard
@@ -316,7 +382,7 @@ export function DashboardPage() {
         />
         <MetricCard
           icon="dollar-sign"
-          label="Ingresos Totales"
+          label={esTodo ? 'Ingresos Totales' : `Ingresos (${periodoLabel})`}
           value={
             metricas.ingresos > 0
               ? formatCurrency(metricas.ingresos)
@@ -388,7 +454,12 @@ export function DashboardPage() {
       {/* Chart + Recent Orders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Bar Chart */}
-        <Card title="Órdenes por Estado" subtitle="Distribución actual">
+        <Card
+          title="Órdenes por Estado"
+          subtitle={
+            esTodo ? 'Distribución actual' : `Distribución (${periodoLabel})`
+          }
+        >
           {chartData.length === 0 ? (
             <p className="text-sm text-slate-500">No hay datos</p>
           ) : (
