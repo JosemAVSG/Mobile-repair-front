@@ -12,7 +12,6 @@ import { Icon } from '../components/atoms/Icon';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import { puedeSubirFotoEtapa, FOTO_ETAPA_STATES } from '../utils/estados';
-import { DataTable, type Column } from '../components/organisms/DataTable';
 import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { FacturaModal } from '../components/organisms/FacturaModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
@@ -180,7 +179,6 @@ export function OrdenDetailPage() {
 
   const canViewOrden = useCan('orden:view', orden ?? undefined);
   const canEditOrden = useCan('orden:edit', orden ?? undefined);
-  const canManageReparaciones = useCan('reparacion:manage', orden ?? undefined);
   const canManageEntrega = useCan('entrega:manage', orden ?? undefined);
   const canManageFotos = useCan('foto:manage', orden ?? undefined);
 
@@ -664,16 +662,6 @@ export function OrdenDetailPage() {
     });
   }, []);
 
-  const openRepModal = useCallback(() => {
-    setRepTipo('');
-    setRepDescripcion('');
-    setRepPrecio('');
-    setRepErrors({});
-    setSelectedRepuestoIds(new Set());
-    setRepuestoSearch('');
-    setRepModalOpen(true);
-  }, []);
-
   const closeRepModal = useCallback(() => {
     setRepModalOpen(false);
     setRepErrors({});
@@ -839,79 +827,6 @@ export function OrdenDetailPage() {
   }, [cliente, orden?.fechaEntrega, config.nombreTaller]);
 
   // ───── Reparaciones columns ─────
-
-  const repColumns: Column<Reparacion>[] = useMemo(
-    () => [
-      {
-        key: 'tipo',
-        label: 'Tipo',
-        render: (row) => (
-          <Badge>{TIPO_REPARACION_LABELS[row.tipo] ?? row.tipo}</Badge>
-        ),
-      },
-      {
-        key: 'descripcion',
-        label: 'Descripción',
-        render: (row) => row.descripcion ?? '—',
-      },
-      {
-        key: 'repuestos',
-        label: 'Repuestos',
-        render: (row) =>
-          row.repuestos && row.repuestos.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {row.repuestos.map((snapshot) => (
-                <Badge key={snapshot.id}>
-                  {snapshot.nombre} ({formatCurrency(snapshot.precioCosto)})
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            '—'
-          ),
-      },
-      {
-        key: 'precio',
-        label: 'Precio',
-        render: (row) => (
-          <span
-            className={
-              orden?.descuentoDiagnostico &&
-              row.descripcion === 'Revisión inicial'
-                ? 'text-slate-400 line-through'
-                : ''
-            }
-          >
-            {formatCurrency(row.precio)}
-            {orden?.descuentoDiagnostico &&
-              row.descripcion === 'Revisión inicial' && (
-                <span className="ml-1 text-xs text-amber-600">
-                  (descontado)
-                </span>
-              )}
-          </span>
-        ),
-      },
-      {
-        key: 'costoRepuesto',
-        label: 'Costo Repuesto',
-        render: (row) =>
-          row.costoRepuesto != null ? formatCurrency(row.costoRepuesto) : '—',
-      },
-      {
-        key: 'ganancia',
-        label: 'Ganancia',
-        render: (row) =>
-          row.ganancia != null ? formatCurrency(row.ganancia) : '—',
-      },
-      {
-        key: 'createdAt',
-        label: 'Creado',
-        render: (row) => formatDate(row.createdAt),
-      },
-    ],
-    [],
-  );
 
   // ───── Timeline events from historial ─────
 
@@ -1120,93 +1035,105 @@ export function OrdenDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          {canManageEntrega && (
-            <Button variant="secondary" onClick={openEntregaModal}>
-              Agendar Entrega
-            </Button>
-          )}
-          {canViewOrden && cliente?.telefono && (
-            <Button variant="secondary" onClick={handleReenviarAviso}>
-              Enviar por WhatsApp
-            </Button>
-          )}
-          {canViewOrden && (
-            <Button variant="secondary" onClick={() => setTicketOpen(true)}>
-              Ticket QR
-            </Button>
-          )}
-          {canViewOrden && (
-            <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
-              Factura
-            </Button>
-          )}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
+            {transitionActions.map(({ target, label, variant }) => (
+              <Button
+                key={target}
+                variant={variant}
+                onClick={() => handleTransition(target)}
+                loading={transitioningTarget === target}
+              >
+                {label}
+              </Button>
+            ))}
+            {canManageEntrega && (
+              <Button variant="secondary" onClick={openEntregaModal}>
+                Agendar Entrega
+              </Button>
+            )}
+            {canViewOrden && cliente?.telefono && (
+              <Button variant="secondary" onClick={handleReenviarAviso}>
+                Enviar por WhatsApp
+              </Button>
+            )}
+            {canViewOrden && (
+              <Button variant="secondary" onClick={() => setTicketOpen(true)}>
+                Ticket QR
+              </Button>
+            )}
+            {canViewOrden && (
+              <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
+                Factura
+              </Button>
+            )}
+          </div>
+
+          {/* ── Mini Progress Timeline ── */}
+          {(() => {
+            const steps = [
+              { label: 'Registro', states: [EstadoOrden.REGISTRO] },
+              { label: 'Diagnóstico', states: [EstadoOrden.DIAGNOSTICO, EstadoOrden.PRESUPUESTO_RECHAZADO] },
+              { label: 'Reparación', states: [EstadoOrden.REPARACION, EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.REPARACION_COMPLETADA] },
+              { label: 'Finalizado', states: [EstadoOrden.CONTROL_CALIDAD, EstadoOrden.ESPERANDO_ENTREGA, EstadoOrden.PAGADO, EstadoOrden.ENTREGADO, EstadoOrden.GARANTIA] },
+            ];
+            const terminalStates: EstadoOrden[] = [EstadoOrden.ENTREGADO, EstadoOrden.DEVUELTO, EstadoOrden.GARANTIA];
+            const currentIdx = steps.findIndex((s) => s.states.includes(orden.estado));
+            const isTerminal = terminalStates.includes(orden.estado);
+            const isRejected = orden.estado === EstadoOrden.PRESUPUESTO_RECHAZADO || orden.estado === EstadoOrden.DEVUELTO;
+
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white px-6 py-4">
+                <div className="flex items-center">
+                  {steps.map((step, i) => {
+                    const isActive = i === currentIdx;
+                    const isDone = currentIdx > i || isTerminal;
+                    return (
+                      <div key={step.label} className="flex flex-1 items-center">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                              isRejected && isActive
+                                ? 'bg-red-100 text-red-600 ring-2 ring-red-300'
+                                : isDone
+                                  ? 'bg-emerald-500 text-white'
+                                  : isActive
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                    : 'bg-slate-200 text-slate-500'
+                            }`}
+                          >
+                            {isDone && !isActive ? '✓' : i + 1}
+                          </div>
+                          <span
+                            className={`mt-1.5 whitespace-nowrap text-xs font-medium ${
+                              isActive
+                                ? isRejected
+                                  ? 'text-red-600'
+                                  : 'text-blue-700'
+                                : isDone
+                                  ? 'text-emerald-600'
+                                  : 'text-slate-400'
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                        {i < steps.length - 1 && (
+                          <div
+                            className={`mx-2 mb-5 h-0.5 flex-1 rounded-full ${
+                              isDone && !isActive ? 'bg-emerald-400' : 'bg-slate-200'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
-
-      {/* ── Mini Progress Timeline ── */}
-      {(() => {
-        const steps = [
-          { label: 'Registro', states: [EstadoOrden.REGISTRO] },
-          { label: 'Diagnóstico', states: [EstadoOrden.DIAGNOSTICO, EstadoOrden.PRESUPUESTO_RECHAZADO] },
-          { label: 'Reparación', states: [EstadoOrden.REPARACION, EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.REPARACION_COMPLETADA] },
-          { label: 'Finalizado', states: [EstadoOrden.CONTROL_CALIDAD, EstadoOrden.ESPERANDO_ENTREGA, EstadoOrden.PAGADO, EstadoOrden.ENTREGADO, EstadoOrden.GARANTIA] },
-        ];
-        const terminalStates: EstadoOrden[] = [EstadoOrden.ENTREGADO, EstadoOrden.DEVUELTO, EstadoOrden.GARANTIA];
-        const currentIdx = steps.findIndex((s) => s.states.includes(orden.estado));
-        const isTerminal = terminalStates.includes(orden.estado);
-        const isRejected = orden.estado === EstadoOrden.PRESUPUESTO_RECHAZADO || orden.estado === EstadoOrden.DEVUELTO;
-
-        return (
-          <div className="mb-2 rounded-xl border border-slate-200 bg-white px-6 py-4">
-            <div className="flex items-center">
-              {steps.map((step, i) => {
-                const isActive = i === currentIdx;
-                const isDone = currentIdx > i || isTerminal;
-                return (
-                  <div key={step.label} className="flex flex-1 items-center">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                          isRejected && isActive
-                            ? 'bg-red-100 text-red-600 ring-2 ring-red-300'
-                            : isDone
-                              ? 'bg-emerald-500 text-white'
-                              : isActive
-                                ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                                : 'bg-slate-200 text-slate-500'
-                        }`}
-                      >
-                        {isDone && !isActive ? '✓' : i + 1}
-                      </div>
-                      <span
-                        className={`mt-1.5 whitespace-nowrap text-xs font-medium ${
-                          isActive
-                            ? isRejected
-                              ? 'text-red-600'
-                              : 'text-blue-700'
-                            : isDone
-                              ? 'text-emerald-600'
-                              : 'text-slate-400'
-                        }`}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-                    {i < steps.length - 1 && (
-                      <div
-                        className={`mx-2 mb-5 h-0.5 flex-1 rounded-full ${
-                          isDone && !isActive ? 'bg-emerald-400' : 'bg-slate-200'
-                        }`}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── 2-Column Info Grid ── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1550,50 +1477,6 @@ export function OrdenDetailPage() {
       </Card>
         </div>
       </div>
-
-      {/* ── Workflow Section ── */}
-      {canEditOrden && transitionActions.length > 0 && (
-        <Card title="Flujo de Trabajo">
-          <div className="flex flex-wrap gap-3">
-            {transitionActions.map(({ target, label, variant }) => (
-              <Button
-                key={target}
-                variant={variant}
-                onClick={() => handleTransition(target)}
-                loading={
-                  transitioningTarget === target
-                }
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* ── Reparaciones Section ── */}
-      <Card title="Reparaciones Realizadas">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              {orden.reparaciones.length} reparación(es) registrada(s)
-            </p>
-            {canManageReparaciones && (
-              <Button variant="secondary" size="sm" onClick={openRepModal}>
-                Agregar Reparación
-              </Button>
-            )}
-          </div>
-
-          <DataTable<Reparacion>
-            columns={repColumns}
-            data={orden.reparaciones}
-            loading={false}
-            emptyMessage="No se han registrado reparaciones"
-            keyExtractor={(row) => row.id}
-          />
-        </div>
-      </Card>
 
       {/* ── Historial Section ── */}
       {historial.length > 0 && (
