@@ -453,11 +453,7 @@ export function OrdenDetailPage() {
 
   const [transitioningTarget, setTransitioningTarget] =
     useState<EstadoOrden | null>(null);
-  const [descuentoModalOpen, setDescuentoModalOpen] = useState(false);
-  const [descuentoPendingTarget, setDescuentoPendingTarget] =
-    useState<EstadoOrden | null>(null);
-
-  // ───── Repuestos al completar reparación ─────
+  // ───── Repuestos al avanzar Diagnóstico → Reparación ─────
   const [repuestosModalOpen, setRepuestosModalOpen] = useState(false);
   const [repuestosPendingReparacionId, setRepuestosPendingReparacionId] =
     useState<number | null>(null);
@@ -485,42 +481,29 @@ export function OrdenDetailPage() {
   const handleTransition = useCallback(
     async (target: EstadoOrden) => {
       if (!orden) return;
-      // Intercept DIAGNOSTICO → REPARACION to ask about diagnostic discount
+      // Intercept DIAGNOSTICO → REPARACION to ask about discount + parts
       if (orden.estado === EstadoOrden.DIAGNOSTICO && target === EstadoOrden.REPARACION) {
-        setDescuentoPendingTarget(target);
-        setDescuentoModalOpen(true);
-        return;
-      }
-      // Intercept REPARACION → REPARACION_COMPLETADA to select parts used
-      if (orden.estado === EstadoOrden.REPARACION && target === EstadoOrden.REPARACION_COMPLETADA) {
-        // Find the last repair (the one currently being worked on)
-        const lastRepair = orden.reparaciones[orden.reparaciones.length - 1];
-        if (lastRepair) {
-          setRepuestosPendingReparacionId(lastRepair.id);
-          // Pre-select parts already associated with this repair
+        // Find the "Revisión inicial" repair to pre-select its parts
+        const revision = orden.reparaciones.find(
+          (r) => r.descripcion === 'Revisión inicial',
+        );
+        if (revision) {
+          setRepuestosPendingReparacionId(revision.id);
           const existingIds = new Set(
-            (lastRepair.repuestos ?? []).map((r) => r.repuestoId).filter((id): id is number => id != null),
+            (revision.repuestos ?? []).map((r) => r.repuestoId).filter((id): id is number => id != null),
           );
           setRepCompleteSelectedIds(existingIds);
-          setRepCompleteSearch('');
-          setRepuestosModalOpen(true);
-          return;
+        } else {
+          setRepuestosPendingReparacionId(null);
+          setRepCompleteSelectedIds(new Set());
         }
+        setRepCompleteSearch('');
+        setRepuestosModalOpen(true);
+        return;
       }
       await executeTransition(target);
     },
     [orden, executeTransition],
-  );
-
-  const confirmTransition = useCallback(
-    async (descuento: boolean) => {
-      setDescuentoModalOpen(false);
-      if (descuentoPendingTarget) {
-        await executeTransition(descuentoPendingTarget, descuento);
-      }
-      setDescuentoPendingTarget(null);
-    },
-    [descuentoPendingTarget, executeTransition],
   );
 
   // ───── Mutation: update repair parts ─────
@@ -541,29 +524,34 @@ export function OrdenDetailPage() {
   });
 
   const cancelTransition = useCallback(() => {
-    setDescuentoModalOpen(false);
-    setDescuentoPendingTarget(null);
     setRepuestosModalOpen(false);
     setRepuestosPendingReparacionId(null);
     setRepCompleteSelectedIds(new Set());
     setRepCompleteSearch('');
+    setRepCompleteDiscount(false);
   }, []);
 
+  const [repCompleteDiscount, setRepCompleteDiscount] = useState(false);
+
   const confirmRepuestos = useCallback(async () => {
-    if (!orden || repuestosPendingReparacionId == null) return;
+    if (!orden) return;
     setRepCompleteSubmitting(true);
     try {
-      await updateRepuestosMutation.mutateAsync({
-        ordenId: orden.id,
-        reparacionId: repuestosPendingReparacionId,
-        repuestoIds: Array.from(repCompleteSelectedIds),
-      });
+      // Save parts to the "Revisión inicial" repair if one was found
+      if (repuestosPendingReparacionId != null) {
+        await updateRepuestosMutation.mutateAsync({
+          ordenId: orden.id,
+          reparacionId: repuestosPendingReparacionId,
+          repuestoIds: Array.from(repCompleteSelectedIds),
+        });
+      }
       setRepuestosModalOpen(false);
       setRepuestosPendingReparacionId(null);
       setRepCompleteSelectedIds(new Set());
       setRepCompleteSearch('');
-      // Now advance the state
-      await executeTransition(EstadoOrden.REPARACION_COMPLETADA);
+      setRepCompleteDiscount(false);
+      // Now advance DIAGNOSTICO → REPARACION with discount flag
+      await executeTransition(EstadoOrden.REPARACION, repCompleteDiscount);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al guardar repuestos';
@@ -571,7 +559,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repuestosPendingReparacionId, repCompleteSelectedIds, updateRepuestosMutation, executeTransition]);
+  }, [orden, repuestosPendingReparacionId, repCompleteSelectedIds, repCompleteDiscount, updateRepuestosMutation, executeTransition]);
 
   // ───── Reparacion modal ─────
 
@@ -1545,40 +1533,11 @@ export function OrdenDetailPage() {
         </Card>
       )}
 
-      {/* ───── Descuento Diagnóstico Modal ───── */}
-      <Modal
-        isOpen={descuentoModalOpen}
-        onClose={cancelTransition}
-        title="Descuento de Diagnóstico"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={cancelTransition}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={() => confirmTransition(true)}>
-              Sí, descontar diagnóstico
-            </Button>
-            <Button variant="ghost" onClick={() => confirmTransition(false)}>
-              No, cobrar todo
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600">
-          El cliente aprobó el presupuesto. ¿Desea descontar el precio del diagnóstico del total?
-        </p>
-        <p className="text-xs text-slate-400 mt-2">
-          Si elige <strong>Sí</strong>, solo se cobra la reparación + repuestos.
-          Si elige <strong>No</strong>, se cobra diagnóstico + reparación + repuestos.
-        </p>
-      </Modal>
-
-      {/* ───── Repuestos al Completar Reparación Modal ───── */}
+      {/* ───── Diagnóstico → Reparación Modal ───── */}
       <Modal
         isOpen={repuestosModalOpen}
         onClose={cancelTransition}
-        title="Repuestos utilizados"
+        title="Diagnóstico → Reparación"
         size="md"
         footer={
           <>
@@ -1590,13 +1549,32 @@ export function OrdenDetailPage() {
               onClick={confirmRepuestos}
               loading={repCompleteSubmitting}
             >
-              Guardar y finalizar
+              Iniciar Reparación
             </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600 mb-3">
-          Seleccione los repuestos utilizados en esta reparación:
+        {/* Discount question */}
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800 mb-2">
+            ¿Desea descontar el diagnóstico del precio total?
+          </p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              checked={repCompleteDiscount}
+              onChange={(e) => setRepCompleteDiscount(e.target.checked)}
+            />
+            <span className="text-sm text-amber-700">
+              Sí, descontar diagnóstico (solo se cobra reparación + repuestos)
+            </span>
+          </label>
+        </div>
+
+        {/* Parts selector */}
+        <p className="text-sm text-slate-600 mb-2">
+          Seleccione los repuestos que necesita para esta reparación:
         </p>
         <Input
           type="text"
