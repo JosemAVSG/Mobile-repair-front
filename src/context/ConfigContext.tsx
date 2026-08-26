@@ -167,6 +167,24 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     document.title = config.nombreTaller || DEFAULT_CONFIG.nombreTaller;
   }, [config.nombreTaller]);
 
+  // Mantiene el favicon sincronizado con el logo del taller (el navegador
+  // escala la imagen al tamaño del favicon). Sin logo, vuelve al default.
+  useEffect(() => {
+    const links = document.querySelectorAll<HTMLLinkElement>(
+      'link[rel~="icon"]',
+    );
+    const iconLink =
+      links[0] ??
+      Object.assign(document.createElement('link'), { rel: 'icon' });
+    if (!iconLink.parentNode) {
+      document.head.appendChild(iconLink);
+    }
+    iconLink.href = config.logo || '/vite.svg';
+    // No asumir el tipo: si el logo es png/jpg y el link decía svg,
+    // algunos navegadores no cargan el favicon.
+    iconLink.removeAttribute('type');
+  }, [config.logo]);
+
   const updateConfig = useCallback((parcial: Partial<TallerConfig>) => {
     setColorPrimario((prev) => {
       const nextColor = parcial.colorPrimario ?? prev;
