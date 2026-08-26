@@ -1158,7 +1158,7 @@ export function OrdenDetailPage() {
         const isRejected = orden.estado === EstadoOrden.PRESUPUESTO_RECHAZADO || orden.estado === EstadoOrden.DEVUELTO;
 
         return (
-          <div className="mb-6 rounded-xl border border-slate-200 bg-white px-6 py-4">
+          <div className="mb-2 rounded-xl border border-slate-200 bg-white px-6 py-4">
             <div className="flex items-center">
               {steps.map((step, i) => {
                 const isActive = i === currentIdx;
@@ -1208,8 +1208,11 @@ export function OrdenDetailPage() {
         );
       })()}
 
-      {/* ── Order Info Card ── */}
-      <Card title="Información de la Reparación">
+      {/* ── 2-Column Info Grid ── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Left column */}
+        <div className="space-y-6">
+          <Card title="Información de la Reparación">
         <div className="space-y-4">
           {orden.falloReportado && (
             <div>
@@ -1273,6 +1276,74 @@ export function OrdenDetailPage() {
         </div>
       </Card>
 
+      {/* ── Equipo Section ── */}
+      <Card title="Equipo">
+        <div className="space-y-4">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Tipo:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.tipo
+                ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo)
+                : '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">Marca:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {marcaNombre ?? (marcaId != null ? `Marca #${marcaId}` : '—')}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">Modelo:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {modeloNombre ??
+                (orden.modeloId != null ? `Modelo #${orden.modeloId}` : '—')}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">
+              Número de Serie:
+            </span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.numeroSerie ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-slate-700">IMEI:</span>
+            <p className="mt-1 text-sm text-slate-600">
+              {orden.imei ?? '—'}
+            </p>
+          </div>
+          {orden.capacidad && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Capacidad:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.capacidad}</p>
+            </div>
+          )}
+          {orden.tipoGas && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Tipo de Gas:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.tipoGas}</p>
+            </div>
+          )}
+          {orden.voltaje && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Voltaje:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.voltaje}</p>
+            </div>
+          )}
+          {orden.notasTecnicas && (
+            <div>
+              <span className="text-sm font-medium text-slate-700">Notas Técnicas:</span>
+              <p className="mt-1 text-sm text-slate-600">{orden.notasTecnicas}</p>
+            </div>
+          )}
+        </div>
+      </Card>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-6">
       {/* ── Técnico responsable ── */}
       <Card title="Técnico responsable">
         {tecnicoResponsable ? (
@@ -1350,71 +1421,6 @@ export function OrdenDetailPage() {
             )}
           </div>
         )}
-      </Card>
-
-      {/* ── Equipo Section ── */}
-      <Card title="Equipo">
-        <div className="space-y-4">
-          <div>
-            <span className="text-sm font-medium text-slate-700">Tipo:</span>
-            <p className="mt-1 text-sm text-slate-600">
-              {orden.tipo
-                ? (tipoDispositivoLabel(orden.tipo) ?? orden.tipo)
-                : '—'}
-            </p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-slate-700">Marca:</span>
-            <p className="mt-1 text-sm text-slate-600">
-              {marcaNombre ?? (marcaId != null ? `Marca #${marcaId}` : '—')}
-            </p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-slate-700">Modelo:</span>
-            <p className="mt-1 text-sm text-slate-600">
-              {modeloNombre ??
-                (orden.modeloId != null ? `Modelo #${orden.modeloId}` : '—')}
-            </p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-slate-700">
-              Número de Serie:
-            </span>
-            <p className="mt-1 text-sm text-slate-600">
-              {orden.numeroSerie ?? '—'}
-            </p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-slate-700">IMEI:</span>
-            <p className="mt-1 text-sm text-slate-600">
-              {orden.imei ?? '—'}
-            </p>
-          </div>
-          {orden.capacidad && (
-            <div>
-              <span className="text-sm font-medium text-slate-700">Capacidad:</span>
-              <p className="mt-1 text-sm text-slate-600">{orden.capacidad}</p>
-            </div>
-          )}
-          {orden.tipoGas && (
-            <div>
-              <span className="text-sm font-medium text-slate-700">Tipo de Gas:</span>
-              <p className="mt-1 text-sm text-slate-600">{orden.tipoGas}</p>
-            </div>
-          )}
-          {orden.voltaje && (
-            <div>
-              <span className="text-sm font-medium text-slate-700">Voltaje:</span>
-              <p className="mt-1 text-sm text-slate-600">{orden.voltaje}</p>
-            </div>
-          )}
-          {orden.notasTecnicas && (
-            <div>
-              <span className="text-sm font-medium text-slate-700">Notas Técnicas:</span>
-              <p className="mt-1 text-sm text-slate-600">{orden.notasTecnicas}</p>
-            </div>
-          )}
-        </div>
       </Card>
 
       {/* ── Fotos del equipo ── */}
@@ -1542,6 +1548,8 @@ export function OrdenDetailPage() {
           </div>
         )}
       </Card>
+        </div>
+      </div>
 
       {/* ── Workflow Section ── */}
       {canEditOrden && transitionActions.length > 0 && (
