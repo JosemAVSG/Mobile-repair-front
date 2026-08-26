@@ -14,7 +14,6 @@ import type {
   Modelo,
   OrdenTrabajo,
   Repuesto,
-  Tarifa,
   Tecnico,
 } from '../types';
 
@@ -114,39 +113,6 @@ export function useRepuestos(nombre?: string) {
       apiGet<Repuesto[]>(
         nombre ? `/api/repuestos?nombre=${encodeURIComponent(nombre)}` : '/api/repuestos',
       ),
-  });
-}
-
-export interface TarifaFiltro {
-  verActivas?: boolean;
-  marcaId?: string;
-  modeloId?: string;
-}
-
-export function useTarifas(filtro?: TarifaFiltro) {
-  const verActivas = filtro?.verActivas;
-  const marcaId = filtro?.marcaId;
-  const modeloId = filtro?.modeloId;
-
-  const queryKey = verActivas
-    ? ['tarifas', 'activas']
-    : marcaId
-      ? ['tarifas', 'marca', marcaId]
-      : modeloId
-        ? ['tarifas', 'modelo', modeloId]
-        : ['tarifas'];
-
-  const endpoint = verActivas
-    ? '/api/tarifas/activas'
-    : marcaId
-      ? `/api/tarifas/marca/${marcaId}`
-      : modeloId
-        ? `/api/tarifas/modelo/${modeloId}`
-        : '/api/tarifas';
-
-  return useQuery({
-    queryKey,
-    queryFn: () => apiGet<Tarifa[]>(endpoint),
   });
 }
 

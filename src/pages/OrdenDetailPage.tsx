@@ -56,7 +56,6 @@ import {
   useMarcas,
   useModelos,
   useHistorialOrden,
-  useTarifas,
   useTecnicos,
   useFotosOrden,
   useSubirFotoOrden,
@@ -608,33 +607,6 @@ export function OrdenDetailPage() {
   const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<Set<number>>(new Set());
   const [repuestoSearch, setRepuestoSearch] = useState('');
 
-  // Tarifas para autocompletar el precio de una reparación según el equipo
-  const { data: tarifas } = useTarifas();
-
-  const tarifaAuto = useMemo(() => {
-    if (repTipo === '') return undefined;
-    const list = tarifas ?? [];
-    const marcaIdEq = marcaId != null ? Number(marcaId) : null;
-    const modeloIdEq = orden?.modeloId ?? null;
-    return list.find(
-      (t) =>
-        t.activa &&
-        t.tipo === repTipo &&
-        (modeloIdEq != null
-          ? t.modeloId === modeloIdEq
-          : marcaIdEq != null
-            ? t.modeloId == null && t.marcaId === marcaIdEq
-            : t.modeloId == null && t.marcaId == null),
-    );
-  }, [tarifas, repTipo, marcaId, orden?.modeloId]);
-
-  const precioAutoHint = useMemo(() => {
-    if (tarifaAuto) {
-      return `Precio automático: ${formatCurrency(tarifaAuto.precio)} (tarifa)`;
-    }
-    return null;
-  }, [tarifaAuto]);
-
   const filteredRepuestos = useMemo(() => {
     const term = repuestoSearch.trim().toLowerCase();
     if (!term) return repuestos;
@@ -655,9 +627,8 @@ export function OrdenDetailPage() {
     if (repPrecio !== '' && !isNaN(Number(repPrecio)) && Number(repPrecio) > 0) {
       return Number(repPrecio);
     }
-    if (tarifaAuto) return tarifaAuto.precio;
     return null;
-  }, [repPrecio, tarifaAuto]);
+  }, [repPrecio]);
 
   const gananciaPreview = useMemo(() => {
     if (precioFinalPreview == null) return null;
@@ -711,13 +682,10 @@ export function OrdenDetailPage() {
     let precioFinal: number | null = null;
     if (repPrecio !== '' && !isNaN(Number(repPrecio)) && Number(repPrecio) > 0) {
       precioFinal = Number(repPrecio);
-    } else if (tarifaAuto) {
-      // Si no se escribió precio, resolver la tarifa automática del equipo
-      precioFinal = tarifaAuto.precio;
     }
 
     if (precioFinal == null) {
-      errors.precio = 'Ingrese un precio válido o seleccione un tipo con tarifa automática';
+      errors.precio = 'Ingrese un precio válido';
     }
     setRepErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -743,7 +711,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepSubmitting(false);
     }
-  }, [repTipo, repDescripcion, repPrecio, tarifaAuto, orden, closeRepModal, addReparacionMutation, selectedRepuestoIds]);
+  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, addReparacionMutation, selectedRepuestoIds]);
 
   // ───── Cita de entrega modal ─────
 
@@ -1703,7 +1671,7 @@ export function OrdenDetailPage() {
             />
           </FormField>
 
-          <FormField label="Precio" required={!tarifaAuto} error={repErrors.precio}>
+          <FormField label="Precio" required error={repErrors.precio}>
             <Input
               type="number"
               step="0.01"
@@ -1712,9 +1680,6 @@ export function OrdenDetailPage() {
               value={repPrecio}
               onChange={(e) => setRepPrecio(e.target.value)}
             />
-            {precioAutoHint && (
-              <p className="mt-1 text-xs text-blue-600">{precioAutoHint}</p>
-            )}
           </FormField>
 
           <FormField label="Repuestos utilizados">

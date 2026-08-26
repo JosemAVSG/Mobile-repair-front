@@ -20,7 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import type { OrdenTrabajo, Cliente, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
-import { useOrdenes, useClientes, useMarcas, useModelos, useTarifas, useTecnicos } from '../hooks/useQueries';
+import { useOrdenes, useClientes, useMarcas, useModelos, useTecnicos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
 // Types
@@ -330,20 +330,6 @@ export function OrdenesPage() {
   // ───── Factura modal state ─────
   const [facturaOpen, setFacturaOpen] = useState(false);
   const [facturaOrden, setFacturaOrden] = useState<OrdenTrabajo | null>(null);
-
-  // ───── Tarifas para autocompletar precio de revisión ─────
-  const { data: tarifas } = useTarifas();
-
-  const tarifasEquipo = useMemo(() => {
-    if (!createMarcaId && !createModeloId) return [];
-    const list = tarifas ?? [];
-    return list.filter(
-      (t) =>
-        t.activa &&
-        (t.marcaId == null || (createMarcaId != null && t.marcaId === Number(createMarcaId))) &&
-        (t.modeloId == null || (createModeloId != null && t.modeloId === Number(createModeloId))),
-    );
-  }, [tarifas, createMarcaId, createModeloId]);
 
   // ───── Cascade: marcas by tipo, modelos by marca ─────
 
@@ -950,27 +936,6 @@ export function OrdenesPage() {
                   Costo de Revisión
                 </p>
 
-                {tarifasEquipo.length > 0 && (
-                  <FormField label="Tarifa predefinida">
-                    <Select
-                      options={tarifasEquipo.map((t) => ({
-                        value: String(t.id),
-                        label: `${TIPO_REPARACION_LABELS[t.tipo] ?? t.tipo} — ${formatCurrency(t.precio)}`,
-                      }))}
-                      placeholder="Seleccionar tarifa..."
-                      value=""
-                      onChange={(e) => {
-                        const tarifa = tarifasEquipo.find(
-                          (t) => String(t.id) === e.target.value,
-                        );
-                        if (!tarifa) return;
-                        setCreateTipoReparacion(tarifa.tipo);
-                        setCreatePrecioRevision(String(tarifa.precio));
-                      }}
-                    />
-                  </FormField>
-                )}
-
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField label="Tipo de revisión">
                     <Select
@@ -978,15 +943,7 @@ export function OrdenesPage() {
                       placeholder="Seleccionar tipo..."
                       value={createTipoReparacion}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        setCreateTipoReparacion(val);
-                        // Autocompletar precio si hay tarifa activa para este tipo/equipo
-                        if (val) {
-                          const match = tarifasEquipo.find(
-                            (t) => t.tipo === val,
-                          );
-                          if (match) setCreatePrecioRevision(String(match.precio));
-                        }
+                        setCreateTipoReparacion(e.target.value);
                       }}
                     />
                   </FormField>

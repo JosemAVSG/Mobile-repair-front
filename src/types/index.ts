@@ -160,16 +160,6 @@ export interface Reparacion {
   createdAt: string;
 }
 
-export interface Tarifa {
-  id: number;
-  marcaId: number | null;
-  modeloId: number | null;
-  tipo: TipoReparacion;
-  precio: number;
-  activa: boolean;
-  createdAt: string;
-}
-
 export interface Repuesto {
   id: number;
   nombre: string;
@@ -241,13 +231,6 @@ export interface ReparacionRequest {
   descripcion?: string;
   precio: number;
   repuestoIds?: number[];
-}
-
-export interface TarifaRequest {
-  marcaId?: number;
-  modeloId?: number;
-  tipo: TipoReparacion;
-  precio: number;
 }
 
 export interface TecnicoRequest {

@@ -11,7 +11,6 @@ import { ClienteDetailPage } from './pages/ClienteDetailPage';
 import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
 import { PublicRepairStatusPage } from './pages/PublicRepairStatusPage';
-import { TarifasPage } from './pages/TarifasPage';
 import { RepuestosPage } from './pages/RepuestosPage';
 import { ConfiguracionPage } from './pages/ConfiguracionPage';
 import { TecnicosPage } from './pages/TecnicosPage';
@@ -117,14 +116,6 @@ export default function App() {
         <Route path="reparaciones" element={<OrdenesPage />} />
         <Route path="ordenes" element={<RedirectToReparaciones />} />
         <Route path="ordenes/:id" element={<RedirectToReparaciones />} />
-        <Route
-          path="tarifas"
-          element={
-            <RequireRole roles={['ADMIN']}>
-              <TarifasPage />
-            </RequireRole>
-          }
-        />
         <Route
           path="repuestos"
           element={
