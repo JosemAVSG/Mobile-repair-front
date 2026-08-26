@@ -326,58 +326,6 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Chart + Recent Orders */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Bar Chart */}
-        <Card title="Órdenes por Estado" subtitle="Distribución actual">
-          {chartData.length === 0 ? (
-            <p className="text-sm text-slate-500">No hay datos</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
-                  layout="vertical"
-                  margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
-                >
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={130}
-                    tick={{ fontSize: 12, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#f1f5f9' }}
-                    formatter={(value) => [`${value} órdenes`, '']}
-                  />
-                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={20}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Card>
-
-        {/* Recent Orders */}
-        <div className="lg:col-span-2">
-          <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
-            <DataTable<OrdenRow>
-              columns={columns}
-              data={rows}
-              keyExtractor={(row) => row.id}
-              emptyMessage="No hay reparaciones registradas"
-              onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
-            />
-          </Card>
-        </div>
-      </div>
-
       {/* Próximas Entregas + Acciones Rápidas (2-column grid) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card
@@ -436,6 +384,58 @@ export function DashboardPage() {
             </Button>
           </div>
         </Card>
+      </div>
+
+      {/* Chart + Recent Orders */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Bar Chart */}
+        <Card title="Órdenes por Estado" subtitle="Distribución actual">
+          {chartData.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay datos</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
+                >
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={130}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#f1f5f9' }}
+                    formatter={(value) => [`${value} órdenes`, '']}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={20}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        {/* Recent Orders */}
+        <div className="lg:col-span-2">
+          <Card title="Reparaciones Recientes" subtitle="Últimas 10 reparaciones">
+            <DataTable<OrdenRow>
+              columns={columns}
+              data={rows}
+              keyExtractor={(row) => row.id}
+              emptyMessage="No hay reparaciones registradas"
+              onRowClick={(row) => navigate(`/reparaciones/${row.id}`)}
+            />
+          </Card>
+        </div>
       </div>
     </div>
   );
