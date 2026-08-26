@@ -1082,7 +1082,7 @@ export function OrdenDetailPage() {
                 <Tooltip key={target} content={label}>
                   <Button
                     variant={variant}
-                    size="sm"
+                    size="lg"
                     onClick={() => handleTransition(target)}
                     loading={transitioningTarget === target}
                   >
@@ -1093,28 +1093,28 @@ export function OrdenDetailPage() {
             })}
             {canManageEntrega && (
               <Tooltip content="Agendar entrega">
-                <Button variant="secondary" size="sm" onClick={openEntregaModal}>
+                <Button variant="secondary" size="lg" onClick={openEntregaModal}>
                   <Calendar size={16} />
                 </Button>
               </Tooltip>
             )}
             {canViewOrden && cliente?.telefono && (
               <Tooltip content="Enviar por WhatsApp">
-                <Button variant="secondary" size="sm" onClick={handleReenviarAviso}>
+                <Button variant="secondary" size="lg" onClick={handleReenviarAviso}>
                   <MessageCircle size={16} />
                 </Button>
               </Tooltip>
             )}
             {canViewOrden && (
               <Tooltip content="Ticket QR">
-                <Button variant="secondary" size="sm" onClick={() => setTicketOpen(true)}>
+                <Button variant="secondary" size="lg" onClick={() => setTicketOpen(true)}>
                   <QrCode size={16} />
                 </Button>
               </Tooltip>
             )}
             {canViewOrden && (
               <Tooltip content="Generar factura">
-                <Button variant="secondary" size="sm" onClick={() => setFacturaOpen(true)}>
+                <Button variant="secondary" size="lg" onClick={() => setFacturaOpen(true)}>
                   <FileText size={16} />
                 </Button>
               </Tooltip>
