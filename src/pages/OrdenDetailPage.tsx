@@ -455,11 +455,11 @@ export function OrdenDetailPage() {
     useState<EstadoOrden | null>(null);
   // ───── Repuestos al avanzar Diagnóstico → Reparación ─────
   const [repuestosModalOpen, setRepuestosModalOpen] = useState(false);
-  const [repuestosPendingReparacionId, setRepuestosPendingReparacionId] =
-    useState<number | null>(null);
   const [repCompleteSearch, setRepCompleteSearch] = useState('');
   const [repCompleteSelectedIds, setRepCompleteSelectedIds] = useState<Set<number>>(new Set());
   const [repCompleteSubmitting, setRepCompleteSubmitting] = useState(false);
+  const [repCompleteDiscount, setRepCompleteDiscount] = useState(false);
+  const [repPrecioReal, setRepPrecioReal] = useState('');
 
   const executeTransition = useCallback(
     async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
@@ -483,20 +483,7 @@ export function OrdenDetailPage() {
       if (!orden) return;
       // Intercept DIAGNOSTICO → REPARACION to ask about discount + parts
       if (orden.estado === EstadoOrden.DIAGNOSTICO && target === EstadoOrden.REPARACION) {
-        // Find the "Revisión inicial" repair to pre-select its parts
-        const revision = orden.reparaciones.find(
-          (r) => r.descripcion === 'Revisión inicial',
-        );
-        if (revision) {
-          setRepuestosPendingReparacionId(revision.id);
-          const existingIds = new Set(
-            (revision.repuestos ?? []).map((r) => r.repuestoId).filter((id): id is number => id != null),
-          );
-          setRepCompleteSelectedIds(existingIds);
-        } else {
-          setRepuestosPendingReparacionId(null);
-          setRepCompleteSelectedIds(new Set());
-        }
+        setRepCompleteSelectedIds(new Set());
         setRepCompleteSearch('');
         setRepuestosModalOpen(true);
         return;
@@ -506,17 +493,24 @@ export function OrdenDetailPage() {
     [orden, executeTransition],
   );
 
-  // ───── Mutation: update repair parts ─────
-  const updateRepuestosMutation = useMutation({
+  // ───── Mutation: iniciar reparación (creates repair + advances state) ─────
+  const iniciarReparacionMutation = useMutation({
     mutationFn: ({
       ordenId: oId,
-      reparacionId: rId,
+      precio,
       repuestoIds,
+      descuentoDiagnostico,
     }: {
       ordenId: number;
-      reparacionId: number;
+      precio: number;
       repuestoIds: number[];
-    }) => apiPut<Reparacion>(`/api/ordenes/${oId}/reparaciones/${rId}/repuestos`, repuestoIds),
+      descuentoDiagnostico: boolean;
+    }) =>
+      apiPost<OrdenTrabajo>(`/api/ordenes/${oId}/iniciar-reparacion`, {
+        precio,
+        repuestoIds,
+        descuentoDiagnostico,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -525,41 +519,40 @@ export function OrdenDetailPage() {
 
   const cancelTransition = useCallback(() => {
     setRepuestosModalOpen(false);
-    setRepuestosPendingReparacionId(null);
     setRepCompleteSelectedIds(new Set());
     setRepCompleteSearch('');
     setRepCompleteDiscount(false);
+    setRepPrecioReal('');
   }, []);
-
-  const [repCompleteDiscount, setRepCompleteDiscount] = useState(false);
 
   const confirmRepuestos = useCallback(async () => {
     if (!orden) return;
+    const precio = Number(repPrecioReal);
+    if (!repPrecioReal || isNaN(precio) || precio <= 0) {
+      alert('Ingrese el precio de la reparación');
+      return;
+    }
     setRepCompleteSubmitting(true);
     try {
-      // Save parts to the "Revisión inicial" repair if one was found
-      if (repuestosPendingReparacionId != null) {
-        await updateRepuestosMutation.mutateAsync({
-          ordenId: orden.id,
-          reparacionId: repuestosPendingReparacionId,
-          repuestoIds: Array.from(repCompleteSelectedIds),
-        });
-      }
+      await iniciarReparacionMutation.mutateAsync({
+        ordenId: orden.id,
+        precio,
+        repuestoIds: Array.from(repCompleteSelectedIds),
+        descuentoDiagnostico: repCompleteDiscount,
+      });
       setRepuestosModalOpen(false);
-      setRepuestosPendingReparacionId(null);
       setRepCompleteSelectedIds(new Set());
       setRepCompleteSearch('');
       setRepCompleteDiscount(false);
-      // Now advance DIAGNOSTICO → REPARACION with discount flag
-      await executeTransition(EstadoOrden.REPARACION, repCompleteDiscount);
+      setRepPrecioReal('');
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Error al guardar repuestos';
+        err instanceof Error ? err.message : 'Error al iniciar reparación';
       alert(msg);
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repuestosPendingReparacionId, repCompleteSelectedIds, repCompleteDiscount, updateRepuestosMutation, executeTransition]);
+  }, [orden, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation]);
 
   // ───── Reparacion modal ─────
 
@@ -1570,6 +1563,20 @@ export function OrdenDetailPage() {
               Sí, descontar diagnóstico (solo se cobra reparación + repuestos)
             </span>
           </label>
+        </div>
+
+        {/* Price input */}
+        <div className="mb-4">
+          <FormField label="Precio de la reparación">
+            <Input
+              type="number"
+              placeholder="Ej: 150"
+              value={repPrecioReal}
+              onChange={(e) => setRepPrecioReal(e.target.value)}
+              min="0"
+              step="0.01"
+            />
+          </FormField>
         </div>
 
         {/* Parts selector */}
