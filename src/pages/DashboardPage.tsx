@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  PieChart,
+  Pie,
+  Cell,
   Tooltip,
   ResponsiveContainer,
-  Cell,
+  Legend,
 } from 'recharts';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
@@ -395,30 +394,31 @@ export function DashboardPage() {
           ) : (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
-                  layout="vertical"
-                  margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
-                >
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={130}
-                    tick={{ fontSize: 12, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#f1f5f9' }}
-                    formatter={(value) => [`${value} órdenes`, '']}
-                  />
-                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={20}>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="count"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    strokeWidth={0}
+                  >
                     {chartData.map((entry, index) => (
                       <Cell key={index} fill={entry.color} />
                     ))}
-                  </Bar>
-                </BarChart>
+                  </Pie>
+                  <Tooltip
+                    formatter={(value) => [`${value} órdenes`, '']}
+                  />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 12 }}
+                  />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           )}
