@@ -1,6 +1,24 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Calendar,
+  MessageCircle,
+  QrCode,
+  FileText,
+  ClipboardList,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  Package,
+  Wrench,
+  ShieldCheck,
+  PackageCheck,
+  DollarSign,
+  ShieldAlert,
+  ArrowRight,
+  type LucideIcon,
+} from 'lucide-react';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
@@ -9,6 +27,7 @@ import { Select } from '../components/atoms/Select';
 import { Input } from '../components/atoms/Input';
 import { Spinner } from '../components/atoms/Spinner';
 import { Icon } from '../components/atoms/Icon';
+import { Tooltip } from '../components/atoms/Tooltip';
 import { FormField } from '../components/molecules/FormField';
 import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import { puedeSubirFotoEtapa, FOTO_ETAPA_STATES } from '../utils/estados';
@@ -103,6 +122,24 @@ const TRANSITION_VARIANTS: Record<
   'PAGADO:ENTREGADO': 'primary',
   'ENTREGADO:GARANTIA': 'secondary',
   'GARANTIA:ENTREGADO': 'primary',
+};
+
+const TRANSITION_ICONS: Record<string, LucideIcon> = {
+  'REGISTRO:DIAGNOSTICO': ClipboardList,
+  'DIAGNOSTICO:REPARACION': CheckCircle2,
+  'DIAGNOSTICO:PRESUPUESTO_RECHAZADO': XCircle,
+  'PRESUPUESTO_RECHAZADO:DEVUELTO': RotateCcw,
+  'REPARACION:ESPERANDO_REPUESTO': Package,
+  'REPARACION:REPARACION_COMPLETADA': CheckCircle2,
+  'REPARACION:DIAGNOSTICO': RotateCcw,
+  'ESPERANDO_REPUESTO:REPARACION': Wrench,
+  'REPARACION_COMPLETADA:CONTROL_CALIDAD': ShieldCheck,
+  'CONTROL_CALIDAD:REPARACION': RotateCcw,
+  'CONTROL_CALIDAD:ESPERANDO_ENTREGA': PackageCheck,
+  'ESPERANDO_ENTREGA:PAGADO': DollarSign,
+  'PAGADO:ENTREGADO': CheckCircle2,
+  'ENTREGADO:GARANTIA': ShieldAlert,
+  'GARANTIA:ENTREGADO': RotateCcw,
 };
 
 // ──────────────────────────────────────────────
@@ -1036,36 +1073,49 @@ export function OrdenDetailPage() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-3">
-            {transitionActions.map(({ target, label, variant }) => (
-              <Button
-                key={target}
-                variant={variant}
-                onClick={() => handleTransition(target)}
-                loading={transitioningTarget === target}
-              >
-                {label}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {transitionActions.map(({ target, label, variant }) => {
+              const IconComp = TRANSITION_ICONS[`${orden.estado}:${target}`] ?? ArrowRight;
+              return (
+                <Tooltip key={target} content={label}>
+                  <Button
+                    variant={variant}
+                    size="sm"
+                    onClick={() => handleTransition(target)}
+                    loading={transitioningTarget === target}
+                  >
+                    <IconComp size={16} />
+                  </Button>
+                </Tooltip>
+              );
+            })}
             {canManageEntrega && (
-              <Button variant="secondary" onClick={openEntregaModal}>
-                Agendar Entrega
-              </Button>
+              <Tooltip content="Agendar entrega">
+                <Button variant="secondary" size="sm" onClick={openEntregaModal}>
+                  <Calendar size={16} />
+                </Button>
+              </Tooltip>
             )}
             {canViewOrden && cliente?.telefono && (
-              <Button variant="secondary" onClick={handleReenviarAviso}>
-                Enviar por WhatsApp
-              </Button>
+              <Tooltip content="Enviar por WhatsApp">
+                <Button variant="secondary" size="sm" onClick={handleReenviarAviso}>
+                  <MessageCircle size={16} />
+                </Button>
+              </Tooltip>
             )}
             {canViewOrden && (
-              <Button variant="secondary" onClick={() => setTicketOpen(true)}>
-                Ticket QR
-              </Button>
+              <Tooltip content="Ticket QR">
+                <Button variant="secondary" size="sm" onClick={() => setTicketOpen(true)}>
+                  <QrCode size={16} />
+                </Button>
+              </Tooltip>
             )}
             {canViewOrden && (
-              <Button variant="secondary" onClick={() => setFacturaOpen(true)}>
-                Factura
-              </Button>
+              <Tooltip content="Generar factura">
+                <Button variant="secondary" size="sm" onClick={() => setFacturaOpen(true)}>
+                  <FileText size={16} />
+                </Button>
+              </Tooltip>
             )}
           </div>
 
