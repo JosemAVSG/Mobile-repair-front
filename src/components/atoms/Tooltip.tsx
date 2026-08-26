@@ -38,7 +38,7 @@ export function Tooltip({ content, children, placement = 'top' }: TooltipProps) 
 
   return (
     <>
-      <span ref={refs.setReference} {...getReferenceProps()} className="contents">
+      <span ref={refs.setReference} {...getReferenceProps()} className="inline-flex">
         {children}
       </span>
       {open && (

@@ -1016,7 +1016,8 @@ export function OrdenDetailPage() {
       </Button>
 
       {/* ── Header section ── */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Left: Info */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-slate-800">
@@ -1072,115 +1073,118 @@ export function OrdenDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {transitionActions.map(({ target, label, variant }) => {
-            const IconComp = TRANSITION_ICONS[`${orden.estado}:${target}`] ?? ArrowRight;
-            return (
-              <Tooltip key={target} content={label}>
-                <Button
-                  variant={variant}
-                  size="sm"
-                  onClick={() => handleTransition(target)}
-                  loading={transitioningTarget === target}
-                >
-                  <IconComp size={16} />
+        {/* Right: Buttons + Timeline */}
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {transitionActions.map(({ target, label, variant }) => {
+              const IconComp = TRANSITION_ICONS[`${orden.estado}:${target}`] ?? ArrowRight;
+              return (
+                <Tooltip key={target} content={label}>
+                  <Button
+                    variant={variant}
+                    size="sm"
+                    onClick={() => handleTransition(target)}
+                    loading={transitioningTarget === target}
+                  >
+                    <IconComp size={16} />
+                  </Button>
+                </Tooltip>
+              );
+            })}
+            {canManageEntrega && (
+              <Tooltip content="Agendar entrega">
+                <Button variant="secondary" size="sm" onClick={openEntregaModal}>
+                  <Calendar size={16} />
                 </Button>
               </Tooltip>
-            );
-          })}
-          {canManageEntrega && (
-            <Tooltip content="Agendar entrega">
-              <Button variant="secondary" size="sm" onClick={openEntregaModal}>
-                <Calendar size={16} />
-              </Button>
-            </Tooltip>
-          )}
-          {canViewOrden && cliente?.telefono && (
-            <Tooltip content="Enviar por WhatsApp">
-              <Button variant="secondary" size="sm" onClick={handleReenviarAviso}>
-                <MessageCircle size={16} />
-              </Button>
-            </Tooltip>
-          )}
-          {canViewOrden && (
-            <Tooltip content="Ticket QR">
-              <Button variant="secondary" size="sm" onClick={() => setTicketOpen(true)}>
-                <QrCode size={16} />
-              </Button>
-            </Tooltip>
-          )}
-          {canViewOrden && (
-            <Tooltip content="Generar factura">
-              <Button variant="secondary" size="sm" onClick={() => setFacturaOpen(true)}>
-                <FileText size={16} />
-              </Button>
-            </Tooltip>
-          )}
-        </div>
+            )}
+            {canViewOrden && cliente?.telefono && (
+              <Tooltip content="Enviar por WhatsApp">
+                <Button variant="secondary" size="sm" onClick={handleReenviarAviso}>
+                  <MessageCircle size={16} />
+                </Button>
+              </Tooltip>
+            )}
+            {canViewOrden && (
+              <Tooltip content="Ticket QR">
+                <Button variant="secondary" size="sm" onClick={() => setTicketOpen(true)}>
+                  <QrCode size={16} />
+                </Button>
+              </Tooltip>
+            )}
+            {canViewOrden && (
+              <Tooltip content="Generar factura">
+                <Button variant="secondary" size="sm" onClick={() => setFacturaOpen(true)}>
+                  <FileText size={16} />
+                </Button>
+              </Tooltip>
+            )}
+          </div>
 
-        {/* ── Mini Progress Timeline ── */}
-        {(() => {
-          const steps = [
-            { label: 'Registro', states: [EstadoOrden.REGISTRO] },
-            { label: 'Diagnóstico', states: [EstadoOrden.DIAGNOSTICO, EstadoOrden.PRESUPUESTO_RECHAZADO] },
-            { label: 'Reparación', states: [EstadoOrden.REPARACION, EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.REPARACION_COMPLETADA] },
-            { label: 'Finalizado', states: [EstadoOrden.CONTROL_CALIDAD, EstadoOrden.ESPERANDO_ENTREGA, EstadoOrden.PAGADO, EstadoOrden.ENTREGADO, EstadoOrden.GARANTIA] },
-          ];
-          const terminalStates: EstadoOrden[] = [EstadoOrden.ENTREGADO, EstadoOrden.DEVUELTO, EstadoOrden.GARANTIA];
-          const currentIdx = steps.findIndex((s) => s.states.includes(orden.estado));
-          const isTerminal = terminalStates.includes(orden.estado);
-          const isRejected = orden.estado === EstadoOrden.PRESUPUESTO_RECHAZADO || orden.estado === EstadoOrden.DEVUELTO;
+          {/* ── Mini Progress Timeline ── */}
+          {(() => {
+            const steps = [
+              { label: 'Registro', states: [EstadoOrden.REGISTRO] },
+              { label: 'Diagnóstico', states: [EstadoOrden.DIAGNOSTICO, EstadoOrden.PRESUPUESTO_RECHAZADO] },
+              { label: 'Reparación', states: [EstadoOrden.REPARACION, EstadoOrden.ESPERANDO_REPUESTO, EstadoOrden.REPARACION_COMPLETADA] },
+              { label: 'Finalizado', states: [EstadoOrden.CONTROL_CALIDAD, EstadoOrden.ESPERANDO_ENTREGA, EstadoOrden.PAGADO, EstadoOrden.ENTREGADO, EstadoOrden.GARANTIA] },
+            ];
+            const terminalStates: EstadoOrden[] = [EstadoOrden.ENTREGADO, EstadoOrden.DEVUELTO, EstadoOrden.GARANTIA];
+            const currentIdx = steps.findIndex((s) => s.states.includes(orden.estado));
+            const isTerminal = terminalStates.includes(orden.estado);
+            const isRejected = orden.estado === EstadoOrden.PRESUPUESTO_RECHAZADO || orden.estado === EstadoOrden.DEVUELTO;
 
-          return (
-            <div className="rounded-xl border border-slate-200 bg-white px-6 py-4">
-              <div className="flex items-center">
-                {steps.map((step, i) => {
-                  const isActive = i === currentIdx;
-                  const isDone = currentIdx > i || isTerminal;
-                  return (
-                    <div key={step.label} className="flex flex-1 items-center">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                            isRejected && isActive
-                              ? 'bg-red-100 text-red-600 ring-2 ring-red-300'
-                              : isDone
-                                ? 'bg-emerald-500 text-white'
-                                : isActive
-                                  ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                                  : 'bg-slate-200 text-slate-500'
-                          }`}
-                        >
-                          {isDone && !isActive ? '✓' : i + 1}
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white px-6 py-4">
+                <div className="flex items-center">
+                  {steps.map((step, i) => {
+                    const isActive = i === currentIdx;
+                    const isDone = currentIdx > i || isTerminal;
+                    return (
+                      <div key={step.label} className="flex flex-1 items-center">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                              isRejected && isActive
+                                ? 'bg-red-100 text-red-600 ring-2 ring-red-300'
+                                : isDone
+                                  ? 'bg-emerald-500 text-white'
+                                  : isActive
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                    : 'bg-slate-200 text-slate-500'
+                            }`}
+                          >
+                            {isDone && !isActive ? '✓' : i + 1}
+                          </div>
+                          <span
+                            className={`mt-1.5 whitespace-nowrap text-xs font-medium ${
+                              isActive
+                                ? isRejected
+                                  ? 'text-red-600'
+                                  : 'text-blue-700'
+                                : isDone
+                                  ? 'text-emerald-600'
+                                  : 'text-slate-400'
+                            }`}
+                          >
+                            {step.label}
+                          </span>
                         </div>
-                        <span
-                          className={`mt-1.5 whitespace-nowrap text-xs font-medium ${
-                            isActive
-                              ? isRejected
-                                ? 'text-red-600'
-                                : 'text-blue-700'
-                              : isDone
-                                ? 'text-emerald-600'
-                                : 'text-slate-400'
-                          }`}
-                        >
-                          {step.label}
-                        </span>
+                        {i < steps.length - 1 && (
+                          <div
+                            className={`mx-2 mb-5 h-0.5 flex-1 rounded-full ${
+                              isDone && !isActive ? 'bg-emerald-400' : 'bg-slate-200'
+                            }`}
+                          />
+                        )}
                       </div>
-                      {i < steps.length - 1 && (
-                        <div
-                          className={`mx-2 mb-5 h-0.5 flex-1 rounded-full ${
-                            isDone && !isActive ? 'bg-emerald-400' : 'bg-slate-200'
-                          }`}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
+        </div>
       </div>
 
       {/* ── 2-Column Info Grid ── */}
