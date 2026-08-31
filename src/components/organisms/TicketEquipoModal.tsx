@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '../atoms/Button';
@@ -19,6 +19,8 @@ interface TicketEquipoModalProps {
   onClose: () => void;
 }
 
+type TicketKind = 'customer' | 'technician';
+
 // ──────────────────────────────────────────────
 // TicketEquipoModal
 // ──────────────────────────────────────────────
@@ -31,6 +33,7 @@ export function TicketEquipoModal({
   onClose,
 }: TicketEquipoModalProps) {
   const { config } = useConfig();
+  const [ticket, setTicket] = useState<TicketKind>('customer');
 
   // Escape closes the modal
   useEffect(() => {
@@ -53,19 +56,24 @@ export function TicketEquipoModal({
 
   const imei = orden.imei;
   const serie = orden.numeroSerie;
-  const qrValue = `${window.location.origin}/estado/${orden.id}`;
+
+  const customerQrValue = `${window.location.origin}/estado/${orden.id}`;
+  const technicianQrValue = `${window.location.origin}/reparaciones/${orden.id}`;
+
+  const printTargetId =
+    ticket === 'customer' ? 'ticket-print-customer' : 'ticket-print-technician';
 
   const printStyles = `
     @media print {
       body * { visibility: hidden; }
-      #ticket-print, #ticket-print * { visibility: visible; }
-      #ticket-print {
+      #${printTargetId}, #${printTargetId} * { visibility: visible; }
+      #${printTargetId} {
         position: absolute;
         left: 0;
         top: 0;
         width: 100%;
       }
-      #ticket-print .ticket-no-print { display: none !important; }
+      #${printTargetId} .ticket-no-print { display: none !important; }
     }
   `;
 
@@ -79,8 +87,7 @@ export function TicketEquipoModal({
           aria-hidden="true"
         />
         <div
-          id="ticket-print"
-          className="relative z-10 w-full max-w-[320px] rounded-xl bg-white shadow-xl"
+          className="relative z-10 w-full max-w-[380px] rounded-xl bg-white shadow-xl"
           role="dialog"
           aria-modal="true"
           aria-label="Ticket QR de Equipo"
@@ -99,51 +106,127 @@ export function TicketEquipoModal({
             </button>
           </div>
 
-          {/* Sticker body */}
-          <div className="px-5 py-6">
-            {/* Header */}
-            <div className="mb-4 text-center">
-              <p className="text-sm font-bold uppercase tracking-wide text-slate-900">
-                {config.nombreTaller}
-              </p>
-              <p className="mt-1 text-xs font-medium text-slate-700">
-                N° de Reparación: #{orden.id}
-              </p>
-            </div>
-
-            {/* QR */}
-            <div className="flex justify-center">
-              <div className="rounded-lg border border-slate-200 p-2">
-                <QRCodeSVG value={qrValue} size={140} />
-              </div>
-            </div>
-
-            {/* Data below QR */}
-            <div className="mt-4 space-y-2 text-center">
-              <p className="text-sm font-medium text-slate-800">
-                {equipoLabel}
-              </p>
-              <div className="space-y-1 text-xs text-slate-600">
-                <p>Cliente: {orden.clienteId != null ? `Cliente #${orden.clienteId}` : '—'}</p>
-                {imei && <p>IMEI: {imei}</p>}
-                {serie && <p>N° de Serie: {serie}</p>}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <p className="mt-4 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
-              Registrado: {formatDate(orden.fechaEntrada)}
-            </p>
+          {/* Ticket switcher (hidden on print) */}
+          <div className="ticket-no-print grid grid-cols-2 gap-2 px-5 pt-4">
+            <button
+              onClick={() => setTicket('customer')}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                ticket === 'customer'
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Para el cliente
+            </button>
+            <button
+              onClick={() => setTicket('technician')}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                ticket === 'technician'
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Para el técnico
+            </button>
           </div>
 
-          {/* Footer buttons (hidden on print) */}
-          <div className="ticket-no-print flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
-            <Button variant="secondary" onClick={onClose}>
-              Cerrar
-            </Button>
-            <Button onClick={() => window.print()}>
-              Imprimir
-            </Button>
+          {/* Ticket body */}
+          <div className="px-5 py-6">
+            {ticket === 'customer' ? (
+              <div
+                id="ticket-print-customer"
+                className="rounded-xl border border-slate-200 p-4"
+              >
+                {/* Header */}
+                <div className="mb-4 text-center">
+                  <p className="text-sm font-bold uppercase tracking-wide text-slate-900">
+                    {config.nombreTaller}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-slate-700">
+                    N° de Reparación: #{orden.id}
+                  </p>
+                </div>
+
+                {/* QR */}
+                <div className="flex justify-center">
+                  <div className="rounded-lg border border-slate-200 p-2">
+                    <QRCodeSVG value={customerQrValue} size={140} />
+                  </div>
+                </div>
+
+                {/* Data below QR */}
+                <div className="mt-4 space-y-2 text-center">
+                  <p className="text-sm font-medium text-slate-800">
+                    {equipoLabel}
+                  </p>
+                  <div className="space-y-1 text-xs text-slate-600">
+                    <p>Cliente: {orden.clienteId != null ? `Cliente #${orden.clienteId}` : '—'}</p>
+                    {imei && <p>IMEI: {imei}</p>}
+                    {serie && <p>N° de Serie: {serie}</p>}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <p className="mt-4 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
+                  Registrado: {formatDate(orden.fechaEntrada)}
+                </p>
+
+                {/* Footer buttons (hidden on print) */}
+                <div className="ticket-no-print mt-4 flex items-center justify-end gap-3">
+                  <Button variant="secondary" onClick={onClose}>
+                    Cerrar
+                  </Button>
+                  <Button onClick={() => window.print()}>Imprimir</Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                id="ticket-print-technician"
+                className="rounded-xl border border-slate-200 p-4"
+              >
+                {/* Header */}
+                <div className="mb-4 text-center">
+                  <p className="text-sm font-bold uppercase tracking-wide text-slate-900">
+                    {config.nombreTaller}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-slate-700">
+                    Ticket Técnico · Reparación #{orden.id}
+                  </p>
+                </div>
+
+                {/* QR */}
+                <div className="flex justify-center">
+                  <div className="rounded-lg border border-slate-200 p-2">
+                    <QRCodeSVG value={technicianQrValue} size={140} />
+                  </div>
+                </div>
+
+                {/* Data below QR */}
+                <div className="mt-4 space-y-2 text-center">
+                  <p className="text-sm font-medium text-slate-800">
+                    {equipoLabel}
+                  </p>
+                  <div className="space-y-1 text-xs text-slate-600">
+                    <p>Cliente: {orden.clienteId != null ? `Cliente #${orden.clienteId}` : '—'}</p>
+                    {imei && <p>IMEI: {imei}</p>}
+                    {serie && <p>N° de Serie: {serie}</p>}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <p className="mt-4 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
+                  Registrado: {formatDate(orden.fechaEntrada)}
+                </p>
+
+                {/* Footer buttons (hidden on print) */}
+                <div className="ticket-no-print mt-4 flex items-center justify-end gap-3">
+                  <Button variant="secondary" onClick={onClose}>
+                    Cerrar
+                  </Button>
+                  <Button onClick={() => window.print()}>Imprimir</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
