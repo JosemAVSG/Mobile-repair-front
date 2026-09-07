@@ -1105,13 +1105,17 @@ export function OrdenDetailPage() {
                 </Button>
               </Tooltip>
             )}
-            {canViewOrden && orden.estado === EstadoOrden.ESPERANDO_ENTREGA && (
-              <Tooltip content="Factura (cobro)">
-                <Button variant="secondary" size="lg" onClick={() => setFacturaOpen(true)}>
-                  <FileText size={16} />
-                </Button>
-              </Tooltip>
-            )}
+            {canViewOrden &&
+              (orden.estado === EstadoOrden.ESPERANDO_ENTREGA ||
+                orden.estado === EstadoOrden.PAGADO ||
+                orden.estado === EstadoOrden.ENTREGADO ||
+                orden.estado === EstadoOrden.GARANTIA) && (
+                <Tooltip content="Factura">
+                  <Button variant="secondary" size="lg" onClick={() => setFacturaOpen(true)}>
+                    <FileText size={16} />
+                  </Button>
+                </Tooltip>
+              )}
           </div>
 
           {/* ── Mini Progress Timeline ── */}
@@ -1903,7 +1907,11 @@ export function OrdenDetailPage() {
         cliente={cliente ?? null}
         marca={marcaEquipo}
         modelo={modeloEquipo}
-        onConfirmPago={handleConfirmarPago}
+        onConfirmPago={
+          orden.estado === EstadoOrden.ESPERANDO_ENTREGA
+            ? handleConfirmarPago
+            : undefined
+        }
         confirmandoPago={facturaConfirmandoPago}
         onClose={() => setFacturaOpen(false)}
       />
