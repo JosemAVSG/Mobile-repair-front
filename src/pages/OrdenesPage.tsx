@@ -11,7 +11,6 @@ import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import { Badge } from '../components/atoms/Badge';
 import { SearchField } from '../components/molecules/SearchField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
-import { FacturaModal } from '../components/organisms/FacturaModal';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { apiPost, apiPut } from '../api/client';
@@ -334,10 +333,6 @@ export function OrdenesPage() {
     }
   }, [asignTarget, user?.tecnicoId, asignarMutation]);
 
-  // ───── Factura modal state ─────
-  const [facturaOpen, setFacturaOpen] = useState(false);
-  const [facturaOrden, setFacturaOrden] = useState<OrdenTrabajo | null>(null);
-
   // ───── Cascade: marcas by tipo, modelos by marca ─────
 
   const marcasFiltradas = useMemo(
@@ -375,8 +370,6 @@ export function OrdenesPage() {
       setCreateTipoReparacion('');
       setCreatePrecioRevision('');
       setCreateTecnicoId('');
-      setFacturaOpen(false);
-      setFacturaOrden(null);
       setCreateErrors({});
       setPaso(1);
       setCreateOpen(true);
@@ -410,8 +403,6 @@ export function OrdenesPage() {
     setCreateTipoReparacion('');
     setCreatePrecioRevision('');
     setCreateTecnicoId('');
-    setFacturaOpen(false);
-    setFacturaOrden(null);
     setCreateErrors({});
     setPaso(1);
   }, []);
@@ -462,8 +453,6 @@ export function OrdenesPage() {
       };
       const created = await createMutation.mutateAsync(body);
       closeCreate();
-      setFacturaOrden(created);
-      setFacturaOpen(true);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al crear reparación';
@@ -1084,24 +1073,6 @@ export function OrdenesPage() {
           )}
         </div>
       </Modal>
-
-      {/* ───── Factura Modal ───── */}
-      <FacturaModal
-        isOpen={facturaOpen}
-        orden={facturaOrden}
-        cliente={facturaOrden ? (clienteMap.get(facturaOrden.clienteId) ?? null) : null}
-        marca={
-          facturaOrden
-            ? (marcaMap.get(facturaOrden.marcaId ?? 0) ?? null)
-            : null
-        }
-        modelo={
-          facturaOrden
-            ? (modeloMap.get(facturaOrden.modeloId ?? 0) ?? null)
-            : null
-        }
-        onClose={() => setFacturaOpen(false)}
-      />
 
       {/* ───── Confirmar Asignarme (técnico) ───── */}
       <ConfirmDialog

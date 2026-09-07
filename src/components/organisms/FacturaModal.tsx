@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../atoms/Button';
 import { Icon } from '../atoms/Icon';
@@ -18,6 +18,9 @@ interface FacturaModalProps {
   marca?: Marca | null;
   modelo?: Modelo | null;
   onClose: () => void;
+  /** Si se provee, el modal exige imprimir antes de registrar el pago. */
+  onConfirmPago?: () => void;
+  confirmandoPago?: boolean;
 }
 
 // ──────────────────────────────────────────────
@@ -31,8 +34,11 @@ export function FacturaModal({
   marca,
   modelo,
   onClose,
+  onConfirmPago,
+  confirmandoPago = false,
 }: FacturaModalProps) {
   const { config } = useConfig();
+  const [printAttempted, setPrintAttempted] = useState(false);
 
   // Escape closes the modal
   useEffect(() => {
@@ -43,6 +49,11 @@ export function FacturaModal({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
+
+  // Cada apertura reinicia el requisito de impresión.
+  useEffect(() => {
+    if (isOpen) setPrintAttempted(false);
+  }, [isOpen, orden?.id]);
 
   if (!isOpen || !orden) return null;
 
@@ -148,9 +159,30 @@ export function FacturaModal({
             <Button variant="secondary" onClick={onClose}>
               Cerrar
             </Button>
-            <Button onClick={() => window.print()}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setPrintAttempted(true);
+                window.print();
+              }}
+            >
               Imprimir
             </Button>
+            {onConfirmPago && (
+              <Button
+                variant="primary"
+                disabled={!printAttempted}
+                loading={confirmandoPago}
+                onClick={onConfirmPago}
+                title={
+                  printAttempted
+                    ? 'Registrar pago'
+                    : 'Primero presione Imprimir para poder registrar el pago'
+                }
+              >
+                Confirmo que imprimí — Registrar Pago
+              </Button>
+            )}
           </div>
         </div>
       </div>

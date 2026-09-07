@@ -453,6 +453,7 @@ export function OrdenDetailPage() {
   // ───── Técnico responsable state ─────
 
   const [facturaOpen, setFacturaOpen] = useState(false);
+  const [facturaConfirmandoPago, setFacturaConfirmandoPago] = useState(false);
   const [confirmAsignarme, setConfirmAsignarme] = useState(false);
   const [asignando, setAsignando] = useState(false);
 
@@ -526,10 +527,34 @@ export function OrdenDetailPage() {
         setRepuestosModalOpen(true);
         return;
       }
+      // Intercept ESPERANDO_ENTREGA → PAGADO: exige imprimir la factura primero
+      if (orden.estado === EstadoOrden.ESPERANDO_ENTREGA && target === EstadoOrden.PAGADO) {
+        setFacturaOpen(true);
+        return;
+      }
       await executeTransition(target);
     },
     [orden, executeTransition],
   );
+
+  // El pago se registra desde la factura, tras confirmar la impresión.
+  const handleConfirmarPago = useCallback(async () => {
+    if (!orden) return;
+    setFacturaConfirmandoPago(true);
+    try {
+      await transitionMutation.mutateAsync({
+        id: orden.id,
+        target: EstadoOrden.PAGADO,
+      });
+      setFacturaOpen(false);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al registrar pago';
+      alert(msg);
+    } finally {
+      setFacturaConfirmandoPago(false);
+    }
+  }, [orden, transitionMutation]);
 
   // ───── Mutation: iniciar reparación (creates repair + advances state) ─────
   const iniciarReparacionMutation = useMutation({
@@ -1080,8 +1105,8 @@ export function OrdenDetailPage() {
                 </Button>
               </Tooltip>
             )}
-            {canViewOrden && (
-              <Tooltip content="Generar factura">
+            {canViewOrden && orden.estado === EstadoOrden.ESPERANDO_ENTREGA && (
+              <Tooltip content="Factura (cobro)">
                 <Button variant="secondary" size="lg" onClick={() => setFacturaOpen(true)}>
                   <FileText size={16} />
                 </Button>
@@ -1878,6 +1903,8 @@ export function OrdenDetailPage() {
         cliente={cliente ?? null}
         marca={marcaEquipo}
         modelo={modeloEquipo}
+        onConfirmPago={handleConfirmarPago}
+        confirmandoPago={facturaConfirmandoPago}
         onClose={() => setFacturaOpen(false)}
       />
 
