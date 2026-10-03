@@ -7,6 +7,7 @@ import { formatDate, tipoDispositivoLabel } from '../../utils/formatters';
 import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Marca, Modelo } from '../../types';
 import { POWERED_BY } from '../../utils/brand';
+import { getPublicBaseUrl, getSeguimientoUrl } from '../../utils/publicUrl';
 
 // ──────────────────────────────────────────────
 // Props
@@ -58,8 +59,8 @@ export function TicketEquipoModal({
   const imei = orden.imei;
   const serie = orden.numeroSerie;
 
-  const customerQrValue = `${window.location.origin}/estado/${orden.id}`;
-  const technicianQrValue = `${window.location.origin}/reparaciones/${orden.id}`;
+  const customerQrValue = getSeguimientoUrl(orden);
+  const technicianQrValue = `${getPublicBaseUrl()}/reparaciones/${orden.id}`;
 
   const printTargetId =
     ticket === 'customer' ? 'ticket-print-customer' : 'ticket-print-technician';

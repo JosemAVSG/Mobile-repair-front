@@ -15,7 +15,7 @@ import { createModelo, deleteModelo } from '../api/modelos';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import { buildMarcaMap, buildMarcaObjMap, buildMarcaOptions } from '../utils/maps';
 import type { Modelo, ModeloRequest } from '../types';
-import { CategoriaMarca } from '../types';
+import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas, useModelos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -35,9 +35,7 @@ interface ModeloRow {
 // ──────────────────────────────────────────────
 
 const CATEGORIA_FILTER_OPTIONS = [
-  { value: CategoriaMarca.CELULARES, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES] },
-  { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
-  { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
+  ...CATEGORIAS_MARCA_ACTIVAS.map((c) => ({ value: c, label: CATEGORIA_MARCA_LABELS[c] })),
 ];
 
 // ──────────────────────────────────────────────

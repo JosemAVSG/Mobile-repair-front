@@ -123,8 +123,18 @@ export const deleteFoto = async (fotoId: number): Promise<unknown> => {
   return ApiClient.delete(`/api/fotos/${fotoId}`);
 };
 
+/**
+ * Estado público de una reparación. `ref` es el código público del QR;
+ * si es numérico, es un ticket impreso antes del código (endpoint legacy,
+ * que no devuelve datos del cliente).
+ */
 export const getPublicRepairStatus = async (
-  id: string,
+  ref: string,
 ): Promise<PublicRepairStatus> => {
-  return ApiClient.get<PublicRepairStatus>(`/api/ordenes/${id}/public`);
+  if (/^\d+$/.test(ref)) {
+    return ApiClient.get<PublicRepairStatus>(`/api/ordenes/${ref}/public`);
+  }
+  return ApiClient.get<PublicRepairStatus>(
+    `/api/ordenes/seguimiento/${encodeURIComponent(ref)}`,
+  );
 };

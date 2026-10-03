@@ -38,18 +38,43 @@ export interface LoginResponse {
 
 export enum CategoriaMarca {
   CELULARES = 'CELULARES',
+  /** @deprecated línea blanca: solo para marcas ya cargadas */
   LINEA_BLANCA = 'LINEA_BLANCA',
   COMPUTADORAS = 'COMPUTADORAS',
+  CONSOLAS = 'CONSOLAS',
+  TABLETS = 'TABLETS',
 }
 
 export enum TipoDispositivo {
   CELULAR = 'CELULAR',
+  /** @deprecated línea blanca: solo para órdenes antiguas */
   MICROONDAS = 'MICROONDAS',
+  /** @deprecated */
   NEVERA = 'NEVERA',
+  /** @deprecated */
   COCINA = 'COCINA',
+  /** @deprecated */
   LAVADORA = 'LAVADORA',
   COMPUTADORA = 'COMPUTADORA',
+  CONSOLA = 'CONSOLA',
+  TABLET = 'TABLET',
 }
+
+/** Tipos con los que se pueden crear órdenes nuevas (los demás quedan por historial). */
+export const TIPOS_DISPOSITIVO_ACTIVOS: TipoDispositivo[] = [
+  TipoDispositivo.CELULAR,
+  TipoDispositivo.COMPUTADORA,
+  TipoDispositivo.TABLET,
+  TipoDispositivo.CONSOLA,
+];
+
+/** Categorías de marca que se pueden asignar a marcas nuevas. */
+export const CATEGORIAS_MARCA_ACTIVAS: CategoriaMarca[] = [
+  CategoriaMarca.CELULARES,
+  CategoriaMarca.COMPUTADORAS,
+  CategoriaMarca.TABLETS,
+  CategoriaMarca.CONSOLAS,
+];
 
 export enum EstadoOrden {
   REGISTRO = 'REGISTRO',
@@ -118,6 +143,8 @@ export interface Tecnico {
 
 export interface OrdenTrabajo {
   id: number;
+  /** Código no adivinable usado en el QR público */
+  codigoPublico?: string | null;
   clienteId: number;
   tecnicoId?: number | null;
   marcaId?: number | null;
@@ -281,7 +308,7 @@ export type PublicStage =
 export type PublicRepairStatus = {
   id: string;
   numeroOrden: string;
-  cliente: { nombre: string; telefono?: string };
+  cliente: { nombre?: string | null };
   equipo: { modelo: string; marca?: string };
   estadoOrden: EstadoOrden;
   fechaEstimadaEntrega?: string;

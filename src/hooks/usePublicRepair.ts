@@ -6,7 +6,7 @@ import type { PublicRepairStatus } from '../types';
 const QUERY_KEY = ['ordenes', 'public'] as const;
 
 /**
- * Consulta pública el estado de una reparación por ID.
+ * Consulta pública el estado de una reparación por código público (o ID legacy).
  * No requiere autenticación. No reintenta 404s (orden desconocida).
  */
 export function usePublicRepair(id: string | undefined) {

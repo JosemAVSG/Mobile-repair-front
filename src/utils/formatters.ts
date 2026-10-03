@@ -28,12 +28,16 @@ export const TIPO_DISPOSITIVO_LABELS: Record<TipoDispositivo, string> = {
   [TipoDispositivo.COCINA]: 'Cocina',
   [TipoDispositivo.LAVADORA]: 'Lavadora',
   [TipoDispositivo.COMPUTADORA]: 'Computadora',
+  [TipoDispositivo.CONSOLA]: 'Consola',
+  [TipoDispositivo.TABLET]: 'Tablet',
 };
 
 export const CATEGORIA_MARCA_LABELS: Record<CategoriaMarca, string> = {
   [CategoriaMarca.CELULARES]: 'Celulares',
   [CategoriaMarca.LINEA_BLANCA]: 'Línea Blanca',
   [CategoriaMarca.COMPUTADORAS]: 'Computadoras',
+  [CategoriaMarca.CONSOLAS]: 'Consolas',
+  [CategoriaMarca.TABLETS]: 'Tablets',
 };
 
 export const TIPO_REPARACION_LABELS: Record<TipoReparacion, string> = {
