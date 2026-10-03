@@ -3,6 +3,7 @@ import { MainLayout } from './components/templates/MainLayout';
 import { RequireRole } from './components/auth/RequireRole';
 import { useAuth } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
+import { RegistroPage } from './pages/RegistroPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { MarcasPage } from './pages/MarcasPage';
 import { ModelosPage } from './pages/ModelosPage';
@@ -58,6 +59,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/registro" element={<RegistroPage />} />
 
       {/* /reparaciones/:id mantiene compatibilidad con QR antiguos.
           Autenticado → detalle con layout; sin sesión → redirige a /estado/:id. */}

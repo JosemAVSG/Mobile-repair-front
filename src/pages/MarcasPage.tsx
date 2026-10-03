@@ -16,6 +16,7 @@ import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../uti
 import type { Marca, MarcaRequest } from '../types';
 import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas } from '../hooks/useQueries';
+import { catalogoCreateError, catalogoDeleteError } from '../utils/catalogo';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -105,7 +106,7 @@ export function MarcasPage() {
       setCategoria('');
       setFieldErrors({});
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al crear marca';
+      const msg = catalogoCreateError(err, 'marca');
       setFieldErrors({ nombre: msg });
     } finally {
       setSubmitting(false);
@@ -122,7 +123,7 @@ export function MarcasPage() {
       await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al eliminar';
+      const msg = catalogoDeleteError(err);
       alert(msg);
     } finally {
       setDeleting(false);
@@ -141,7 +142,17 @@ export function MarcasPage() {
   // ───── Columns ─────
 
   const columns: Column<Marca>[] = [
-    { key: 'nombre', label: 'Nombre', sortable: true },
+    {
+      key: 'nombre',
+      label: 'Nombre',
+      sortable: true,
+      render: (row) => (
+        <span className="inline-flex items-center gap-2">
+          {row.nombre}
+          {row.global && <Badge variant="info">Global</Badge>}
+        </span>
+      ),
+    },
     {
       key: 'categoria',
       label: 'Categoría',
@@ -160,18 +171,21 @@ export function MarcasPage() {
     {
       key: 'id',
       label: 'Acciones',
-      render: (row) => (
-        <Button
-          variant="danger"
-          size="sm"
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            setDeleteTarget(row);
-          }}
-        >
-          Eliminar
-        </Button>
-      ),
+      render: (row) =>
+        row.global ? (
+          <span className="text-xs text-slate-400">Solo lectura</span>
+        ) : (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+          >
+            Eliminar
+          </Button>
+        ),
     },
   ];
 
@@ -245,22 +259,29 @@ export function MarcasPage() {
                   <p className="truncate text-base font-semibold text-slate-900">
                     {marca.nombre}
                   </p>
-                  <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                  <span className="inline-flex items-center gap-1.5">
+                    {marca.global && <Badge variant="info">Global</Badge>}
+                    <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                  </span>
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
                   <span className="text-xs text-slate-500">
                     Creado {formatDate(marca.createdAt)}
                   </span>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation();
-                      setDeleteTarget(marca);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
+                  {marca.global ? (
+                    <span className="text-xs text-slate-400">Solo lectura</span>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setDeleteTarget(marca);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  )}
                 </div>
               </>
             );

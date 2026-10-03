@@ -12,3 +12,15 @@ export function isOrdenAtrasada(
   if (TERMINAL_STATES.has(orden.estado)) return false;
   return new Date(orden.fechaEntrega).getTime() < Date.now();
 }
+
+/**
+ * Número de orden a mostrar (sin `#`). Usa el número por taller que entrega el
+ * backend; si falta (datos viejos/respuestas antiguas) cae al id con el mismo
+ * formato de 4 dígitos.
+ */
+export function formatNumeroOrden(
+  orden: Pick<OrdenTrabajo, 'id' | 'numeroOrden'>,
+): string {
+  const numero = orden.numeroOrden?.trim();
+  return numero ? numero : String(orden.id).padStart(4, '0');
+}

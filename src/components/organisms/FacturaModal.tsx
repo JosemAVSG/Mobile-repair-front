@@ -4,6 +4,7 @@ import { Button } from '../atoms/Button';
 import { Icon } from '../atoms/Icon';
 import { StatusBadge } from '../molecules/StatusBadge';
 import { formatCurrency, formatDateTime, tipoDispositivoLabel } from '../../utils/formatters';
+import { formatNumeroOrden } from '../../utils/ordenes';
 import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Cliente, Marca, Modelo } from '../../types';
 
@@ -125,7 +126,7 @@ export function FacturaModal({
             </div>
 
             <div className="divide-y divide-slate-200 border-t border-b border-slate-300">
-              <Row label="N° de Orden" value={`#${orden.id}`} />
+              <Row label="N° de Orden" value={`#${formatNumeroOrden(orden)}`} />
               <Row label="Cliente" value={cliente?.nombre ?? `Cliente #${orden.clienteId}`} />
               <Row label="Equipo" value={equipoLabel} />
               {imei && <Row label="IMEI" value={imei} />}

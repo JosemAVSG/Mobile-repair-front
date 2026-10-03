@@ -17,6 +17,7 @@ import { buildMarcaMap, buildMarcaObjMap, buildMarcaOptions } from '../utils/map
 import type { Modelo, ModeloRequest } from '../types';
 import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas, useModelos } from '../hooks/useQueries';
+import { catalogoCreateError, catalogoDeleteError } from '../utils/catalogo';
 
 // ──────────────────────────────────────────────
 // Types
@@ -25,6 +26,7 @@ import { useMarcas, useModelos } from '../hooks/useQueries';
 interface ModeloRow {
   id: number;
   nombre: string;
+  global: boolean;
   marcaNombre: string;
   marcaCategoria: CategoriaMarca | null;
   createdAt: string;
@@ -118,6 +120,7 @@ export function ModelosPage() {
     return filtered.map((m) => ({
       id: m.id,
       nombre: m.nombre,
+      global: m.global === true,
       marcaNombre: marcaMap.get(m.marcaId) ?? `Marca #${m.marcaId}`,
       marcaCategoria: marcaObjMap.get(m.marcaId)?.categoria ?? null,
       createdAt: m.createdAt,
@@ -152,7 +155,7 @@ export function ModelosPage() {
       setFiltroCategoriaForm('');
       setFieldErrors({});
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al crear modelo';
+      const msg = catalogoCreateError(err, 'modelo');
       setFieldErrors({ nombre: msg });
     } finally {
       setSubmitting(false);
@@ -169,7 +172,7 @@ export function ModelosPage() {
       await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al eliminar';
+      const msg = catalogoDeleteError(err);
       alert(msg);
     } finally {
       setDeleting(false);
@@ -189,7 +192,17 @@ export function ModelosPage() {
   // ───── Columns ─────
 
   const columns: Column<ModeloRow>[] = [
-    { key: 'nombre', label: 'Nombre', sortable: true },
+    {
+      key: 'nombre',
+      label: 'Nombre',
+      sortable: true,
+      render: (row) => (
+        <span className="inline-flex items-center gap-2">
+          {row.nombre}
+          {row.global && <Badge variant="info">Global</Badge>}
+        </span>
+      ),
+    },
     { key: 'marcaNombre', label: 'Marca', sortable: true },
     {
       key: 'marcaCategoria',
@@ -209,20 +222,23 @@ export function ModelosPage() {
     {
       key: 'id',
       label: 'Acciones',
-      render: (row) => (
-        <Button
-          variant="danger"
-          size="sm"
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            // Reconstruct full Modelo from row
-            const target = (modelos ?? []).find((m) => m.id === row.id);
-            if (target) setDeleteTarget(target);
-          }}
-        >
-          Eliminar
-        </Button>
-      ),
+      render: (row) =>
+        row.global ? (
+          <span className="text-xs text-slate-400">Solo lectura</span>
+        ) : (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              // Reconstruct full Modelo from row
+              const target = (modelos ?? []).find((m) => m.id === row.id);
+              if (target) setDeleteTarget(target);
+            }}
+          >
+            Eliminar
+          </Button>
+        ),
     },
   ];
 
@@ -309,27 +325,34 @@ export function ModelosPage() {
                   <p className="truncate text-base font-semibold text-slate-900">
                     {row.nombre}
                   </p>
-                  {cfg && <Badge variant={cfg.variant}>{cfg.label}</Badge>}
+                  <span className="inline-flex items-center gap-1.5">
+                    {row.global && <Badge variant="info">Global</Badge>}
+                    {cfg && <Badge variant={cfg.variant}>{cfg.label}</Badge>}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-600">{row.marcaNombre}</p>
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
                   <span className="text-xs text-slate-500">
                     Creado {formatDate(row.createdAt)}
                   </span>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation();
-                      // Reconstruct full Modelo from row
-                      const target = (modelos ?? []).find(
-                        (m) => m.id === row.id,
-                      );
-                      if (target) setDeleteTarget(target);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
+                  {row.global ? (
+                    <span className="text-xs text-slate-400">Solo lectura</span>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        // Reconstruct full Modelo from row
+                        const target = (modelos ?? []).find(
+                          (m) => m.id === row.id,
+                        );
+                        if (target) setDeleteTarget(target);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  )}
                 </div>
               </>
             );

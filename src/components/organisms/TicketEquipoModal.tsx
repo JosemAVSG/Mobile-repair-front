@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '../atoms/Button';
 import { Icon } from '../atoms/Icon';
 import { formatDate, tipoDispositivoLabel } from '../../utils/formatters';
+import { formatNumeroOrden } from '../../utils/ordenes';
 import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Marca, Modelo } from '../../types';
 import { POWERED_BY } from '../../utils/brand';
@@ -145,7 +146,7 @@ export function TicketEquipoModal({
                     {config.nombreTaller}
                   </p>
                   <p className="mt-1 text-xs font-medium text-slate-700">
-                    N° de Reparación: #{orden.id}
+                    N° de Reparación: #{formatNumeroOrden(orden)}
                   </p>
                 </div>
 
@@ -193,7 +194,7 @@ export function TicketEquipoModal({
                     {config.nombreTaller}
                   </p>
                   <p className="mt-1 text-xs font-medium text-slate-700">
-                    Ticket Técnico · Reparación #{orden.id}
+                    Ticket Técnico · Reparación #{formatNumeroOrden(orden)}
                   </p>
                 </div>
 

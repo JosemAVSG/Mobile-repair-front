@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { getMe, login as loginRequest } from '../api/auth';
-import type { AuthUser, LoginResponse } from '../types';
+import { useQueryClient } from '@tanstack/react-query';
+import { getMe, login as loginRequest, registerTaller } from '../api/auth';
+import type { AuthUser, LoginResponse, RegisterTallerRequest } from '../types';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -8,6 +9,9 @@ interface AuthContextType {
   /** Loguea contra POST /api/auth/login. Resuelve con el usuario autenticado
    *  o lanza un ApiError (mensaje del backend, p.ej. "Credenciales inválidas"). */
   login: (username: string, password: string) => Promise<AuthUser>;
+  /** Alta de un taller nuevo (POST /api/auth/register-taller). Deja la sesión
+   *  iniciada con el admin recién creado. */
+  register: (req: RegisterTallerRequest) => Promise<AuthUser>;
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -62,6 +66,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
   // Estado inicial desde localStorage (evita parpadeo de pantalla de login)
   const [initialStored] = useState<StoredAuth | null>(() => loadFromStorage());
   const [user, setUser] = useState<AuthUser | null>(() => initialStored?.user ?? null);
@@ -98,23 +103,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [initialStored]);
 
+  // Inicia sesión con la respuesta del backend (login o registro). Limpia la
+  // caché de react-query ANTES de actualizar el estado: así nunca se mezclan
+  // datos de un taller con los de otro.
+  const startSession = useCallback(
+    (response: LoginResponse): AuthUser => {
+      queryClient.clear();
+      const tallerId = response.tallerId ?? response.user.tallerId ?? null;
+      const next: StoredAuth = {
+        token: response.token,
+        user: normalizeUser({ ...response.user, tallerId }),
+      };
+      saveToStorage(next);
+      setUser(next.user);
+      setToken(response.token);
+      return next.user;
+    },
+    [queryClient],
+  );
+
   const login = useCallback(async (username: string, password: string): Promise<AuthUser> => {
     const response: LoginResponse = await loginRequest(username, password);
-    const next: StoredAuth = {
-      token: response.token,
-      user: normalizeUser(response.user),
-    };
-    saveToStorage(next);
-    setUser(next.user);
-    setToken(response.token);
-    return next.user;
-  }, []);
+    return startSession(response);
+  }, [startSession]);
+
+  const register = useCallback(
+    async (req: RegisterTallerRequest): Promise<AuthUser> => {
+      const response: LoginResponse = await registerTaller(req);
+      return startSession(response);
+    },
+    [startSession],
+  );
 
   const logout = useCallback(() => {
+    // Caché fuera ANTES de cambiar el estado: ningún dato del taller anterior
+    // puede quedar visible para la siguiente sesión.
+    queryClient.clear();
     clearStorage();
     setUser(null);
     setToken(null);
-  }, []);
+  }, [queryClient]);
 
   const isAdmin = user?.rol === 'ADMIN';
 
@@ -124,6 +152,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         token,
         login,
+        register,
         logout,
         isAuthenticated: user !== null,
         isAdmin,

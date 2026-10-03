@@ -14,6 +14,7 @@ import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { deleteCliente, updateCliente } from '../api/clientes';
 import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters';
+import { formatNumeroOrden } from '../utils/ordenes';
 import type { ClienteRequest, OrdenTrabajo } from '../types';
 import { useCliente, useOrdenes, useMarcas, useModelos } from '../hooks/useQueries';
 
@@ -83,7 +84,7 @@ export function ClienteDetailPage() {
   // ───── Orden columns ─────
 
   const ordColumns: Column<OrdenTrabajo>[] = [
-    { key: 'id', label: 'ID', sortable: true },
+    { key: 'numeroOrden', label: 'N°', sortable: true, render: (row) => formatNumeroOrden(row) },
     {
       key: 'tipo',
       label: 'Equipo / Tipo',
@@ -330,7 +331,7 @@ export function ClienteDetailPage() {
                 <>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-slate-700">
-                      #{row.id}
+                      #{formatNumeroOrden(row)}
                     </span>
                     <StatusBadge estado={row.estado} />
                   </div>

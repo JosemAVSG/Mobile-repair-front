@@ -52,7 +52,7 @@ import {
   buildMensajeEntregaGeneral,
   copyTextToClipboard,
 } from '../utils/whatsapp';
-import { isOrdenAtrasada } from '../utils/ordenes';
+import { isOrdenAtrasada, formatNumeroOrden } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
 import type { EtapaFoto, FotoOrden, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
@@ -1011,7 +1011,7 @@ export function OrdenDetailPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-slate-800">
-              Reparación #{orden.id}
+              Reparación #{formatNumeroOrden(orden)}
             </h2>
             <StatusBadge estado={orden.estado} />
           </div>
@@ -1917,7 +1917,7 @@ export function OrdenDetailPage() {
       <ConfirmDialog
         isOpen={confirmAsignarme}
         title="Asignar reparación"
-        message={`¿Quieres asignarte la reparación #${orden.id}?`}
+        message={`¿Quieres asignarte la reparación #${formatNumeroOrden(orden)}?`}
         confirmLabel="Asignarme"
         cancelLabel="Cancelar"
         variant="warning"

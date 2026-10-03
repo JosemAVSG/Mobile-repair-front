@@ -1,17 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getConfig, getPublicConfig, updateConfig } from '../api/configuracion';
+import { getConfig, updateConfig } from '../api/configuracion';
 import type { ShopConfigForm } from '../types';
 
 const QUERY_KEY = ['configuracion'] as const;
-
-/** Configuración pública del taller (sin autenticación). */
-export function usePublicShopConfig() {
-  return useQuery({
-    queryKey: [...QUERY_KEY, 'public'],
-    queryFn: () => getPublicConfig(),
-    staleTime: 5 * 60 * 1000,
-  });
-}
 
 /** Configuración del taller para administradores (requiere rol ADMIN). */
 export function useAdminShopConfig() {
