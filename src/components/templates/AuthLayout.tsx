@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Icon } from '../atoms/Icon';
 import { useConfig } from '../../context/ConfigContext';
+import { POWERED_BY } from '../../utils/brand';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -81,7 +82,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           </div>
 
           <p className="text-sm text-white/60">
-            © {year} {config.nombreTaller}
+            © {year} {config.nombreTaller} · {POWERED_BY}
           </p>
         </div>
       </aside>

@@ -3,6 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { Icon, type IconName } from '../atoms/Icon';
 import { useConfig } from '../../context/ConfigContext';
 import { useAuth } from '../../hooks/useAuth';
+import { PRODUCT_NAME } from '../../utils/brand';
 
 interface NavItem {
   path: string;
@@ -236,7 +237,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               </Link>
             ))}
             <p className="mt-3 px-3 text-xs text-slate-500">
-              Sistema de gestión de reparaciones
+              {PRODUCT_NAME} · Gestión de reparaciones
             </p>
           </div>
         )}
