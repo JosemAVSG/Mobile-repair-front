@@ -451,7 +451,7 @@ export function OrdenesPage() {
             : undefined
           : (user?.tecnicoId ?? undefined),
       };
-      const created = await createMutation.mutateAsync(body);
+      await createMutation.mutateAsync(body);
       closeCreate();
     } catch (err: unknown) {
       const msg =
