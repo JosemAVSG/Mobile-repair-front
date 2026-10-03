@@ -12,6 +12,7 @@ import {
   type PublicStage,
   EstadoOrden,
 } from '../types';
+import { POWERED_BY } from '../utils/brand';
 
 // ──────────────────────────────────────────────
 // Stages
@@ -388,6 +389,9 @@ export function PublicRepairStatusPage() {
         <p className="mx-auto mt-6 max-w-xl text-center text-xs text-slate-400">
           Esta información es de solo lectura. Para más detalles, acércate al
           taller.
+        </p>
+        <p className="mx-auto mt-2 max-w-xl text-center text-xs text-slate-400">
+          Seguimiento {POWERED_BY}
         </p>
       </main>
     </div>

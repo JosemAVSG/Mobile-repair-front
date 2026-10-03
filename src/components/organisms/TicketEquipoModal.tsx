@@ -6,6 +6,7 @@ import { Icon } from '../atoms/Icon';
 import { formatDate, tipoDispositivoLabel } from '../../utils/formatters';
 import { useConfig } from '../../context/ConfigContext';
 import type { OrdenTrabajo, Marca, Modelo } from '../../types';
+import { POWERED_BY } from '../../utils/brand';
 import { getPublicBaseUrl, getSeguimientoUrl } from '../../utils/publicUrl';
 
 // ──────────────────────────────────────────────
@@ -171,6 +172,7 @@ export function TicketEquipoModal({
                 <p className="mt-4 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
                   Registrado: {formatDate(orden.fechaEntrada)}
                 </p>
+                <p className="mt-1 text-center text-[10px] text-slate-400">{POWERED_BY}</p>
 
                 {/* Footer buttons (hidden on print) */}
                 <div className="ticket-no-print mt-4 flex items-center justify-end gap-3">
