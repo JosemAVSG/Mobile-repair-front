@@ -229,15 +229,14 @@ function RepairInfo({ repair }: { repair: PublicRepairStatus }) {
       </section>
 
       <section className="grid gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4 sm:grid-cols-2">
-        <div>
-          <p className="text-xs text-slate-500">Cliente</p>
-          <p className="text-sm font-medium text-slate-900">
-            {repair.cliente.nombre}
-          </p>
-          {repair.cliente.telefono && (
-            <p className="text-sm text-slate-600">{repair.cliente.telefono}</p>
-          )}
-        </div>
+        {repair.cliente?.nombre && (
+          <div>
+            <p className="text-xs text-slate-500">Cliente</p>
+            <p className="text-sm font-medium text-slate-900">
+              {repair.cliente.nombre}
+            </p>
+          </div>
+        )}
         <div>
           <p className="text-xs text-slate-500">Equipo</p>
           <p className="text-sm font-medium text-slate-900">

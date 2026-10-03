@@ -118,6 +118,8 @@ export interface Tecnico {
 
 export interface OrdenTrabajo {
   id: number;
+  /** Código no adivinable usado en el QR público */
+  codigoPublico?: string | null;
   clienteId: number;
   tecnicoId?: number | null;
   marcaId?: number | null;
@@ -281,7 +283,7 @@ export type PublicStage =
 export type PublicRepairStatus = {
   id: string;
   numeroOrden: string;
-  cliente: { nombre: string; telefono?: string };
+  cliente: { nombre?: string | null };
   equipo: { modelo: string; marca?: string };
   estadoOrden: EstadoOrden;
   fechaEstimadaEntrega?: string;
