@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiGet, ApiError } from '../api/client';
+import { ApiError } from '../api/ApiClient';
+import { getPublicRepairStatus } from '../api/ordenes';
 import type { PublicRepairStatus } from '../types';
 
 const QUERY_KEY = ['ordenes', 'public'] as const;
@@ -11,7 +12,7 @@ const QUERY_KEY = ['ordenes', 'public'] as const;
 export function usePublicRepair(id: string | undefined) {
   return useQuery<PublicRepairStatus, ApiError>({
     queryKey: [...QUERY_KEY, id],
-    queryFn: () => apiGet<PublicRepairStatus>(`/api/ordenes/${id}/public`),
+    queryFn: () => getPublicRepairStatus(id!),
     enabled: Boolean(id),
     retry: (failureCount, error) => {
       // Una orden inexistente no va a aparecer reintentando.

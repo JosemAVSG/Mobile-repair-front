@@ -6,7 +6,7 @@ import { Select } from '../atoms/Select';
 import { FormField } from '../molecules/FormField';
 import { Spinner } from '../atoms/Spinner';
 import { Badge } from '../atoms/Badge';
-import { ApiError } from '../../api/client';
+import { ApiError } from '../../api/ApiClient';
 import { useOrdenes } from '../../hooks/useQueries';
 import type {
   MovimientoRequest,

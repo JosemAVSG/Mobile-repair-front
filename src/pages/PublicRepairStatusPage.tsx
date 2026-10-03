@@ -4,7 +4,7 @@ import { usePublicShopConfig } from '../hooks/useShopConfig';
 import { Button } from '../components/atoms/Button';
 import { Spinner } from '../components/atoms/Spinner';
 import { Icon } from '../components/atoms/Icon';
-import { ApiError } from '../api/client';
+import { ApiError } from '../api/ApiClient';
 import { formatDate } from '../utils/formatters';
 import {
   ESTADO_TO_PUBLIC_STAGE,

@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPost, apiPut, apiDelete } from '../api/client';
+import { createCliente, deleteCliente, updateCliente } from '../api/clientes';
 import { formatDate } from '../utils/formatters';
 import type { Cliente, ClienteRequest } from '../types';
 import { useClientes } from '../hooks/useQueries';
@@ -41,13 +41,13 @@ export function ClientesPage() {
   const saveMutation = useMutation({
     mutationFn: (body: ClienteRequest) =>
       editTarget
-        ? apiPut<Cliente>(`/api/clientes/${editTarget.id}`, body)
-        : apiPost<Cliente>('/api/clientes', body),
+        ? updateCliente(editTarget.id, body)
+        : createCliente(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['clientes'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiDelete<unknown>(`/api/clientes/${id}`),
+    mutationFn: (id: number) => deleteCliente(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['clientes'] }),
   });
 

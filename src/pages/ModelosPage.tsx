@@ -11,7 +11,7 @@ import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { Badge } from '../components/atoms/Badge';
-import { apiPost, apiDelete } from '../api/client';
+import { createModelo, deleteModelo } from '../api/modelos';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import { buildMarcaMap, buildMarcaObjMap, buildMarcaOptions } from '../utils/maps';
 import type { Modelo, ModeloRequest } from '../types';
@@ -65,12 +65,12 @@ export function ModelosPage() {
   const marcasReq = useMarcas();
 
   const createMutation = useMutation({
-    mutationFn: (body: ModeloRequest) => apiPost<Modelo>('/api/modelos', body),
+    mutationFn: (body: ModeloRequest) => createModelo(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelos'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiDelete<unknown>(`/api/modelos/${id}`),
+    mutationFn: (id: number) => deleteModelo(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelos'] }),
   });
 

@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPost, apiDelete } from '../api/client';
+import { createMarca, deleteMarca } from '../api/marcas';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
 import { CategoriaMarca } from '../types';
@@ -50,12 +50,12 @@ export function MarcasPage() {
     : null;
 
   const createMutation = useMutation({
-    mutationFn: (body: MarcaRequest) => apiPost<Marca>('/api/marcas', body),
+    mutationFn: (body: MarcaRequest) => createMarca(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['marcas'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiDelete<unknown>(`/api/marcas/${id}`),
+    mutationFn: (id: number) => deleteMarca(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['marcas'] }),
   });
 

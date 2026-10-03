@@ -35,7 +35,14 @@ import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { FacturaModal } from '../components/organisms/FacturaModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
-import { apiPut, apiPost, ApiError } from '../api/client';
+import { ApiError } from '../api/ApiClient';
+import {
+  addReparacion,
+  asignarTecnico,
+  iniciarReparacion,
+  updateEntrega,
+  updateOrdenEstado,
+} from '../api/ordenes';
 import { useAuth } from '../hooks/useAuth';
 import { useCan } from '../hooks/useCan';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
@@ -47,7 +54,7 @@ import {
 } from '../utils/whatsapp';
 import { isOrdenAtrasada } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
-import type { EtapaFoto, FotoOrden, OrdenTrabajo, Reparacion, ReparacionRequest } from '../types';
+import type { EtapaFoto, FotoOrden, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
   useOrden,
@@ -287,13 +294,8 @@ export function OrdenDetailPage() {
   // ───── Mutations ─────
 
   const transitionMutation = useMutation({
-    mutationFn: ({ id: targetId, target, descuentoDiagnostico }: { id: number; target: EstadoOrden; descuentoDiagnostico?: boolean }) => {
-      let url = `/api/ordenes/${targetId}/estado?estado=${target}`;
-      if (descuentoDiagnostico != null) {
-        url += `&descuentoDiagnostico=${descuentoDiagnostico}`;
-      }
-      return apiPut<OrdenTrabajo>(url, {});
-    },
+    mutationFn: ({ id: targetId, target, descuentoDiagnostico }: { id: number; target: EstadoOrden; descuentoDiagnostico?: boolean }) =>
+      updateOrdenEstado(targetId, target, descuentoDiagnostico),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -302,7 +304,7 @@ export function OrdenDetailPage() {
 
   const addReparacionMutation = useMutation({
     mutationFn: ({ ordenId: targetOrdenId, body }: { ordenId: number; body: ReparacionRequest }) =>
-      apiPost<Reparacion>(`/api/ordenes/${targetOrdenId}/reparaciones`, body),
+      addReparacion(targetOrdenId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -311,7 +313,7 @@ export function OrdenDetailPage() {
 
   const entregaMutation = useMutation({
     mutationFn: ({ targetOrdenId, fechaEntrega }: { targetOrdenId: number; fechaEntrega: string | null }) =>
-      apiPut<OrdenTrabajo>(`/api/ordenes/${targetOrdenId}/entrega`, { fechaEntrega }),
+      updateEntrega(targetOrdenId, fechaEntrega),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes'] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -320,7 +322,7 @@ export function OrdenDetailPage() {
 
   const asignarTecnicoMutation = useMutation({
     mutationFn: ({ targetOrdenId, tecnicoId }: { targetOrdenId: number; tecnicoId: number | null }) =>
-      apiPut<OrdenTrabajo>(`/api/ordenes/${targetOrdenId}/tecnico`, { tecnicoId }),
+      asignarTecnico(targetOrdenId, tecnicoId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -568,12 +570,7 @@ export function OrdenDetailPage() {
       precio: number;
       repuestoIds: number[];
       descuentoDiagnostico: boolean;
-    }) =>
-      apiPost<OrdenTrabajo>(`/api/ordenes/${oId}/iniciar-reparacion`, {
-        precio,
-        repuestoIds,
-        descuentoDiagnostico,
-      }),
+    }) => iniciarReparacion(oId, { precio, repuestoIds, descuentoDiagnostico }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });

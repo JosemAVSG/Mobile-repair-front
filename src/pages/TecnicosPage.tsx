@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPost, apiPut, apiDelete } from '../api/client';
+import { createTecnico, deleteTecnico, updateTecnico } from '../api/tecnicos';
 import { formatDate, rolBadgeConfig } from '../utils/formatters';
 import type { Tecnico, TecnicoRequest, RolUsuario } from '../types';
 import { useTecnicos } from '../hooks/useQueries';
@@ -60,13 +60,13 @@ export function TecnicosPage() {
   const saveMutation = useMutation({
     mutationFn: (body: TecnicoRequest) =>
       editTarget
-        ? apiPut<Tecnico>(`/api/tecnicos/${editTarget.id}`, body)
-        : apiPost<Tecnico>('/api/tecnicos', body),
+        ? updateTecnico(editTarget.id, body)
+        : createTecnico(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tecnicos'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiDelete<unknown>(`/api/tecnicos/${id}`),
+    mutationFn: (id: number) => deleteTecnico(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tecnicos'] }),
   });
 

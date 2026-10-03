@@ -3,7 +3,7 @@ import { Modal } from '../atoms/Modal';
 import { Button } from '../atoms/Button';
 import { Input } from '../atoms/Input';
 import { FormField } from '../molecules/FormField';
-import { ApiError } from '../../api/client';
+import { ApiError } from '../../api/ApiClient';
 import type { ProductoInventario, ProductoInventarioRequest } from '../../types';
 
 interface ProductoInventarioModalProps {

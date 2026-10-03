@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { apiGet, apiPost } from '../api/client';
+import { getMe, login as loginRequest } from '../api/auth';
 import type { AuthUser, LoginResponse } from '../types';
 
 interface AuthContextType {
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!stored) return;
     let cancelled = false;
 
-    apiGet<AuthUser>('/api/auth/me')
+    getMe()
       .then((me) => {
         if (cancelled) return;
         const next: StoredAuth = { token: stored.token, user: normalizeUser(me) };
@@ -99,10 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [initialStored]);
 
   const login = useCallback(async (username: string, password: string): Promise<AuthUser> => {
-    const response = await apiPost<LoginResponse>('/api/auth/login', {
-      username,
-      password,
-    });
+    const response: LoginResponse = await loginRequest(username, password);
     const next: StoredAuth = {
       token: response.token,
       user: normalizeUser(response.user),

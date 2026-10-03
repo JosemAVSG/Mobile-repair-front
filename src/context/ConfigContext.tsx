@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '../api/client';
+import { getPublicConfig } from '../api/configuracion';
 import type { BackendShopConfig } from '../types';
 
 // ──────────────────────────────────────────────
@@ -142,7 +142,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   const legacyIdentity = useMemo(() => readLegacyShopIdentity(), []);
   const { data: backendConfig } = useQuery({
     queryKey: QUERY_KEY,
-    queryFn: () => apiGet<BackendShopConfig>('/api/configuracion/public'),
+    queryFn: () => getPublicConfig(),
     placeholderData: legacyIdentity,
     staleTime: 5 * 60 * 1000,
   });

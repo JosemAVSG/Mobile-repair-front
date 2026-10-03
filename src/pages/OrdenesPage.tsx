@@ -13,7 +13,7 @@ import { SearchField } from '../components/molecules/SearchField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPost, apiPut } from '../api/client';
+import { asignarTecnico, createOrden } from '../api/ordenes';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { isOrdenAtrasada } from '../utils/ordenes';
 import { useAuth } from '../hooks/useAuth';
@@ -129,13 +129,13 @@ export function OrdenesPage() {
   const { data: tecnicos } = useTecnicos();
 
   const createMutation = useMutation({
-    mutationFn: (body: OrdenRequest) => apiPost<OrdenTrabajo>('/api/ordenes', body),
+    mutationFn: (body: OrdenRequest) => createOrden(body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
   });
 
   const asignarMutation = useMutation({
     mutationFn: ({ ordenId, tecnicoId }: { ordenId: number; tecnicoId: number }) =>
-      apiPut<OrdenTrabajo>(`/api/ordenes/${ordenId}/tecnico`, { tecnicoId }),
+      asignarTecnico(ordenId, tecnicoId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
   });
 

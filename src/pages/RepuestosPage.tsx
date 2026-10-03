@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPost, apiPut, apiDelete } from '../api/client';
+import { createRepuesto, deleteRepuesto, updateRepuesto } from '../api/repuestos';
 import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { buildMarcaMap, buildModeloMap } from '../utils/maps';
 import type { Repuesto, RepuestoRequest } from '../types';
@@ -84,14 +84,14 @@ export function RepuestosPage() {
   const saveMutation = useMutation({
     mutationFn: (body: RepuestoRequest) =>
       editingRepuesto
-        ? apiPut<Repuesto>(`/api/repuestos/${editingRepuesto.id}`, body)
-        : apiPost<Repuesto>('/api/repuestos', body),
+        ? updateRepuesto(editingRepuesto.id, body)
+        : createRepuesto(body),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['repuestos'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiDelete<unknown>(`/api/repuestos/${id}`),
+    mutationFn: (id: number) => deleteRepuesto(id),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['repuestos'] }),
   });
@@ -153,9 +153,9 @@ export function RepuestosPage() {
       };
 
       if (editingRepuesto) {
-        await apiPut(`/api/repuestos/${editingRepuesto.id}`, body);
+        await updateRepuesto(editingRepuesto.id, body);
       } else {
-        await apiPost<Repuesto>('/api/repuestos', body);
+        await createRepuesto(body);
       }
 
       setCreateOpen(false);

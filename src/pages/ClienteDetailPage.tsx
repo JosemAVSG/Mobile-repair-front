@@ -12,9 +12,9 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { StatusBadge } from '../components/molecules/StatusBadge';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { apiPut, apiDelete } from '../api/client';
+import { deleteCliente, updateCliente } from '../api/clientes';
 import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters';
-import type { Cliente, ClienteRequest, OrdenTrabajo } from '../types';
+import type { ClienteRequest, OrdenTrabajo } from '../types';
 import { useCliente, useOrdenes, useMarcas, useModelos } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -57,7 +57,7 @@ export function ClienteDetailPage() {
   const { data: modelos } = useModelos();
 
   const updateMutation = useMutation({
-    mutationFn: (body: ClienteRequest) => apiPut<Cliente>(`/api/clientes/${cliente?.id}`, body),
+    mutationFn: (body: ClienteRequest) => updateCliente(cliente?.id as number, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes', idNum] });
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
@@ -65,7 +65,7 @@ export function ClienteDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => apiDelete<unknown>(`/api/clientes/${cliente?.id}`),
+    mutationFn: () => deleteCliente(cliente?.id as number),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
       navigate('/clientes');
