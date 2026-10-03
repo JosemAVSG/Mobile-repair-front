@@ -101,9 +101,19 @@ instance.interceptors.request.use((config) => {
 });
 
 // Desenvuelve el envelope y normaliza los errores.
+// Un 401 con sesión guardada = token vencido o inválido: se limpia y vuelve al login.
 instance.interceptors.response.use(
   (response) => unwrapResponse(response) as unknown as AxiosResponse,
-  (error) => Promise.reject(toApiError(error)),
+  (error) => {
+    const isLogin = error?.config?.url?.includes('/api/auth/login');
+    if (error?.response?.status === 401 && !isLogin && getToken()) {
+      localStorage.removeItem('auth');
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    }
+    return Promise.reject(toApiError(error));
+  },
 );
 
 // ──────────────────────────────────────────────
