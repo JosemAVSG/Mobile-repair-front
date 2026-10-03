@@ -18,7 +18,7 @@ import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_L
 import { isOrdenAtrasada } from '../utils/ordenes';
 import { useAuth } from '../hooks/useAuth';
 import type { OrdenTrabajo, Cliente, Marca, Modelo, OrdenRequest } from '../types';
-import { EstadoOrden, TipoDispositivo, TipoReparacion } from '../types';
+import { EstadoOrden, TIPOS_DISPOSITIVO_ACTIVOS, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
 import { useOrdenes, useClientes, useMarcas, useModelos, useTecnicos } from '../hooks/useQueries';
 
@@ -58,7 +58,14 @@ const estadoOptions = [
   })),
 ];
 
+// Filtro del listado: todos los tipos (incluye línea blanca para órdenes antiguas)
 const tipoOptions = Object.values(TipoDispositivo).map((tipo) => ({
+  value: tipo,
+  label: tipoDispositivoLabel(tipo),
+}));
+
+// Alta de órdenes: solo los tipos que el taller atiende hoy
+const tipoOptionsCreacion = TIPOS_DISPOSITIVO_ACTIVOS.map((tipo) => ({
   value: tipo,
   label: tipoDispositivoLabel(tipo),
 }));
@@ -306,8 +313,9 @@ export function OrdenesPage() {
     marca?: string;
     modelo?: string;
     tipo?: string;
+    serie?: string;
     general?: string;
-  }>({});
+  }>({})
 
   // ───── Stepper state ─────
   const [paso, setPaso] = useState(1);
@@ -415,11 +423,16 @@ export function OrdenesPage() {
       marca?: string;
       modelo?: string;
       tipo?: string;
+      serie?: string;
     } = {};
     if (!createClienteId) errors.cliente = 'Seleccione un cliente';
     if (!createMarcaId) errors.marca = 'Seleccione una marca';
     if (!createModeloId) errors.modelo = 'Seleccione un modelo';
     if (!createTipo) errors.tipo = 'Seleccione un tipo';
+    // La API exige número de serie para computadoras
+    if (createTipo === TipoDispositivo.COMPUTADORA && !createSerie.trim()) {
+      errors.serie = 'El número de serie es requerido para computadoras';
+    }
     setCreateErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -497,13 +510,17 @@ export function OrdenesPage() {
       marca?: string;
       modelo?: string;
       tipo?: string;
+      serie?: string;
     } = {};
     if (!createClienteId) errors.cliente = 'Seleccione un cliente';
     if (!createMarcaId) errors.marca = 'Seleccione una marca';
     if (!createModeloId) errors.modelo = 'Seleccione un modelo';
     if (!createTipo) errors.tipo = 'Seleccione un tipo';
+    if (createTipo === TipoDispositivo.COMPUTADORA && !createSerie.trim()) {
+      errors.serie = 'El número de serie es requerido para computadoras';
+    }
     return errors;
-  }, [createClienteId, createMarcaId, createModeloId, createTipo]);
+  }, [createClienteId, createMarcaId, createModeloId, createTipo, createSerie]);
 
   const handleSiguiente = useCallback(() => {
     if (paso === 1) {
@@ -811,7 +828,7 @@ export function OrdenesPage() {
 
               <FormField label="Tipo" required error={createErrors.tipo}>
                 <Select
-                  options={tipoOptions}
+                  options={tipoOptionsCreacion}
                   value={createTipo ? String(createTipo) : ''}
                   onChange={(e) => {
                     const val = e.target.value as TipoDispositivo | '';
@@ -865,9 +882,8 @@ export function OrdenesPage() {
                 />
               </FormField>
 
-              {/* Campos condicionados por tipo de equipo: un celular no
-                  tiene voltaje/gas, una cocina no tiene IMEI. */}
-              {createTipo === 'CELULAR' && (
+              {/* Campos condicionados por tipo de equipo */}
+              {(createTipo === 'CELULAR' || createTipo === 'TABLET') && (
                 <FormField label="IMEI (opcional)">
                   <Input
                     placeholder="IMEI del dispositivo"
@@ -877,8 +893,12 @@ export function OrdenesPage() {
                 </FormField>
               )}
 
-              {(createTipo === 'CELULAR' || createTipo === 'COMPUTADORA') && (
-                <FormField label="Número de Serie (opcional)">
+              {createTipo && (
+                <FormField
+                  label={createTipo === 'COMPUTADORA' ? 'Número de Serie' : 'Número de Serie (opcional)'}
+                  required={createTipo === 'COMPUTADORA'}
+                  error={createErrors.serie}
+                >
                   <Input
                     placeholder="Número de serie"
                     value={createSerie}
@@ -890,39 +910,13 @@ export function OrdenesPage() {
               {createTipo && (
                 <FormField label="Capacidad (opcional)">
                   <Input
-                    placeholder={
-                      createTipo === 'CELULAR' || createTipo === 'COMPUTADORA'
-                        ? 'Ej: 128 GB, 256 GB'
-                        : 'Ej: 200 L, 30 L'
-                    }
+                    placeholder={createTipo === 'CONSOLA' ? 'Ej: 825 GB, 1 TB' : 'Ej: 128 GB, 256 GB'}
                     value={createCapacidad}
                     onChange={(e) => setCreateCapacidad(e.target.value)}
                   />
                 </FormField>
               )}
 
-              {(createTipo === 'MICROONDAS' ||
-                createTipo === 'NEVERA' ||
-                createTipo === 'COCINA' ||
-                createTipo === 'LAVADORA') && (
-                <>
-                  <FormField label="Tipo de Gas (opcional)">
-                    <Input
-                      placeholder="Ej: R134a, R600a"
-                      value={createTipoGas}
-                      onChange={(e) => setCreateTipoGas(e.target.value)}
-                    />
-                  </FormField>
-
-                  <FormField label="Voltaje (opcional)">
-                    <Input
-                      placeholder="Ej: 110V, 220V"
-                      value={createVoltaje}
-                      onChange={(e) => setCreateVoltaje(e.target.value)}
-                    />
-                  </FormField>
-                </>
-              )}
 
               <FormField label="Notas Técnicas (opcional)">
                 <textarea

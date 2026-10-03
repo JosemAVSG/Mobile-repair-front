@@ -14,7 +14,7 @@ import { EntityList } from '../components/organisms/EntityList';
 import { createMarca, deleteMarca } from '../api/marcas';
 import { formatDate, CATEGORIA_MARCA_LABELS, categoriaBadgeConfig } from '../utils/formatters';
 import type { Marca, MarcaRequest } from '../types';
-import { CategoriaMarca } from '../types';
+import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas } from '../hooks/useQueries';
 
 // ──────────────────────────────────────────────
@@ -22,9 +22,7 @@ import { useMarcas } from '../hooks/useQueries';
 // ──────────────────────────────────────────────
 
 const CATEGORIA_OPTIONS = [
-  { value: CategoriaMarca.CELULARES, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.CELULARES] },
-  { value: CategoriaMarca.LINEA_BLANCA, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.LINEA_BLANCA] },
-  { value: CategoriaMarca.COMPUTADORAS, label: CATEGORIA_MARCA_LABELS[CategoriaMarca.COMPUTADORAS] },
+  ...CATEGORIAS_MARCA_ACTIVAS.map((c) => ({ value: c, label: CATEGORIA_MARCA_LABELS[c] })),
 ];
 
 // ──────────────────────────────────────────────

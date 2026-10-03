@@ -11,6 +11,10 @@ export function categoriaDeTipo(tipo: TipoDispositivo): CategoriaMarca {
       return CategoriaMarca.CELULARES;
     case TipoDispositivo.COMPUTADORA:
       return CategoriaMarca.COMPUTADORAS;
+    case TipoDispositivo.CONSOLA:
+      return CategoriaMarca.CONSOLAS;
+    case TipoDispositivo.TABLET:
+      return CategoriaMarca.TABLETS;
     case TipoDispositivo.MICROONDAS:
     case TipoDispositivo.NEVERA:
     case TipoDispositivo.COCINA:

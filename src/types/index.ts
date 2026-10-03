@@ -38,18 +38,43 @@ export interface LoginResponse {
 
 export enum CategoriaMarca {
   CELULARES = 'CELULARES',
+  /** @deprecated línea blanca: solo para marcas ya cargadas */
   LINEA_BLANCA = 'LINEA_BLANCA',
   COMPUTADORAS = 'COMPUTADORAS',
+  CONSOLAS = 'CONSOLAS',
+  TABLETS = 'TABLETS',
 }
 
 export enum TipoDispositivo {
   CELULAR = 'CELULAR',
+  /** @deprecated línea blanca: solo para órdenes antiguas */
   MICROONDAS = 'MICROONDAS',
+  /** @deprecated */
   NEVERA = 'NEVERA',
+  /** @deprecated */
   COCINA = 'COCINA',
+  /** @deprecated */
   LAVADORA = 'LAVADORA',
   COMPUTADORA = 'COMPUTADORA',
+  CONSOLA = 'CONSOLA',
+  TABLET = 'TABLET',
 }
+
+/** Tipos con los que se pueden crear órdenes nuevas (los demás quedan por historial). */
+export const TIPOS_DISPOSITIVO_ACTIVOS: TipoDispositivo[] = [
+  TipoDispositivo.CELULAR,
+  TipoDispositivo.COMPUTADORA,
+  TipoDispositivo.TABLET,
+  TipoDispositivo.CONSOLA,
+];
+
+/** Categorías de marca que se pueden asignar a marcas nuevas. */
+export const CATEGORIAS_MARCA_ACTIVAS: CategoriaMarca[] = [
+  CategoriaMarca.CELULARES,
+  CategoriaMarca.COMPUTADORAS,
+  CategoriaMarca.TABLETS,
+  CategoriaMarca.CONSOLAS,
+];
 
 export enum EstadoOrden {
   REGISTRO = 'REGISTRO',
