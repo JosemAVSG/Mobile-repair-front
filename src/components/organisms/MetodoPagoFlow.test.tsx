@@ -80,6 +80,7 @@ describe('MetodoPagoFlow', () => {
     renderFlow({ open: true, defaultEmail: 'user@x.co' });
     const addButton = screen.getByRole('button', { name: /agregar tarjeta/i });
     expect(addButton).toBeDisabled();
+    expect(screen.getByText(/acepta los dos términos/i)).toBeInTheDocument();
 
     const [terms, auth] = screen.getAllByRole('checkbox');
     fireEvent.click(terms);
@@ -122,6 +123,9 @@ describe('MetodoPagoFlow', () => {
 
     await waitFor(() => expect(tokenizeCardMock).toHaveBeenCalled());
     expect(registrarMutation.mutate).not.toHaveBeenCalled();
+    expect(await screen.findByText(/cerraste el formulario de wompi/i)).toBeInTheDocument();
+    // La tarjeta no se agregó, pero el botón vuelve a estar disponible para reintentar.
+    expect(screen.getByRole('button', { name: /agregar tarjeta/i })).not.toBeDisabled();
   });
 
   it('renders a 503 error from the API as the user-safe message', async () => {
