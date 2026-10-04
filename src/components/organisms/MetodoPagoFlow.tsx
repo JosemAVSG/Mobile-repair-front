@@ -51,6 +51,7 @@ export function MetodoPagoFlow({
   const [tokenizing, setTokenizing] = useState(false);
   const [widgetError, setWidgetError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const attempt = useRef(0);
 
   const planOptions = planes.map((p) => ({ value: p.plan, label: `${p.nombre} · ${formatCop(p.precioCop)}/mes` }));
   const selectedPlanInfo = planes.find((p) => p.plan === plan);
@@ -62,6 +63,10 @@ export function MetodoPagoFlow({
       setEmail(defaultEmail);
       setPlan(initialPlan ?? '');
       setWidgetError(null);
+      // Un intento anterior que nunca respondió no debe dejar el botón en "cargando".
+      attempt.current += 1;
+      inFlight.current = false;
+      setTokenizing(false);
     }
   }, [open, defaultEmail, initialPlan]);
 
@@ -84,6 +89,7 @@ export function MetodoPagoFlow({
   const handleSubmit = async () => {
     if (inFlight.current || !canSubmit || !acceptance) return;
     inFlight.current = true;
+    const myAttempt = ++attempt.current;
     setTokenizing(true);
     setWidgetError(null);
 
@@ -91,11 +97,14 @@ export function MetodoPagoFlow({
     try {
       cardToken = await tokenizeCard({ publicKey: acceptance.publicKey });
     } catch {
+      if (myAttempt !== attempt.current) return;
       setWidgetError('No pudimos cargar el formulario de pago. Intenta de nuevo.');
       inFlight.current = false;
       setTokenizing(false);
       return;
     }
+    // Respuesta de un intento anterior (el modal se cerró y reabrió): se descarta.
+    if (myAttempt !== attempt.current) return;
     inFlight.current = false;
     setTokenizing(false);
     // Silent no-op when the user closes the widget without producing a token.

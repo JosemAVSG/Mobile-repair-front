@@ -117,4 +117,16 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
     await tokenizeCard({ publicKey: 'pub_test_abc' });
     expect(scripts()).toHaveLength(0);
   });
+
+  it('resolves null when the widget iframe is dismissed without calling the callback', async () => {
+    const open = vi.fn(() => {
+      const frame = document.createElement('iframe');
+      frame.src = 'https://checkout.wompi.co/p/';
+      document.body.appendChild(frame);
+      setTimeout(() => frame.remove(), 0);
+    });
+    (window as unknown as { WidgetCheckout: unknown }).WidgetCheckout = vi.fn(() => ({ open }));
+
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
+  });
 });
