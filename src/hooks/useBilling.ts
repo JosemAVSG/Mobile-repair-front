@@ -3,13 +3,15 @@ import {
   cancelarSuscripcion,
   cambiarPlan,
   getCobros,
+  getPlanes,
   getSuscripcion,
   getWompiAcceptance,
   reactivarSuscripcion,
   registrarMetodoPago,
 } from '../api/billing';
 import { POLL_CAP_MS } from './useCobroEnCursoWatch';
-import type { Cobro, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
+import { PLANES_FALLBACK } from '../lib/planesFallback';
+import type { Cobro, PlanCatalogo, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
 
 const POLL_INTERVAL_MS = 4_000;
 
@@ -52,6 +54,16 @@ export function useSuscripcion(): UseQueryResult<Suscripcion, Error> {
     queryFn: getSuscripcion,
     refetchInterval: (query) => shouldPoll(query.state.data),
   });
+}
+
+/** Catálogo público de planes; si el API falla se usa el respaldo local. */
+export function usePlanes(): { data: PlanCatalogo[]; isLoading: boolean } {
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing', 'planes'],
+    queryFn: getPlanes,
+    staleTime: 5 * 60_000,
+  });
+  return { data: data && data.length > 0 ? data : PLANES_FALLBACK, isLoading };
 }
 
 export function useWompiAcceptance(enabled: boolean): UseQueryResult<WompiAcceptance, Error> {

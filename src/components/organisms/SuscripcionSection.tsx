@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { Button } from '../atoms/Button';
 import { Card } from '../atoms/Card';
-import { Select } from '../atoms/Select';
 import { Spinner } from '../atoms/Spinner';
 import { Badge } from '../atoms/Badge';
 import { ConfirmDialog } from '../molecules/ConfirmDialog';
 import { CobroStatusBadge } from '../molecules/CobroStatusBadge';
 import { MetodoPagoFlow } from './MetodoPagoFlow';
 import { HistorialCobros } from './HistorialCobros';
+import { PlanesCards } from './PlanesCards';
 import {
   useCambiarPlan,
   useCancelarSuscripcion,
   useCobros,
+  usePlanes,
   useReactivarSuscripcion,
   useSuscripcion,
 } from '../../hooks/useBilling';
@@ -40,11 +41,6 @@ const ESTADO_LABEL: Record<string, string> = {
   CANCELADO: 'Cancelada',
 };
 
-const PLAN_OPTIONS = [
-  { value: 'BASICO', label: 'Básico' },
-  { value: 'PRO', label: 'Pro' },
-];
-
 function daysLeft(iso: string): number | null {
   const end = new Date(iso).getTime();
   if (Number.isNaN(end)) return null;
@@ -60,10 +56,12 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
   const cambiarPlan = useCambiarPlan();
   const cancelar = useCancelarSuscripcion();
   const reactivar = useReactivarSuscripcion();
+  const { data: planes } = usePlanes();
 
   const [paymentFlowOpen, setPaymentFlowOpen] = useState(autoOpenPaymentFlow ?? false);
   const [paymentFlowRequiresPlan, setPaymentFlowRequiresPlan] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PlanSuscripcion | ''>('');
+  const [paymentFlowInitialPlan, setPaymentFlowInitialPlan] = useState<PlanSuscripcion | undefined>();
+  const [planToConfirm, setPlanToConfirm] = useState<PlanSuscripcion | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   if (isLoading) {
@@ -114,15 +112,29 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
   const trialDays = isTrial && trialEndsAt ? daysLeft(trialEndsAt) : null;
   const hasCard = metodoPago != null;
 
-  const openPaymentFlow = (requiresPlan: boolean) => {
+  const openPaymentFlow = (requiresPlan: boolean, initialPlan?: PlanSuscripcion) => {
     setPaymentFlowRequiresPlan(requiresPlan);
+    setPaymentFlowInitialPlan(initialPlan);
     setPaymentFlowOpen(true);
   };
 
-  const handleChangePlan = () => {
-    if (selectedPlan) {
-      cambiarPlan.mutate(selectedPlan);
-      setSelectedPlan('');
+  // Con tarjeta y suscripción viva el plan se cambia directo; si no, se pasa por el flujo de pago.
+  const canSwitchPlan = hasCard && (estado === 'ACTIVO' || isTrial);
+  const showPlanes = pagosHabilitados && !isLegacy && !isEmpresarial && planes.length > 0;
+  const planToConfirmInfo = planes.find((p) => p.plan === planToConfirm);
+
+  const handleSelectPlan = (target: PlanSuscripcion) => {
+    if (canSwitchPlan) {
+      setPlanToConfirm(target);
+    } else {
+      openPaymentFlow(true, target);
+    }
+  };
+
+  const handleConfirmPlan = () => {
+    if (planToConfirm) {
+      cambiarPlan.mutate(planToConfirm);
+      setPlanToConfirm(null);
     }
   };
 
@@ -224,6 +236,20 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
             </div>
           )}
 
+          {showPlanes && (
+            <div className="space-y-2">
+              <h5 className="text-sm font-medium text-slate-700">Planes</h5>
+              <PlanesCards
+                planes={planes}
+                currentPlan={estado === 'ACTIVO' ? plan : null}
+                pendingPlan={pendingPlan}
+                actionLabel={canSwitchPlan ? 'Cambiar a' : 'Elegir'}
+                disabled={cambiarPlan.isPending}
+                onSelect={handleSelectPlan}
+              />
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             {pagosHabilitados && !isLegacy && !isEmpresarial && (
               <>
@@ -251,22 +277,6 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
 
                 {(estado === 'ACTIVO' || (isTrial && hasCard)) && (
                   <>
-                    <Select
-                      options={PLAN_OPTIONS}
-                      placeholder="Cambiar plan…"
-                      value={selectedPlan}
-                      onChange={(e) => setSelectedPlan(e.target.value as PlanSuscripcion)}
-                      className="w-40"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={!selectedPlan}
-                      loading={cambiarPlan.isPending}
-                      onClick={handleChangePlan}
-                    >
-                      Cambiar plan
-                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -319,7 +329,22 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
         open={paymentFlowOpen}
         onClose={() => setPaymentFlowOpen(false)}
         requiresPlan={paymentFlowRequiresPlan}
+        initialPlan={paymentFlowInitialPlan}
         defaultEmail={defaultEmail}
+      />
+
+      <ConfirmDialog
+        isOpen={planToConfirm != null}
+        title="Cambiar de plan"
+        message={`Pasarás al plan ${planToConfirmInfo?.nombre ?? ''}${
+          planToConfirmInfo ? ` (${formatCop(planToConfirmInfo.precioCop)} / mes)` : ''
+        }. El cambio se aplica desde tu próximo cobro${nextChargeAt ? `, el ${formatDate(nextChargeAt)}` : ''}.`}
+        confirmLabel="Confirmar cambio"
+        cancelLabel="Volver"
+        onConfirm={handleConfirmPlan}
+        onCancel={() => setPlanToConfirm(null)}
+        loading={cambiarPlan.isPending}
+        variant="warning"
       />
 
       <ConfirmDialog

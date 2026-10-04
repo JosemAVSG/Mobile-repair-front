@@ -48,6 +48,7 @@ const baseSuscripcion: Suscripcion = {
 let flowProps: { open: boolean } = { open: false };
 
 vi.mock('../hooks/useBilling', () => ({
+  usePlanes: () => ({ data: [], isLoading: false }),
   useSuscripcion: () => ({ data: baseSuscripcion, isLoading: false }),
   useCobros: () => ({ data: [] }),
   useCambiarPlan: () => ({ mutate: vi.fn(), isPending: false }),

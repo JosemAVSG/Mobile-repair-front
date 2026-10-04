@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PLANES_FALLBACK as PLANES } from '../../lib/planesFallback';
 import type { ReactNode } from 'react';
 import { SuscripcionSection } from './SuscripcionSection';
 import type { Suscripcion } from '../../types';
@@ -33,6 +34,7 @@ let cancelarMutation = { mutate: vi.fn(), isPending: false };
 let reactivarMutation = { mutate: vi.fn(), isPending: false };
 
 vi.mock('../../hooks/useBilling', () => ({
+  usePlanes: () => ({ data: PLANES, isLoading: false }),
   useSuscripcion: () => suscripcionQuery,
   useCambiarPlan: () => cambiarPlanMutation,
   useCancelarSuscripcion: () => cancelarMutation,
@@ -240,5 +242,35 @@ describe('SuscripcionSection', () => {
     rerender(<SuscripcionSection />);
     expect(spy).toHaveBeenCalledTimes(1);
     window.removeEventListener('fixtra:refresh-me', spy);
+  });
+
+  it('ACTIVO BASICO: marks the current plan and confirms before switching to PRO', () => {
+    renderSection(baseSuscripcion);
+    expect(screen.getByRole('button', { name: 'Plan actual' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar a Pro' }));
+    expect(screen.getByText(/se aplica desde tu próximo cobro/i)).toBeInTheDocument();
+    expect(cambiarPlanMutation.mutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar cambio' }));
+    expect(cambiarPlanMutation.mutate).toHaveBeenCalledWith('PRO');
+  });
+
+  it('TRIAL without card: choosing a plan opens the payment flow', () => {
+    renderSection({
+      ...baseSuscripcion,
+      plan: 'TRIAL',
+      planDisplayName: 'Free trial',
+      estado: 'TRIAL',
+      metodoPago: null,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir Pro' }));
+    expect(screen.getByRole('dialog', { name: 'Método de pago' })).toBeInTheDocument();
+    expect(cambiarPlanMutation.mutate).not.toHaveBeenCalled();
+  });
+
+  it('does not show plan cards when payments are disabled', () => {
+    renderSection({ ...baseSuscripcion, pagosHabilitados: false });
+    expect(screen.queryByRole('list', { name: /planes disponibles/i })).not.toBeInTheDocument();
   });
 });

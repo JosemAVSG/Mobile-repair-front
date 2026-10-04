@@ -22,6 +22,7 @@ describe('api/billing (R-UI2)', () => {
         'cambiarPlan',
         'cancelarSuscripcion',
         'getCobros',
+        'getPlanes',
         'getSuscripcion',
         'getWompiAcceptance',
         'reactivarSuscripcion',

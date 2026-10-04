@@ -484,6 +484,16 @@ export interface Suscripcion {
   pagosHabilitados: boolean;
 }
 
+/** Plan self-serve del catálogo público (GET /api/billing/planes). */
+export interface PlanCatalogo {
+  plan: 'BASICO' | 'PRO';
+  nombre: string;
+  descripcion?: string | null;
+  precioCop: number;
+  features: string[];
+  destacado: boolean;
+}
+
 export interface Cobro {
   status: 'APPROVED' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'PENDING' | 'CLAIMED';
   statusMessage: string | null;
