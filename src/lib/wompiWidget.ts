@@ -124,16 +124,61 @@ export async function tokenizeCard(options: TokenizeOptions): Promise<string | n
   }
 
   return new Promise<string | null>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      stopWatching();
+      fn();
+    };
+    // Si el usuario cierra el widget con la X, Wompi no siempre invoca el callback y la promesa
+    // quedaría colgada (botón en "cargando" para siempre). Se detecta por la salida del iframe.
+    const stopWatching = watchWidgetDismissed(() => finish(() => resolve(null)));
+
     const checkout = new WidgetCheckout({
       publicKey: options.publicKey,
       widgetOperation: 'tokenize',
     });
     checkout.open((result) => {
-      try {
-        resolve(extractToken(result));
-      } catch (e) {
-        reject(e);
-      }
+      finish(() => {
+        try {
+          resolve(extractToken(result));
+        } catch (e) {
+          reject(e);
+        }
+      });
     });
   });
+}
+
+const DISMISS_GRACE_MS = 1_500;
+
+function isWompiFrame(node: Node): boolean {
+  return node instanceof HTMLIFrameElement && node.src.includes('wompi');
+}
+
+/**
+ * Avisa cuando el iframe de Wompi aparece y luego desaparece del DOM. Espera un margen por si el
+ * callback con el token llega justo al cerrarse. Devuelve la función para dejar de observar.
+ */
+function watchWidgetDismissed(onDismissed: () => void): () => void {
+  let seen = false;
+  let timer: number | undefined;
+
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      m.addedNodes.forEach((n) => {
+        if (isWompiFrame(n) || (n instanceof Element && n.querySelector('iframe[src*="wompi"]'))) seen = true;
+      });
+    }
+    if (seen && !document.querySelector('iframe[src*="wompi"]') && timer === undefined) {
+      timer = window.setTimeout(onDismissed, DISMISS_GRACE_MS);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  return () => {
+    observer.disconnect();
+    if (timer !== undefined) window.clearTimeout(timer);
+  };
 }
