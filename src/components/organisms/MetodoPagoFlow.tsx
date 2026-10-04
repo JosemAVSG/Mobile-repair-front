@@ -57,9 +57,13 @@ export function MetodoPagoFlow({
   const planOptions = planes.map((p) => ({ value: p.plan, label: `${p.nombre} · ${formatCop(p.precioCop)}/mes` }));
   const selectedPlanInfo = planes.find((p) => p.plan === plan);
 
-  // Reset form state whenever the flow opens.
+  // Reset form state only when the flow goes from closed to open: a change of defaultEmail or
+  // initialPlan while the user is filling the form must not wipe the checkboxes.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    const justOpened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (justOpened) {
       setTermsChecked(false);
       setEmail(defaultEmail);
       setPlan(initialPlan ?? '');

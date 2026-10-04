@@ -172,4 +172,16 @@ describe('MetodoPagoFlow', () => {
     resolveToken('tok_1');
     await waitFor(() => expect(registrarMutation.mutate).toHaveBeenCalledTimes(1));
   });
+
+  it('keeps the checked terms when defaultEmail changes while the flow is open', () => {
+    const { rerender } = renderFlow({ open: true, defaultEmail: '' });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    expect(screen.getAllByRole('checkbox')[0]).toBeChecked();
+
+    rerender(<MetodoPagoFlow open onClose={() => {}} defaultEmail="late@x.co" />);
+
+    expect(screen.getAllByRole('checkbox')[0]).toBeChecked();
+    expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
+  });
 });
