@@ -4,10 +4,9 @@ interface TokenizeOptions {
   publicKey: string;
 }
 
-interface WidgetResult {
-  token?: { id?: string } | null;
-  error?: unknown;
-}
+// Wompi no documenta la forma exacta del callback en modo tokenize, así que se
+// acepta cualquier objeto y se busca el token (tok_…) por patrón.
+type WidgetResult = Record<string, unknown>;
 
 interface WidgetCheckout {
   open: (callback: (result: WidgetResult | undefined) => void) => void;
@@ -81,10 +80,40 @@ export function loadWompiWidget(): Promise<void> {
   return loader;
 }
 
-function extractToken(result: WidgetResult | undefined): string | null {
-  if (!result) return null;
-  if (typeof result.token?.id === 'string') return result.token.id;
+const CARD_TOKEN = /^tok_/;
+
+function idAt(value: unknown): string | null {
+  if (value && typeof value === 'object' && typeof (value as { id?: unknown }).id === 'string') {
+    return (value as { id: string }).id;
+  }
   return null;
+}
+
+function findCardToken(value: unknown, depth = 0): string | null {
+  if (typeof value === 'string') return CARD_TOKEN.test(value) ? value : null;
+  if (!value || typeof value !== 'object' || depth > 4) return null;
+  for (const nested of Object.values(value)) {
+    const found = findCardToken(nested, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * null = el usuario cerró el widget sin tokenizar (silencioso).
+ * Lanza si el widget devolvió datos pero ninguno es un token reconocible: así el
+ * flujo muestra un error en vez de quedarse quieto.
+ */
+function extractToken(result: WidgetResult | undefined): string | null {
+  if (!result || Object.keys(result).length === 0 || 'error' in result) return null;
+  const source = result.payment_source as { token?: unknown } | undefined;
+  // Forma real verificada en sandbox (2026-10-04): { payment_source: { token: 'tok_…', brand, lastFour } }.
+  if (typeof source?.token === 'string') return source.token;
+  const known = idAt(result.token) ?? idAt(result.card) ?? idAt(result.data);
+  if (known) return known;
+  const found = findCardToken(result);
+  if (found) return found;
+  throw new Error('El widget de Wompi no devolvió un token de tarjeta reconocible');
 }
 
 export async function tokenizeCard(options: TokenizeOptions): Promise<string | null> {
@@ -94,13 +123,17 @@ export async function tokenizeCard(options: TokenizeOptions): Promise<string | n
     return null;
   }
 
-  return new Promise<string | null>((resolve) => {
+  return new Promise<string | null>((resolve, reject) => {
     const checkout = new WidgetCheckout({
       publicKey: options.publicKey,
       widgetOperation: 'tokenize',
     });
     checkout.open((result) => {
-      resolve(extractToken(result));
+      try {
+        resolve(extractToken(result));
+      } catch (e) {
+        reject(e);
+      }
     });
   });
 }

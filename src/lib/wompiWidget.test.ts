@@ -67,6 +67,43 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
     await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
   });
 
+  it('resolves the token from the real sandbox callback shape (payment_source.token)', async () => {
+    fakeWidget({
+      payment_source: {
+        token: 'tok_test_2211259_73155f3d7D1058e1C2bBA9f531c788fd',
+        type: 'CARD',
+        cardHolder: 'Charles Wilson',
+        lastFour: '5786',
+        brand: 'MASTERCARD',
+        name: 'MASTERCARD-5786',
+      },
+    });
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBe(
+      'tok_test_2211259_73155f3d7D1058e1C2bBA9f531c788fd',
+    );
+  });
+
+  it('rejects when an async widget callback carries no recognizable token', async () => {
+    const open = vi.fn((cb: (r: unknown) => void) => setTimeout(() => cb({ transaction: { id: 'x' } }), 0));
+    (window as unknown as { WidgetCheckout: unknown }).WidgetCheckout = vi.fn(() => ({ open }));
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).rejects.toThrow(/token/i);
+  });
+
+  it.each([
+    ['card.id', { card: { id: 'tok_test_card' } }, 'tok_test_card'],
+    ['data.id (tokens API shape)', { status: 'CREATED', data: { id: 'tok_test_data', last_four: '5786' } }, 'tok_test_data'],
+    ['top-level id', { id: 'tok_test_top' }, 'tok_test_top'],
+    ['nested unknown key', { payload: { result: { cardToken: 'tok_test_deep' } } }, 'tok_test_deep'],
+  ])('resolves the token when the widget returns it in %s', async (_label, result, expected) => {
+    fakeWidget(result);
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBe(expected);
+  });
+
+  it('rejects (never silent) when the widget returns data without a recognizable token', async () => {
+    fakeWidget({ transaction: { id: '123-abc', status: 'APPROVED' } });
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).rejects.toThrow(/token/i);
+  });
+
   it('does not log card data or the token', async () => {
     const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) => vi.spyOn(console, m));
     fakeWidget({ token: { id: 'tok_secret' } });
