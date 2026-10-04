@@ -1,28 +1,30 @@
 import { ApiClient as api } from './ApiClient';
-import type { Suscripcion } from '../types';
-
-export interface CheckoutRequest {
-  plan?: 'BASICO' | 'PRO';
-}
-
-export interface CheckoutResponse {
-  url: string;
-}
-
-export interface PortalResponse {
-  url: string;
-}
-
-export async function createCheckout(plan?: 'BASICO' | 'PRO'): Promise<string> {
-  const res = await api.post<CheckoutResponse>('/api/billing/checkout', plan ? { plan } : undefined);
-  return res.url;
-}
+import type { Cobro, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
 
 export async function getSuscripcion(): Promise<Suscripcion> {
   return api.get<Suscripcion>('/api/billing/suscripcion');
 }
 
-export async function getPortalLink(): Promise<string> {
-  const res = await api.post<PortalResponse>('/api/billing/portal');
-  return res.url;
+export async function getWompiAcceptance(): Promise<WompiAcceptance> {
+  return api.get<WompiAcceptance>('/api/billing/wompi/acceptance');
+}
+
+export async function registrarMetodoPago(req: MetodoPagoRequest): Promise<Suscripcion> {
+  return api.post<Suscripcion>('/api/billing/metodo-pago', req);
+}
+
+export async function cambiarPlan(plan: PlanSuscripcion): Promise<Suscripcion> {
+  return api.post<Suscripcion>('/api/billing/plan', { plan });
+}
+
+export async function cancelarSuscripcion(): Promise<Suscripcion> {
+  return api.post<Suscripcion>('/api/billing/cancelar');
+}
+
+export async function reactivarSuscripcion(): Promise<Suscripcion> {
+  return api.post<Suscripcion>('/api/billing/reactivar');
+}
+
+export async function getCobros(limit = 12): Promise<Cobro[]> {
+  return api.get<Cobro[]>('/api/billing/cobros', { params: { limit } });
 }

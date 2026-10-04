@@ -24,6 +24,8 @@ export type EtapaFoto = 'ANTES' | 'DURANTE' | 'DESPUES';
 
 export type EstadoSuscripcion = 'TRIAL' | 'ACTIVO' | 'SUSPENDIDO' | 'CANCELADO';
 
+export type PlanSuscripcion = 'TRIAL' | 'LEGACY' | 'BASICO' | 'PRO' | 'EMPRESARIAL';
+
 export interface AuthUser {
   id: number;
   nombre: string;
@@ -460,17 +462,49 @@ export interface InventoryKpis {
 
 /** Respuesta de GET /api/billing/suscripcion (SuscripcionResponse del API). */
 export interface Suscripcion {
-  plan: string;
+  plan: PlanSuscripcion;
   planDisplayName: string;
   estado: EstadoSuscripcion;
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
+  nextChargeAt?: string | null;
+  cancelAtPeriodEnd: boolean;
+  pendingPlan?: PlanSuscripcion | null;
+  pendingPlanDisplayName?: string | null;
   precioCop?: number | null;
+  /** Amount to be charged on the next charge date (COP, human units). */
+  montoProximoCobroCop?: number | null;
   /** Textos ya legibles del catálogo (p.ej. "Técnicos hasta 2"). */
   features?: string[];
   contactoEmpresarial?: boolean;
-  /** Hay una suscripción en el proveedor: un checkout nuevo la duplicaría; se cambia por el portal. */
-  tieneSuscripcion?: boolean;
-  /** Hay customer en el proveedor: el portal está disponible. */
-  tienePortal?: boolean;
+  metodoPago?: { brand: string; last4: string } | null;
+  ultimoCobro?: Cobro | null;
+  cobroEnCurso: boolean;
+  enMora: boolean;
+  pagosHabilitados: boolean;
+}
+
+export interface Cobro {
+  status: 'APPROVED' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'PENDING' | 'CLAIMED';
+  statusMessage: string | null;
+  montoCop: number;
+  plan: PlanSuscripcion;
+  createdAt: string;
+  finalizedAt: string | null;
+}
+
+export interface WompiAcceptance {
+  publicKey: string;
+  acceptanceToken: string;
+  acceptancePermalink: string;
+  personalAuthToken: string;
+  personalAuthPermalink: string;
+}
+
+export interface MetodoPagoRequest {
+  cardToken: string;
+  acceptanceToken: string;
+  personalAuthToken: string;
+  email: string;
+  plan?: PlanSuscripcion;
 }

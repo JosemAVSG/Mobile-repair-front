@@ -119,6 +119,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => window.removeEventListener(BILLING_BLOCK_EVENT, handleBlock);
   }, []);
 
+  // After a successful payment-method/recovery charge, refresh /me so the billing
+  // block clears as soon as the backend transitions the tenant back to ACTIVO.
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (!token) return;
+      const revisionAtStart = sessionRevision.current;
+      getMe()
+        .then((me) => {
+          if (sessionRevision.current !== revisionAtStart) return;
+          const latest = loadFromStorage();
+          if (!latest || latest.token !== token) return;
+          const next: StoredAuth = {
+            token,
+            user: normalizeUser({
+              ...me,
+              tallerId: me.tallerId ?? latest.user.tallerId,
+            }),
+          };
+          saveToStorage(next);
+          setUser(next.user);
+          setBillingBlock(null);
+        })
+        .catch(() => {
+          // Leave existing state untouched; polling will eventually reconcile.
+        });
+    };
+    window.addEventListener('fixtra:refresh-me', handleRefresh);
+    return () => window.removeEventListener('fixtra:refresh-me', handleRefresh);
+  }, [token]);
+
   // Storage events only fire for changes made by another document. Adopt a
   // valid session without writing it back, so this listener cannot loop.
   useEffect(() => {

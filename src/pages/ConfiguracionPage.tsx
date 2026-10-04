@@ -10,9 +10,8 @@ import {
   useAdminShopConfig,
   useUpdateShopConfig,
 } from '../hooks/useShopConfig';
-import { useSuscripcion, useCreateCheckout, usePortalLink } from '../hooks/useBilling';
+import { useSuscripcion } from '../hooks/useBilling';
 import { formatCop, formatDate } from '../utils/formatters';
-import { ApiError } from '../api/ApiClient';
 import type { ShopConfigForm } from '../types';
 
 // ──────────────────────────────────────────────
@@ -304,179 +303,88 @@ const ESTADO_BADGE: Record<string, 'success' | 'info' | 'warning' | 'danger' | '
 };
 
 const ESTADO_LABEL: Record<string, string> = {
-  ACTIVO: 'Activo',
-  TRIAL: 'Prueba gratuita',
-  SUSPENDIDO: 'Suspendido',
-  CANCELADO: 'Cancelado',
+  ACTIVO: 'Active',
+  TRIAL: 'Free trial',
+  SUSPENDIDO: 'Suspended',
+  CANCELADO: 'Cancelled',
 };
 
-const ESTADO_COPY: Record<string, string> = {
-  SUSPENDIDO: 'Tu suscripción está suspendida. Renueva tu plan para continuar.',
-  CANCELADO: 'Tu suscripción fue cancelada. Elige un plan para reactivar tu taller.',
-};
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError || error instanceof Error) return error.message;
-  return 'No se pudo completar la operación';
-}
-
-/** Días enteros que faltan hasta `iso` (mínimo 0), o null si la fecha no es válida. */
+/** Full days remaining until `iso` (minimum 0), or null if invalid. */
 function daysLeft(iso: string): number | null {
   const end = new Date(iso).getTime();
   if (Number.isNaN(end)) return null;
   return Math.max(0, Math.ceil((end - Date.now()) / DAY_MS));
 }
 
+// TODO(W6): replace this temporary stub with the full SuscripcionSection organism.
 function SuscripcionSection() {
   const { data: suscripcion, isLoading } = useSuscripcion();
-  const createCheckout = useCreateCheckout();
-  const createPortal = usePortalLink();
-  const contactEmail = (import.meta.env.VITE_BILLING_CONTACT_EMAIL as string | undefined) || '';
 
-  const redirect = (url: string) => window.location.assign(url);
-  const handleCheckout = (plan?: 'BASICO' | 'PRO') => {
-    createPortal.reset();
-    createCheckout.mutate(plan, { onSuccess: redirect });
-  };
-  const handlePortal = () => {
-    createCheckout.reset();
-    createPortal.mutate(undefined, { onSuccess: redirect });
-  };
-
-  let body;
   if (isLoading) {
-    body = (
-      <div className="flex items-center justify-center py-8">
-        <Spinner size="md" />
-      </div>
-    );
-  } else if (!suscripcion) {
-    body = (
-      <p className="text-sm text-slate-600">No hay información de suscripción disponible.</p>
-    );
-  } else {
-    const { plan, planDisplayName, estado, precioCop, features, trialEndsAt, currentPeriodEnd } =
-      suscripcion;
-    const isLegacy = plan === 'LEGACY';
-    const isEmpresarial = plan === 'EMPRESARIAL' || suscripcion.contactoEmpresarial;
-    const blocked = estado === 'SUSPENDIDO' || estado === 'CANCELADO';
-    const trialDays = plan === 'TRIAL' && trialEndsAt ? daysLeft(trialEndsAt) : null;
-    const pending = createCheckout.isPending || createPortal.isPending;
-    const actionError = createCheckout.error ?? createPortal.error;
-
-    const tieneSuscripcion = suscripcion.tieneSuscripcion ?? false;
-    const tienePortal = suscripcion.tienePortal ?? false;
-    const sellable = !isLegacy && !isEmpresarial;
-
-    // Checkout SOLO sin suscripción vigente (trial, trial vencido) o tras una cancelación. Con
-    // suscripción un segundo checkout duplicaría el cobro (el API responde 409): cambiar de plan y
-    // pagar una cuenta vencida pasan por el portal.
-    const showChoosePlan = sellable && (estado === 'CANCELADO' || !tieneSuscripcion);
-    const enPortal = sellable && tieneSuscripcion && estado !== 'CANCELADO';
-    const showPay = enPortal && tienePortal && estado === 'SUSPENDIDO';
-    const showUpgrade = enPortal && tienePortal && !showPay && plan === 'BASICO';
-    // El portal solo existe con customer en el proveedor (tienePortal).
-    const showPortal = sellable && tienePortal && !showPay;
-
-    body = (
-      <div className="space-y-4">
-        <div>
-          <h4 className="text-lg font-semibold text-slate-800">{planDisplayName}</h4>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {isLegacy ? (
-              <Badge variant="default">Plan heredado</Badge>
-            ) : (
-              <Badge variant={ESTADO_BADGE[estado] ?? 'default'}>
-                {ESTADO_LABEL[estado] ?? estado}
-              </Badge>
-            )}
+    return (
+      <section aria-label="Suscripción">
+        <Card title="Suscripción">
+          <div className="flex items-center justify-center py-8">
+            <Spinner size="md" />
           </div>
-          {precioCop != null && (
-            <p className="mt-2 text-sm font-medium text-slate-700">{formatCop(precioCop)}</p>
-          )}
-          {trialDays != null && (
-            <p className="mt-2 text-sm text-slate-600">
-              {trialDays === 1 ? 'Te queda 1 día' : `Te quedan ${trialDays} días`} de prueba
-              {trialEndsAt ? ` (hasta el ${formatDate(trialEndsAt)})` : ''}.
-            </p>
-          )}
-          {currentPeriodEnd && !isLegacy && (
-            <p className="mt-2 text-sm text-slate-600">
-              Período vigente hasta el {formatDate(currentPeriodEnd)}.
-            </p>
-          )}
-        </div>
-
-        {blocked && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            {ESTADO_COPY[estado]}
-          </p>
-        )}
-
-        {features && features.length > 0 && (
-          <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
-            <p className="mb-1 font-medium text-slate-700">Incluye</p>
-            <ul className="list-inside list-disc space-y-0.5">
-              {features.map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          {showChoosePlan && (
-            <>
-              <Button type="button" disabled={pending} onClick={() => handleCheckout('BASICO')}>
-                Elegir plan Básico
-              </Button>
-              <Button type="button" disabled={pending} onClick={() => handleCheckout('PRO')}>
-                Elegir plan Pro
-              </Button>
-            </>
-          )}
-          {showPay && (
-            <Button type="button" disabled={pending} onClick={handlePortal}>
-              Actualizar pago
-            </Button>
-          )}
-          {showUpgrade && (
-            <Button type="button" disabled={pending} onClick={handlePortal}>
-              Mejorar plan (Pro)
-            </Button>
-          )}
-          {showPortal && (
-            <Button type="button" variant="secondary" disabled={pending} onClick={handlePortal}>
-              Gestionar suscripción
-            </Button>
-          )}
-          {isEmpresarial &&
-            (contactEmail ? (
-              <a
-                href={`mailto:${contactEmail}`}
-                className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Contactar
-              </a>
-            ) : (
-              <span className="text-sm text-slate-500">
-                Contacta a ventas para gestionar tu plan.
-              </span>
-            ))}
-        </div>
-
-        {actionError && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-            {errorMessage(actionError)}
-          </p>
-        )}
-      </div>
+        </Card>
+      </section>
     );
   }
 
+  if (!suscripcion) {
+    return (
+      <section aria-label="Suscripción">
+        <Card title="Suscripción">
+          <p className="text-sm text-slate-600">No subscription information available.</p>
+        </Card>
+      </section>
+    );
+  }
+
+  const { planDisplayName, estado, precioCop, trialEndsAt, currentPeriodEnd, nextChargeAt, metodoPago } =
+    suscripcion;
+  const isLegacy = suscripcion.plan === 'LEGACY';
+  const trialDays = suscripcion.plan === 'TRIAL' && trialEndsAt ? daysLeft(trialEndsAt) : null;
+
   return (
     <section aria-label="Suscripción">
-      <Card title="Suscripción">{body}</Card>
+      <Card title="Suscripción">
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-lg font-semibold text-slate-800">{planDisplayName}</h4>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {isLegacy ? (
+                <Badge variant="default">Legacy plan</Badge>
+              ) : (
+                <Badge variant={ESTADO_BADGE[estado] ?? 'default'}>
+                  {ESTADO_LABEL[estado] ?? estado}
+                </Badge>
+              )}
+            </div>
+            {precioCop != null && (
+              <p className="mt-2 text-sm font-medium text-slate-700">{formatCop(precioCop)}</p>
+            )}
+            {trialDays != null && (
+              <p className="mt-2 text-sm text-slate-600">
+                {trialDays === 1 ? '1 day left' : `${trialDays} days left`} in your free trial
+                {trialEndsAt ? ` (until ${formatDate(trialEndsAt)})` : ''}.
+              </p>
+            )}
+            {currentPeriodEnd && !isLegacy && (
+              <p className="mt-2 text-sm text-slate-600">
+                Current period until {formatDate(currentPeriodEnd)}.
+              </p>
+            )}
+            {nextChargeAt && metodoPago && (
+              <p className="mt-2 text-sm text-slate-600">
+                Next charge {formatDate(nextChargeAt)} on {metodoPago.brand} •••• {metodoPago.last4}.
+              </p>
+            )}
+          </div>
+          <p className="text-xs text-slate-400">Subscription management will be enabled in the next release.</p>
+        </div>
+      </Card>
     </section>
   );
 }
