@@ -1,5 +1,5 @@
 import { ApiClient as api } from './ApiClient';
-import type { Cobro, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
+import type { Cobro, PlanCatalogo, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
 
 export async function getSuscripcion(): Promise<Suscripcion> {
   return api.get<Suscripcion>('/api/billing/suscripcion');
@@ -27,4 +27,8 @@ export async function reactivarSuscripcion(): Promise<Suscripcion> {
 
 export async function getCobros(limit = 12): Promise<Cobro[]> {
   return api.get<Cobro[]>('/api/billing/cobros', { params: { limit } });
+}
+
+export async function getPlanes(): Promise<PlanCatalogo[]> {
+  return api.get<PlanCatalogo[]>('/api/billing/planes');
 }

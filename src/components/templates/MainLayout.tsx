@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../organisms/Sidebar';
 import { Header } from '../organisms/Header';
 import { SuspendedBanner } from '../organisms/SuspendedBanner';
+import { TrialBanner } from '../organisms/TrialBanner';
 import { Breadcrumbs } from '../molecules/Breadcrumbs';
 
 interface MainLayoutProps {
@@ -21,6 +22,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <SuspendedBanner />
+        <TrialBanner />
         <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">

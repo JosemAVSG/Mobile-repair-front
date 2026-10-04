@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PLANES_FALLBACK as PLANES } from '../../lib/planesFallback';
 import type { ReactNode } from 'react';
 import { MetodoPagoFlow } from './MetodoPagoFlow';
 import { ApiError } from '../../api/ApiClient';
@@ -24,6 +25,7 @@ let registrarMutation: {
 let tokenizeCardMock: ReturnType<typeof vi.fn>;
 
 vi.mock('../../hooks/useBilling', () => ({
+  usePlanes: () => ({ data: PLANES, isLoading: false }),
   useWompiAcceptance: () => acceptanceQuery,
   useRegistrarMetodoPago: () => registrarMutation,
 }));

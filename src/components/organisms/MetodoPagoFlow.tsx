@@ -5,8 +5,9 @@ import { Modal } from '../atoms/Modal';
 import { Select } from '../atoms/Select';
 import { Spinner } from '../atoms/Spinner';
 import { WompiTermsCheckboxes } from '../molecules/WompiTermsCheckboxes';
-import { useRegistrarMetodoPago, useWompiAcceptance } from '../../hooks/useBilling';
+import { usePlanes, useRegistrarMetodoPago, useWompiAcceptance } from '../../hooks/useBilling';
 import { tokenizeCard } from '../../lib/wompiWidget';
+import { formatCop } from '../../utils/formatters';
 import { ApiError } from '../../api/ApiClient';
 import type { PlanSuscripcion } from '../../types';
 
@@ -17,11 +18,6 @@ interface MetodoPagoFlowProps {
   initialPlan?: PlanSuscripcion;
   defaultEmail?: string;
 }
-
-const PLAN_OPTIONS: { value: PlanSuscripcion; label: string }[] = [
-  { value: 'BASICO', label: 'Básico' },
-  { value: 'PRO', label: 'Pro' },
-];
 
 function apiErrorMessage(error: Error | null): string | null {
   if (!error) return null;
@@ -46,6 +42,7 @@ export function MetodoPagoFlow({
     isLoading: loadingAcceptance,
     error: acceptanceError,
   } = useWompiAcceptance(open);
+  const { data: planes } = usePlanes();
   const { mutate: registrar, isPending, isSuccess, error } = useRegistrarMetodoPago();
 
   const [termsChecked, setTermsChecked] = useState(false);
@@ -54,6 +51,9 @@ export function MetodoPagoFlow({
   const [tokenizing, setTokenizing] = useState(false);
   const [widgetError, setWidgetError] = useState<string | null>(null);
   const inFlight = useRef(false);
+
+  const planOptions = planes.map((p) => ({ value: p.plan, label: `${p.nombre} · ${formatCop(p.precioCop)}/mes` }));
+  const selectedPlanInfo = planes.find((p) => p.plan === plan);
 
   // Reset form state whenever the flow opens.
   useEffect(() => {
@@ -151,11 +151,18 @@ export function MetodoPagoFlow({
             <Select
               label="Plan"
               placeholder="Selecciona un plan…"
-              options={PLAN_OPTIONS}
+              options={planOptions}
               value={plan}
               onChange={(e) => setPlan(e.target.value as PlanSuscripcion)}
               disabled={isPending}
             />
+          )}
+
+          {selectedPlanInfo && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              Plan <strong>{selectedPlanInfo.nombre}</strong>: {formatCop(selectedPlanInfo.precioCop)} al mes, con
+              cobro automático a esta tarjeta. Puedes cancelar cuando quieras desde Configuración.
+            </p>
           )}
 
           <WompiTermsCheckboxes
