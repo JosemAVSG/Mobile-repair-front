@@ -135,4 +135,35 @@ describe('MetodoPagoFlow', () => {
 
     expect(screen.getByText(/invalid card token/i)).toBeInTheDocument();
   });
+
+  it('shows a Spanish error and re-enables submit when the widget fails to load', async () => {
+    tokenizeCardMock.mockRejectedValue(new Error('boom'));
+    renderFlow({ open: true, defaultEmail: 'user@x.co' });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    fireEvent.click(screen.getByRole('button', { name: /agregar tarjeta/i }));
+
+    expect(await screen.findByText(/no pudimos cargar el formulario de pago/i)).toBeInTheDocument();
+    expect(registrarMutation.mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /agregar tarjeta/i })).not.toBeDisabled();
+  });
+
+  it('ignores re-entry while tokenizing (double click opens one widget, one POST)', async () => {
+    let resolveToken: (v: string) => void = () => {};
+    tokenizeCardMock.mockImplementation(
+      () => new Promise<string>((resolve) => { resolveToken = resolve; }),
+    );
+    renderFlow({ open: true, defaultEmail: 'user@x.co' });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    const btn = screen.getByRole('button', { name: /agregar tarjeta/i });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+
+    expect(tokenizeCardMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(btn).toBeDisabled());
+
+    resolveToken('tok_1');
+    await waitFor(() => expect(registrarMutation.mutate).toHaveBeenCalledTimes(1));
+  });
 });

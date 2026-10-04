@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { SuscripcionSection } from './SuscripcionSection';
@@ -26,6 +26,7 @@ const baseSuscripcion: Suscripcion = {
   contactoEmpresarial: false,
 };
 
+const useCobrosMock = vi.fn();
 let suscripcionQuery: { data?: Suscripcion; isLoading: boolean } = { isLoading: true };
 let cambiarPlanMutation = { mutate: vi.fn(), isPending: false };
 let cancelarMutation = { mutate: vi.fn(), isPending: false };
@@ -36,7 +37,10 @@ vi.mock('../../hooks/useBilling', () => ({
   useCambiarPlan: () => cambiarPlanMutation,
   useCancelarSuscripcion: () => cancelarMutation,
   useReactivarSuscripcion: () => reactivarMutation,
-  useCobros: () => ({ data: [] }),
+  useCobros: (...args: unknown[]) => {
+    useCobrosMock(...args);
+    return { data: [] };
+  },
 }));
 
 vi.mock('./MetodoPagoFlow', () => ({
@@ -62,6 +66,7 @@ const renderSection = (s: Suscripcion) => {
 
 describe('SuscripcionSection', () => {
   beforeEach(() => {
+    useCobrosMock.mockClear();
     suscripcionQuery = { isLoading: true };
     cambiarPlanMutation = { mutate: vi.fn(), isPending: false };
     cancelarMutation = { mutate: vi.fn(), isPending: false };
@@ -167,5 +172,73 @@ describe('SuscripcionSection', () => {
   it('enMora: shows retry warning', () => {
     renderSection({ ...baseSuscripcion, enMora: true, nextChargeAt: '2026-12-02T00:00:00' });
     expect(screen.getByText(/reintentaremos el/i)).toBeInTheDocument();
+  });
+
+  it('shows the cancel confirmation in Spanish', () => {
+    renderSection(baseSuscripcion);
+    fireEvent.click(screen.getByRole('button', { name: /cancelar suscripción/i }));
+    expect(screen.getByText(/mantendrás el acceso hasta el final del período actual/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your access will remain/i)).not.toBeInTheDocument();
+  });
+
+  it.each(['SUSPENDIDO', 'CANCELADO'] as const)('%s: disables the cobros list query', (estado) => {
+    renderSection({ ...baseSuscripcion, estado });
+    expect(useCobrosMock).toHaveBeenLastCalledWith(12, false);
+  });
+
+  it('ACTIVO: enables the cobros list query', () => {
+    renderSection(baseSuscripcion);
+    expect(useCobrosMock).toHaveBeenLastCalledWith(12, true);
+  });
+
+  it('SUSPENDIDO: shows the last charge status and message without the cobros list', () => {
+    renderSection({
+      ...baseSuscripcion,
+      estado: 'SUSPENDIDO',
+      ultimoCobro: {
+        montoCop: 49900,
+        plan: 'BASICO',
+        status: 'DECLINED',
+        statusMessage: 'Fondos insuficientes',
+        createdAt: '2026-11-01T00:00:00',
+      } as Suscripcion['ultimoCobro'],
+    });
+    expect(screen.getByText(/fondos insuficientes/i)).toBeInTheDocument();
+  });
+
+  it('shows the in-process message when polling cap is reached with cobroEnCurso', () => {
+    vi.useFakeTimers();
+    try {
+      renderSection({ ...baseSuscripcion, cobroEnCurso: true });
+      expect(screen.queryByText(/tu pago sigue en proceso/i)).not.toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(121_000);
+      });
+      expect(screen.getByText(/tu pago sigue en proceso/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dispatches fixtra:refresh-me when cobroEnCurso goes true -> false', () => {
+    const spy = vi.fn();
+    window.addEventListener('fixtra:refresh-me', spy);
+    const { rerender } = renderSection({ ...baseSuscripcion, cobroEnCurso: true });
+    expect(spy).not.toHaveBeenCalled();
+    suscripcionQuery = { data: { ...baseSuscripcion, cobroEnCurso: false }, isLoading: false };
+    rerender(<SuscripcionSection />);
+    expect(spy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('fixtra:refresh-me', spy);
+  });
+
+  it('dispatches fixtra:refresh-me when estado changes', () => {
+    const spy = vi.fn();
+    window.addEventListener('fixtra:refresh-me', spy);
+    const { rerender } = renderSection({ ...baseSuscripcion, estado: 'SUSPENDIDO' });
+    expect(spy).not.toHaveBeenCalled();
+    suscripcionQuery = { data: { ...baseSuscripcion, estado: 'ACTIVO' }, isLoading: false };
+    rerender(<SuscripcionSection />);
+    expect(spy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('fixtra:refresh-me', spy);
   });
 });

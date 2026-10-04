@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../atoms/Button';
 import { Input } from '../atoms/Input';
 import { Modal } from '../atoms/Modal';
@@ -51,6 +51,9 @@ export function MetodoPagoFlow({
   const [termsChecked, setTermsChecked] = useState(false);
   const [email, setEmail] = useState(defaultEmail);
   const [plan, setPlan] = useState<PlanSuscripcion | ''>(initialPlan ?? '');
+  const [tokenizing, setTokenizing] = useState(false);
+  const [widgetError, setWidgetError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   // Reset form state whenever the flow opens.
   useEffect(() => {
@@ -58,6 +61,7 @@ export function MetodoPagoFlow({
       setTermsChecked(false);
       setEmail(defaultEmail);
       setPlan(initialPlan ?? '');
+      setWidgetError(null);
     }
   }, [open, defaultEmail, initialPlan]);
 
@@ -73,12 +77,27 @@ export function MetodoPagoFlow({
     termsChecked &&
     email.trim().length > 0 &&
     acceptance != null &&
-    (!requiresPlan || plan !== '');
+    (!requiresPlan || plan !== '') &&
+    !tokenizing &&
+    !isPending;
 
   const handleSubmit = async () => {
-    if (!canSubmit || !acceptance) return;
+    if (inFlight.current || !canSubmit || !acceptance) return;
+    inFlight.current = true;
+    setTokenizing(true);
+    setWidgetError(null);
 
-    const cardToken = await tokenizeCard({ publicKey: acceptance.publicKey });
+    let cardToken: string | null;
+    try {
+      cardToken = await tokenizeCard({ publicKey: acceptance.publicKey });
+    } catch {
+      setWidgetError('No pudimos cargar el formulario de pago. Intenta de nuevo.');
+      inFlight.current = false;
+      setTokenizing(false);
+      return;
+    }
+    inFlight.current = false;
+    setTokenizing(false);
     // Silent no-op when the user closes the widget without producing a token.
     if (!cardToken) return;
 
@@ -91,7 +110,7 @@ export function MetodoPagoFlow({
     });
   };
 
-  const errorMessage = apiErrorMessage(error);
+  const errorMessage = widgetError ?? apiErrorMessage(error);
 
   return (
     <Modal isOpen={open} onClose={onClose} title="Agregar método de pago" size="md">
@@ -156,7 +175,7 @@ export function MetodoPagoFlow({
             <Button variant="secondary" onClick={onClose} disabled={isPending}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} loading={isPending} disabled={!canSubmit}>
+            <Button onClick={handleSubmit} loading={isPending || tokenizing} disabled={!canSubmit}>
               Agregar tarjeta
             </Button>
           </div>

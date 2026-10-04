@@ -15,6 +15,7 @@ import {
   useReactivarSuscripcion,
   useSuscripcion,
 } from '../../hooks/useBilling';
+import { useCobroEnCursoWatch } from '../../hooks/useCobroEnCursoWatch';
 import { formatCop, formatDate } from '../../utils/formatters';
 import type { PlanSuscripcion } from '../../types';
 
@@ -52,7 +53,10 @@ function daysLeft(iso: string): number | null {
 
 export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: SuscripcionSectionProps) {
   const { data: suscripcion, isLoading } = useSuscripcion();
-  const { data: cobros = [] } = useCobros(12);
+  const blocked = suscripcion?.estado === 'SUSPENDIDO' || suscripcion?.estado === 'CANCELADO';
+  // /api/billing/cobros no es ruta de recuperación: 403 para tenants bloqueados.
+  const { data: cobros = [] } = useCobros(12, !blocked);
+  const { pollTimedOut } = useCobroEnCursoWatch(suscripcion?.cobroEnCurso, suscripcion?.estado);
   const cambiarPlan = useCambiarPlan();
   const cancelar = useCancelarSuscripcion();
   const reactivar = useReactivarSuscripcion();
@@ -285,7 +289,29 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
             )}
           </div>
 
-          {cobros.length > 0 && <HistorialCobros cobros={cobros} ultimoCobro={suscripcion.ultimoCobro} />}
+          {cobroEnCurso && pollTimedOut && (
+            <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              Tu pago sigue en proceso. Te avisaremos cuando se confirme; vuelve a revisar en unos minutos.
+            </p>
+          )}
+
+          {cobros.length > 0 ? (
+            <HistorialCobros cobros={cobros} ultimoCobro={suscripcion.ultimoCobro} />
+          ) : (
+            suscripcion.ultimoCobro && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h5 className="text-sm font-medium text-slate-700">Último cobro</h5>
+                  <CobroStatusBadge status={suscripcion.ultimoCobro.status} />
+                </div>
+                {suscripcion.ultimoCobro.statusMessage && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                    {suscripcion.ultimoCobro.statusMessage}
+                  </p>
+                )}
+              </div>
+            )
+          )}
         </div>
       </Card>
 
@@ -299,7 +325,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
       <ConfirmDialog
         isOpen={showCancelDialog}
         title="Cancelar suscripción"
-        message="Your access will remain until the end of the current period. Are you sure?"
+        message="Mantendrás el acceso hasta el final del período actual. ¿Seguro que quieres cancelar?"
         confirmLabel="Confirmar"
         cancelLabel="Volver"
         onConfirm={() => {

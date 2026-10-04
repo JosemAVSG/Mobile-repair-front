@@ -41,7 +41,7 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
   it('rejects after 15s without loading', async () => {
     vi.useFakeTimers();
     const p = loadWompiWidget();
-    const assertion = expect(p).rejects.toThrow(/timed out/i);
+    const assertion = expect(p).rejects.toThrow(/tiempo de carga/i);
     await vi.advanceTimersByTimeAsync(15_000);
     await assertion;
   });

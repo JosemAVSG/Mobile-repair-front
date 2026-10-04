@@ -8,10 +8,10 @@ import {
   reactivarSuscripcion,
   registrarMetodoPago,
 } from '../api/billing';
+import { POLL_CAP_MS } from './useCobroEnCursoWatch';
 import type { Cobro, MetodoPagoRequest, PlanSuscripcion, Suscripcion, WompiAcceptance } from '../types';
 
 const POLL_INTERVAL_MS = 4_000;
-const POLL_CAP_MS = 120_000;
 
 let pollingAnchor: number | null = null;
 
@@ -63,10 +63,11 @@ export function useWompiAcceptance(enabled: boolean): UseQueryResult<WompiAccept
   });
 }
 
-export function useCobros(limit = 12): UseQueryResult<Cobro[], Error> {
+export function useCobros(limit = 12, enabled = true): UseQueryResult<Cobro[], Error> {
   return useQuery({
     queryKey: ['billing', 'cobros'],
     queryFn: () => getCobros(limit),
+    enabled,
   });
 }
 

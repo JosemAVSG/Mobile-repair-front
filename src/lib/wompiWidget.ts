@@ -54,7 +54,7 @@ export function loadWompiWidget(): Promise<void> {
       cleanup();
       loader = null;
       removeScript();
-      reject(new Error('Wompi widget load timed out'));
+      reject(new Error('Se agotó el tiempo de carga del widget de Wompi'));
     }, 15_000);
 
     const cleanup = () => {
@@ -72,7 +72,7 @@ export function loadWompiWidget(): Promise<void> {
       cleanup();
       loader = null;
       removeScript();
-      reject(new Error('Failed to load Wompi widget'));
+      reject(new Error('No se pudo cargar el widget de Wompi'));
     };
 
     document.head.appendChild(script);
