@@ -125,6 +125,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     queryFn: () => getPublicConfig(),
     placeholderData: DEFAULT_IDENTITY,
     staleTime: 5 * 60 * 1000,
+    enabled: user !== null,
   });
 
   const config = useMemo<TallerConfig>(
