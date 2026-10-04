@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { HistorialCobros } from './HistorialCobros';
 import type { Cobro } from '../../types';
+
+vi.mock('../../context/ConfigContext', () => ({
+  useConfig: () => ({ config: { nombreTaller: 'JgTech', logo: null } }),
+}));
 
 const cobros: Cobro[] = [
   {
@@ -47,5 +51,21 @@ describe('HistorialCobros', () => {
   it('shows the last declined charge status message', () => {
     render(<HistorialCobros cobros={cobros} ultimoCobro={cobros[1]} />);
     expect(screen.getByText(/insufficient funds/i)).toBeInTheDocument();
+  });
+
+  it('offers a receipt only for approved charges and opens it', () => {
+    render(<HistorialCobros cobros={cobros} />);
+
+    const buttons = screen.getAllByRole('button', { name: /ver comprobante/i });
+    expect(buttons).toHaveLength(1);
+
+    fireEvent.click(buttons[0]);
+    const dialog = screen.getByRole('dialog', { name: /comprobante de pago/i });
+    expect(dialog).toHaveTextContent('$ 99.900');
+    expect(dialog).toHaveTextContent(/pro/i);
+    expect(dialog).toHaveTextContent(/no una factura electrónica/i);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cerrar' })[0]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

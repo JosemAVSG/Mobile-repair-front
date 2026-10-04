@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { Button } from '../atoms/Button';
+import { ReciboCobroModal } from './ReciboCobroModal';
 import { CobroStatusBadge } from '../molecules/CobroStatusBadge';
 import { formatCop, formatDate } from '../../utils/formatters';
 import type { Cobro } from '../../types';
@@ -8,6 +11,7 @@ interface HistorialCobrosProps {
 }
 
 export function HistorialCobros({ cobros, ultimoCobro }: HistorialCobrosProps) {
+  const [recibo, setRecibo] = useState<Cobro | null>(null);
   const newestFirst = [...cobros].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -34,11 +38,20 @@ export function HistorialCobros({ cobros, ultimoCobro }: HistorialCobrosProps) {
                   {formatDate(cobro.createdAt)} · {cobro.plan}
                 </p>
               </div>
-              <CobroStatusBadge status={cobro.status} />
+              <div className="flex items-center gap-2">
+                {cobro.status === 'APPROVED' && (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setRecibo(cobro)}>
+                    Ver comprobante
+                  </Button>
+                )}
+                <CobroStatusBadge status={cobro.status} />
+              </div>
             </li>
           ))}
         </ul>
       )}
+
+      <ReciboCobroModal cobro={recibo} onClose={() => setRecibo(null)} />
     </div>
   );
 }
