@@ -24,7 +24,7 @@ export type EtapaFoto = 'ANTES' | 'DURANTE' | 'DESPUES';
 
 export type EstadoSuscripcion = 'TRIAL' | 'ACTIVO' | 'SUSPENDIDO' | 'CANCELADO';
 
-export type PlanSuscripcion = 'TRIAL' | 'LEGACY' | 'BASICO' | 'PRO' | 'EMPRESARIAL';
+export type PlanSuscripcion = 'TRIAL' | 'LEGACY' | 'BASICO' | 'PRO';
 
 export interface AuthUser {
   id: number;
@@ -476,7 +476,6 @@ export interface Suscripcion {
   montoProximoCobroCop?: number | null;
   /** Textos ya legibles del catálogo (p.ej. "Técnicos hasta 2"). */
   features?: string[];
-  contactoEmpresarial?: boolean;
   metodoPago?: { brand: string; last4: string } | null;
   ultimoCobro?: Cobro | null;
   cobroEnCurso: boolean;

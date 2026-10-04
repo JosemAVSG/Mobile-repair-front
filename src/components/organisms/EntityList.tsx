@@ -19,6 +19,10 @@ export interface EntityListProps<T> {
 
 type ViewMode = 'list' | 'grid';
 
+// Columnas que se adaptan al ancho disponible (cada card mide al menos 19rem) y separación
+// uniforme; la paginación va aparte con su propio margen para no quedar pegada a las cards.
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-4';
+
 const CARD_SKELETON_CLASS =
   'h-28 animate-pulse rounded-xl border border-slate-200 bg-white';
 
@@ -189,7 +193,7 @@ function EntityListWithCards<T>({
   };
 
   const renderPagination = () => (
-    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
       <select
         aria-label="Filas por página"
         value={gridPageSize}
@@ -296,14 +300,14 @@ function EntityListWithCards<T>({
             pageSize={pageSize}
           />
         ) : loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={GRID_CLASS}>
             {renderSkeletons()}
           </div>
         ) : filtered.length === 0 ? (
           renderEmpty()
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className={GRID_CLASS}>
               {paginatedGrid.map(renderCardItem)}
             </div>
             {renderPagination()}

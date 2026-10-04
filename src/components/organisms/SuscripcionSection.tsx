@@ -104,11 +104,9 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
     enMora,
     pagosHabilitados,
     features,
-    contactoEmpresarial,
   } = suscripcion;
 
   const isLegacy = plan === 'LEGACY';
-  const isEmpresarial = plan === 'EMPRESARIAL' || contactoEmpresarial;
   const isTrial = plan === 'TRIAL';
   const trialDays = isTrial && trialEndsAt ? daysLeft(trialEndsAt) : null;
   const hasCard = metodoPago != null;
@@ -121,7 +119,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
 
   // Con tarjeta y suscripción viva el plan se cambia directo; si no, se pasa por el flujo de pago.
   const canSwitchPlan = hasCard && (estado === 'ACTIVO' || isTrial);
-  const showPlanes = pagosHabilitados && !isLegacy && !isEmpresarial && planes.length > 0;
+  const showPlanes = pagosHabilitados && !isLegacy && planes.length > 0;
   // Ya contrató un plan: la sugerencia de la landing deja de tener sentido.
   if (estado === 'ACTIVO' && hasCard) clearPlanIntent();
 
@@ -256,7 +254,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {pagosHabilitados && !isLegacy && !isEmpresarial && (
+            {pagosHabilitados && !isLegacy && (
               <>
                 {isTrial && !hasCard && (
                   <Button type="button" onClick={() => openPaymentFlow(true)}>
@@ -294,14 +292,6 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
               </>
             )}
 
-            {isEmpresarial && (
-              <a
-                href={contactEmail ? `mailto:${contactEmail}` : '#'}
-                className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Contactar a ventas
-              </a>
-            )}
           </div>
 
           {cobroEnCurso && pollTimedOut && (
