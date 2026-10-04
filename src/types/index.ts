@@ -494,6 +494,8 @@ export interface PlanCatalogo {
 }
 
 export interface Cobro {
+  /** Número de comprobante (p. ej. CP-20261104-9A3F01BC); ausente en cobros sin referencia. */
+  numero?: string | null;
   status: 'APPROVED' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'PENDING' | 'CLAIMED';
   statusMessage: string | null;
   montoCop: number;

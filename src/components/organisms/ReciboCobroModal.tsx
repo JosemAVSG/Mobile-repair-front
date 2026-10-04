@@ -74,6 +74,12 @@ export function ReciboCobroModal({ cobro, onClose }: ReciboCobroModalProps) {
             </div>
 
             <dl className="space-y-2 text-sm">
+              {cobro.numero && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">N.º de comprobante</dt>
+                  <dd className="text-right font-mono font-medium text-slate-800">{cobro.numero}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Taller</dt>
                 <dd className="text-right font-medium text-slate-800">{config.nombreTaller}</dd>

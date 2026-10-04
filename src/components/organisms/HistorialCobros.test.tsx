@@ -9,6 +9,7 @@ vi.mock('../../context/ConfigContext', () => ({
 
 const cobros: Cobro[] = [
   {
+    numero: 'CP-20261101-9A3F01BC',
     status: 'APPROVED',
     statusMessage: null,
     montoCop: 99900,
@@ -61,6 +62,7 @@ describe('HistorialCobros', () => {
 
     fireEvent.click(buttons[0]);
     const dialog = screen.getByRole('dialog', { name: /comprobante de pago/i });
+    expect(dialog).toHaveTextContent('CP-20261101-9A3F01BC');
     expect(dialog).toHaveTextContent('$ 99.900');
     expect(dialog).toHaveTextContent(/pro/i);
     expect(dialog).toHaveTextContent(/no una factura electrónica/i);
