@@ -364,13 +364,19 @@ function SuscripcionSection() {
     const pending = createCheckout.isPending || createPortal.isPending;
     const actionError = createCheckout.error ?? createPortal.error;
 
-    // Elegir plan: TRIAL o estados bloqueados (renovar/reactivar). Mejorar: BASICO activo.
-    const showChoosePlan = !isLegacy && !isEmpresarial && (plan === 'TRIAL' || blocked);
-    const showUpgrade = !isLegacy && !isEmpresarial && !blocked && plan === 'BASICO';
-    // El portal solo sirve con cliente en el proveedor; la API no lo expone, así que
-    // se ofrece y el error 400/409 del backend se muestra si todavía no existe.
-    const showPortal =
-      !isLegacy && !isEmpresarial && (blocked || plan === 'BASICO' || plan === 'PRO');
+    const tieneSuscripcion = suscripcion.tieneSuscripcion ?? false;
+    const tienePortal = suscripcion.tienePortal ?? false;
+    const sellable = !isLegacy && !isEmpresarial;
+
+    // Checkout SOLO sin suscripción vigente (trial, trial vencido) o tras una cancelación. Con
+    // suscripción un segundo checkout duplicaría el cobro (el API responde 409): cambiar de plan y
+    // pagar una cuenta vencida pasan por el portal.
+    const showChoosePlan = sellable && (estado === 'CANCELADO' || !tieneSuscripcion);
+    const enPortal = sellable && tieneSuscripcion && estado !== 'CANCELADO';
+    const showPay = enPortal && tienePortal && estado === 'SUSPENDIDO';
+    const showUpgrade = enPortal && tienePortal && !showPay && plan === 'BASICO';
+    // El portal solo existe con customer en el proveedor (tienePortal).
+    const showPortal = sellable && tienePortal && !showPay;
 
     body = (
       <div className="space-y-4">
@@ -429,8 +435,13 @@ function SuscripcionSection() {
               </Button>
             </>
           )}
+          {showPay && (
+            <Button type="button" disabled={pending} onClick={handlePortal}>
+              Actualizar pago
+            </Button>
+          )}
           {showUpgrade && (
-            <Button type="button" disabled={pending} onClick={() => handleCheckout('PRO')}>
+            <Button type="button" disabled={pending} onClick={handlePortal}>
               Mejorar plan (Pro)
             </Button>
           )}

@@ -469,4 +469,8 @@ export interface Suscripcion {
   /** Textos ya legibles del catálogo (p.ej. "Técnicos hasta 2"). */
   features?: string[];
   contactoEmpresarial?: boolean;
+  /** Hay una suscripción en el proveedor: un checkout nuevo la duplicaría; se cambia por el portal. */
+  tieneSuscripcion?: boolean;
+  /** Hay customer en el proveedor: el portal está disponible. */
+  tienePortal?: boolean;
 }
