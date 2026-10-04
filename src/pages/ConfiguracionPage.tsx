@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Input } from '../components/atoms/Input';
@@ -9,6 +10,8 @@ import {
   useAdminShopConfig,
   useUpdateShopConfig,
 } from '../hooks/useShopConfig';
+import { useAuth } from '../hooks/useAuth';
+import { SuscripcionSection } from '../components/organisms/SuscripcionSection';
 import type { ShopConfigForm } from '../types';
 
 // ──────────────────────────────────────────────
@@ -32,6 +35,9 @@ export function ConfiguracionPage() {
   const { config, updateConfig } = useConfig();
   const { data: backendConfig, isPending: loadingBackend } = useAdminShopConfig();
   const updateMutation = useUpdateShopConfig();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const autoOpenPaymentFlow = searchParams.get('pagar') === '1';
 
   const [draft, setDraft] = useState<ShopConfigForm>({
     nombreTaller: '',
@@ -285,6 +291,11 @@ export function ConfiguracionPage() {
           logo del taller.
         </span>
       </div>
+      <SuscripcionSection
+        defaultEmail={user?.correo ?? ''}
+        autoOpenPaymentFlow={autoOpenPaymentFlow}
+      />
     </div>
   );
 }
+

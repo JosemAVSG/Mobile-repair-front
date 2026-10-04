@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { AuthProvider } from './AuthContext';
 import { useAuth } from '../hooks/useAuth';
+import { ApiError } from '../api/ApiClient';
 import type { AuthUser } from '../types';
 
 vi.mock('../api/auth', () => ({
@@ -212,5 +213,199 @@ describe('AuthContext: aislamiento de caché entre talleres', () => {
 
     expect(result.current.user?.tallerId).toBe(7);
     expect(JSON.parse(localStorage.getItem('auth')!).user.tallerId).toBe(7);
+  });
+});
+
+describe('AuthContext: billing (R-BU1/R-BU5)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(getMe).mockReset();
+    vi.mocked(login).mockReset();
+  });
+  afterEach(() => localStorage.clear());
+
+  const storedWithEstado = (estado: string) =>
+    JSON.stringify({
+      token: 'jwt-7',
+      user: { ...response(7).user, tallerId: 7, plan: 'BASICO', estado },
+    });
+
+  it('S-BU5.1: /me 200 con estado SUSPENDIDO → autenticado + billingBlocked, sin logout', async () => {
+    localStorage.setItem('auth', storedWithEstado('ACTIVO'));
+    vi.mocked(getMe).mockResolvedValue({
+      ...response(7).user,
+      tallerId: 7,
+      plan: 'BASICO',
+      estado: 'SUSPENDIDO',
+    });
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.billingBlocked).toBe(true);
+    expect(result.current.user?.estado).toBe('SUSPENDIDO');
+    expect(JSON.parse(localStorage.getItem('auth')!).user.estado).toBe('SUSPENDIDO');
+  });
+
+  it('S-BU1.3: login 200 con estado CANCELADO en la raíz o en user → billingBlocked', async () => {
+    vi.mocked(login).mockResolvedValue({
+      ...response(7),
+      plan: 'PRO',
+      estado: 'CANCELADO',
+      currentPeriodEnd: '2026-10-01T00:00:00',
+    });
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.login('admin', 'secret');
+    });
+
+    expect(result.current.billingBlocked).toBe(true);
+    expect(result.current.user?.plan).toBe('PRO');
+    expect(result.current.user?.estado).toBe('CANCELADO');
+    expect(result.current.user?.currentPeriodEnd).toBe('2026-10-01T00:00:00');
+  });
+
+  it('login con estado ACTIVO → billingBlocked false', async () => {
+    vi.mocked(login).mockResolvedValue({ ...response(7), plan: 'PRO', estado: 'ACTIVO' });
+    const { result } = setup();
+    await act(async () => {
+      await result.current.login('admin', 'secret');
+    });
+    expect(result.current.billingBlocked).toBe(false);
+  });
+
+  it('S-BU5.1b: /me 403 SUSPENDIDO con estado guardado ACTIVO (stale) → sesión mantenida y billingBlocked', async () => {
+    localStorage.setItem('auth', storedWithEstado('ACTIVO'));
+    vi.mocked(getMe).mockRejectedValue(
+      new ApiError('Tu suscripción está suspendida.', 403, {}, 'SUSPENDIDO'),
+    );
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.token).toBe('jwt-7');
+    expect(localStorage.getItem('auth')).not.toBeNull();
+    expect(result.current.user?.estado).toBe('ACTIVO'); // el guardado está stale...
+    expect(result.current.billingBlocked).toBe(true); // ...pero el 403 manda
+    expect(result.current.billingBlock).toEqual({
+      codigo: 'SUSPENDIDO',
+      message: 'Tu suscripción está suspendida.',
+    });
+  });
+
+  it('S-BU5.2: /me 401 → logout', async () => {
+    localStorage.setItem('auth', storedWithEstado('ACTIVO'));
+    vi.mocked(getMe).mockRejectedValue(new ApiError('Token inválido', 401, {}));
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+
+    expect(result.current.user).toBeNull();
+    expect(result.current.billingBlocked).toBe(false);
+    expect(localStorage.getItem('auth')).toBeNull();
+  });
+
+  it('otro fallo de /me (403 sin codigo de billing, red) → logout como hoy', async () => {
+    localStorage.setItem('auth', storedWithEstado('ACTIVO'));
+    vi.mocked(getMe).mockRejectedValue(new ApiError('Acceso denegado', 403, {}, 'LIMITE_PLAN'));
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+
+    expect(result.current.user).toBeNull();
+    expect(localStorage.getItem('auth')).toBeNull();
+  });
+
+  it('el evento fixtra:billing-block lo captura el provider (raíz) aunque nadie más escuche', async () => {
+    vi.mocked(login).mockResolvedValue({ ...response(7), plan: 'PRO', estado: 'ACTIVO' });
+    const { result } = setup();
+    await act(async () => {
+      await result.current.login('admin', 'secret');
+    });
+    expect(result.current.billingBlocked).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('fixtra:billing-block', {
+          detail: { codigo: 'SUSPENDIDO', message: 'Tu período de prueba terminó.' },
+        }),
+      );
+    });
+
+    expect(result.current.billingBlocked).toBe(true);
+    expect(result.current.billingBlock?.message).toBe('Tu período de prueba terminó.');
+  });
+
+  it('eventos con codigo que no es de billing se ignoran', async () => {
+    const { result } = setup();
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('fixtra:billing-block', { detail: { codigo: 'LIMITE_PLAN', message: 'x' } }),
+      );
+    });
+    expect(result.current.billingBlock).toBeNull();
+  });
+
+  it('refetches /me after fixtra:refresh-me and clears the billing block when ACTIVO', async () => {
+    localStorage.setItem('auth', storedWithEstado('SUSPENDIDO'));
+    vi.mocked(getMe)
+      .mockResolvedValueOnce({
+        ...response(7).user,
+        tallerId: 7,
+        plan: 'BASICO',
+        estado: 'SUSPENDIDO',
+      })
+      .mockResolvedValue({
+        ...response(7).user,
+        tallerId: 7,
+        plan: 'BASICO',
+        estado: 'ACTIVO',
+      });
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+    expect(result.current.user?.estado).toBe('SUSPENDIDO');
+    expect(result.current.billingBlocked).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('fixtra:refresh-me'));
+    });
+
+    await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.user?.estado).toBe('ACTIVO'));
+    expect(result.current.billingBlocked).toBe(false);
+    expect(result.current.billingBlock).toBeNull();
+    expect(JSON.parse(localStorage.getItem('auth')!).user.estado).toBe('ACTIVO');
+  });
+
+  it('logout y un nuevo login limpian el bloqueo', async () => {
+    vi.mocked(login).mockResolvedValue({ ...response(7), plan: 'PRO', estado: 'ACTIVO' });
+    const { result } = setup();
+    await act(async () => {
+      await result.current.login('admin', 'secret');
+    });
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('fixtra:billing-block', { detail: { codigo: 'CANCELADO', message: 'm' } }),
+      );
+    });
+    expect(result.current.billingBlocked).toBe(true);
+
+    act(() => result.current.logout());
+    expect(result.current.billingBlock).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('fixtra:billing-block', { detail: { codigo: 'CANCELADO', message: 'm' } }),
+      );
+    });
+    await act(async () => {
+      await result.current.login('admin', 'secret');
+    });
+    expect(result.current.billingBlock).toBeNull();
+    expect(result.current.billingBlocked).toBe(false);
   });
 });

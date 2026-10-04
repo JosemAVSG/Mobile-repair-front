@@ -34,7 +34,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Panel de marca (solo escritorio) */}
-      <aside className="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-primary to-primary-dark text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
+      <aside className="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-[#1f2630] via-[#161b22] to-[#0d1117] text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
         {/* Patrón decorativo tipo grilla */}
         <div
           aria-hidden="true"
@@ -43,14 +43,14 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         {/* Ícono decorativo translúcido */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-24 -right-24 text-white opacity-10"
+          className="pointer-events-none absolute -bottom-24 -right-24 text-[#f7a830] opacity-10"
         >
           <Icon name="wrench" size={420} />
         </div>
 
         <div className="relative flex h-full flex-col justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/25">
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-[#f7a830]/40">
               {logo}
             </div>
             <span className="text-lg font-semibold tracking-tight">
@@ -77,7 +77,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                   <Icon
                     name="check-circle"
                     size={18}
-                    className="shrink-0 text-emerald-300"
+                    className="shrink-0 text-[#f7a830]"
                   />
                   {feature}
                 </li>

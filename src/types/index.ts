@@ -2,9 +2,16 @@
 // API Response wrapper
 // ──────────────────────────────────────────────
 
+export interface ApiResponseMeta {
+  success: boolean;
+  message: string;
+  timestamp: string;
+  codigo?: string;
+}
+
 export interface ApiResponse<T> {
   data: T;
-  meta: { success: boolean; message: string; timestamp: string };
+  meta: ApiResponseMeta;
 }
 
 // ──────────────────────────────────────────────
@@ -14,6 +21,10 @@ export interface ApiResponse<T> {
 export type RolUsuario = 'ADMIN' | 'TECNICO';
 
 export type EtapaFoto = 'ANTES' | 'DURANTE' | 'DESPUES';
+
+export type EstadoSuscripcion = 'TRIAL' | 'ACTIVO' | 'SUSPENDIDO' | 'CANCELADO';
+
+export type PlanSuscripcion = 'TRIAL' | 'LEGACY' | 'BASICO' | 'PRO' | 'EMPRESARIAL';
 
 export interface AuthUser {
   id: number;
@@ -30,6 +41,11 @@ export interface AuthUser {
   tecnicoId?: number | null;
   /** Taller (tenant) al que pertenece el usuario. */
   tallerId?: number | null;
+  /** Billing fields from backend (login/me) */
+  plan?: string | null;
+  estado?: EstadoSuscripcion | null;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
 }
 
 export interface LoginResponse {
@@ -38,6 +54,10 @@ export interface LoginResponse {
   rol: RolUsuario;
   tallerId?: number | null;
   nombreTaller?: string | null;
+  plan?: string | null;
+  estado?: EstadoSuscripcion | null;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
 }
 
 /** Cuerpo de POST /api/auth/register-taller. */
@@ -434,4 +454,57 @@ export interface InventoryKpis {
   bajoStock: number;
   sinStock: number;
   valorTotalStock: number;
+}
+
+// ──────────────────────────────────────────────
+// Billing
+// ──────────────────────────────────────────────
+
+/** Respuesta de GET /api/billing/suscripcion (SuscripcionResponse del API). */
+export interface Suscripcion {
+  plan: PlanSuscripcion;
+  planDisplayName: string;
+  estado: EstadoSuscripcion;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
+  nextChargeAt?: string | null;
+  cancelAtPeriodEnd: boolean;
+  pendingPlan?: PlanSuscripcion | null;
+  pendingPlanDisplayName?: string | null;
+  precioCop?: number | null;
+  /** Amount to be charged on the next charge date (COP, human units). */
+  montoProximoCobroCop?: number | null;
+  /** Textos ya legibles del catálogo (p.ej. "Técnicos hasta 2"). */
+  features?: string[];
+  contactoEmpresarial?: boolean;
+  metodoPago?: { brand: string; last4: string } | null;
+  ultimoCobro?: Cobro | null;
+  cobroEnCurso: boolean;
+  enMora: boolean;
+  pagosHabilitados: boolean;
+}
+
+export interface Cobro {
+  status: 'APPROVED' | 'DECLINED' | 'ERROR' | 'VOIDED' | 'PENDING' | 'CLAIMED';
+  statusMessage: string | null;
+  montoCop: number;
+  plan: PlanSuscripcion;
+  createdAt: string;
+  finalizedAt: string | null;
+}
+
+export interface WompiAcceptance {
+  publicKey: string;
+  acceptanceToken: string;
+  acceptancePermalink: string;
+  personalAuthToken: string;
+  personalAuthPermalink: string;
+}
+
+export interface MetodoPagoRequest {
+  cardToken: string;
+  acceptanceToken: string;
+  personalAuthToken: string;
+  email: string;
+  plan?: PlanSuscripcion;
 }
