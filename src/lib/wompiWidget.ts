@@ -106,6 +106,9 @@ function findCardToken(value: unknown, depth = 0): string | null {
  */
 function extractToken(result: WidgetResult | undefined): string | null {
   if (!result || Object.keys(result).length === 0 || 'error' in result) return null;
+  const source = result.payment_source as { token?: unknown } | undefined;
+  // Forma real verificada en sandbox (2026-10-04): { payment_source: { token: 'tok_…', brand, lastFour } }.
+  if (typeof source?.token === 'string') return source.token;
   const known = idAt(result.token) ?? idAt(result.card) ?? idAt(result.data);
   if (known) return known;
   const found = findCardToken(result);
@@ -120,13 +123,17 @@ export async function tokenizeCard(options: TokenizeOptions): Promise<string | n
     return null;
   }
 
-  return new Promise<string | null>((resolve) => {
+  return new Promise<string | null>((resolve, reject) => {
     const checkout = new WidgetCheckout({
       publicKey: options.publicKey,
       widgetOperation: 'tokenize',
     });
     checkout.open((result) => {
-      resolve(extractToken(result));
+      try {
+        resolve(extractToken(result));
+      } catch (e) {
+        reject(e);
+      }
     });
   });
 }

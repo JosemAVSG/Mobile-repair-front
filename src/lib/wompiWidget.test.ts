@@ -67,6 +67,28 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
     await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
   });
 
+  it('resolves the token from the real sandbox callback shape (payment_source.token)', async () => {
+    fakeWidget({
+      payment_source: {
+        token: 'tok_test_2211259_73155f3d7D1058e1C2bBA9f531c788fd',
+        type: 'CARD',
+        cardHolder: 'Charles Wilson',
+        lastFour: '5786',
+        brand: 'MASTERCARD',
+        name: 'MASTERCARD-5786',
+      },
+    });
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBe(
+      'tok_test_2211259_73155f3d7D1058e1C2bBA9f531c788fd',
+    );
+  });
+
+  it('rejects when an async widget callback carries no recognizable token', async () => {
+    const open = vi.fn((cb: (r: unknown) => void) => setTimeout(() => cb({ transaction: { id: 'x' } }), 0));
+    (window as unknown as { WidgetCheckout: unknown }).WidgetCheckout = vi.fn(() => ({ open }));
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).rejects.toThrow(/token/i);
+  });
+
   it.each([
     ['card.id', { card: { id: 'tok_test_card' } }, 'tok_test_card'],
     ['data.id (tokens API shape)', { status: 'CREATED', data: { id: 'tok_test_data', last_four: '5786' } }, 'tok_test_data'],
