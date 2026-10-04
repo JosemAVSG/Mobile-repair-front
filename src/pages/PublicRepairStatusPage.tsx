@@ -1,6 +1,5 @@
 import { useParams } from 'react-router-dom';
 import { usePublicRepair } from '../hooks/usePublicRepair';
-import { usePublicShopConfig } from '../hooks/useShopConfig';
 import { Button } from '../components/atoms/Button';
 import { Spinner } from '../components/atoms/Spinner';
 import { Icon } from '../components/atoms/Icon';
@@ -12,7 +11,7 @@ import {
   type PublicStage,
   EstadoOrden,
 } from '../types';
-import { POWERED_BY } from '../utils/brand';
+import { POWERED_BY, PRODUCT_NAME } from '../utils/brand';
 
 // ──────────────────────────────────────────────
 // Stages
@@ -340,10 +339,11 @@ export function PublicRepairStatusPage() {
     error,
     refetch,
   } = usePublicRepair(id);
-  const { data: shopConfig } = usePublicShopConfig();
 
-  const nombreTaller = shopConfig?.nombreTaller ?? 'Taller de Reparaciones';
-  const logo = shopConfig?.logo;
+  // La identidad del taller viaja en la propia respuesta del seguimiento
+  // (nombreTaller/logoUrl). Mientras carga o si falla, marca genérica Fixtra.
+  const nombreTaller = repair?.nombreTaller?.trim() || PRODUCT_NAME;
+  const logo = repair?.logoUrl;
 
   if (isLoading) {
     return <LoadingState nombreTaller={nombreTaller} logo={logo} />;

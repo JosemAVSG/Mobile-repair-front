@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getPublicConfig } from '../api/configuracion';
+import { useAuth } from '../hooks/useAuth';
+import { PRODUCT_NAME } from '../utils/brand';
 import type { BackendShopConfig } from '../types';
 
 // ──────────────────────────────────────────────
@@ -19,9 +21,10 @@ import type { BackendShopConfig } from '../types';
 // SIEMPRE en localStorage y NUNCA se envía al backend.
 //
 // `nombreTaller` y `logo` son identidad del taller: se leen desde el endpoint
-// público `/api/configuracion/public`. Se conserva una única lectura del
-// legacy `taller-config` localStorage como fallback hasta que el backend
-// responda.
+// público `/api/configuracion/public`. Con sesión devuelve la identidad del
+// taller del usuario; sin sesión, la marca genérica del producto (Fixtra).
+// La query va keyed por `tallerId`, así cambiar de sesión nunca muestra la
+// identidad de otro taller.
 
 export interface TallerConfig {
   nombreTaller: string;
@@ -30,7 +33,7 @@ export interface TallerConfig {
 }
 
 export const DEFAULT_CONFIG: TallerConfig = {
-  nombreTaller: 'Taller de Reparaciones',
+  nombreTaller: PRODUCT_NAME,
   logo: null,
   colorPrimario: '#2563eb',
 };
@@ -44,7 +47,6 @@ interface ConfigContextType {
 export const ConfigContext = createContext<ConfigContextType | null>(null);
 
 const STORAGE_KEY = 'taller-config';
-const QUERY_KEY = ['configuracion', 'public'];
 
 // Variables CSS que consume Tailwind v4 (@theme inline en index.css)
 const CSS_PRIMARY = '--taller-primary';
@@ -96,35 +98,10 @@ function loadColorFromStorage(): string {
   }
 }
 
-/**
- * Lectura única de nombre/logo legacy desde `taller-config`.
- * Se usa como `initialData` mientras llega la configuración del backend.
- */
-function readLegacyShopIdentity(): BackendShopConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        nombreTaller: DEFAULT_CONFIG.nombreTaller,
-        logo: DEFAULT_CONFIG.logo,
-      };
-    }
-    const parsed = JSON.parse(raw) as Partial<TallerConfig>;
-    return {
-      nombreTaller:
-        typeof parsed.nombreTaller === 'string' &&
-        parsed.nombreTaller.trim() !== ''
-          ? parsed.nombreTaller
-          : DEFAULT_CONFIG.nombreTaller,
-      logo: typeof parsed.logo === 'string' ? parsed.logo : DEFAULT_CONFIG.logo,
-    };
-  } catch {
-    return {
-      nombreTaller: DEFAULT_CONFIG.nombreTaller,
-      logo: DEFAULT_CONFIG.logo,
-    };
-  }
-}
+const DEFAULT_IDENTITY: BackendShopConfig = {
+  nombreTaller: DEFAULT_CONFIG.nombreTaller,
+  logo: DEFAULT_CONFIG.logo,
+};
 
 interface ConfigProviderProps {
   children: ReactNode;
@@ -135,16 +112,20 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     loadColorFromStorage(),
   );
 
-  // Identidad del taller desde backend. El legacy de localStorage se usa como
-  // placeholder mientras carga, pero NUNCA como `initialData`: eso marcaría el
-  // default como "fresco" y React Query no consultaría la API hasta pasar el
-  // staleTime (el default sobrescribía la API al recargar).
-  const legacyIdentity = useMemo(() => readLegacyShopIdentity(), []);
-  const { data: backendConfig } = useQuery({
-    queryKey: QUERY_KEY,
+  const { user } = useAuth();
+  const tallerKey = user?.tallerId ?? 'anon';
+
+  // Identidad del taller desde backend. El default (Fixtra) es solo
+  // `placeholderData`, NUNCA `initialData`: eso marcaría el default como
+  // "fresco" y React Query no consultaría la API hasta pasar el staleTime.
+  // El prefijo ['configuracion','public'] se mantiene para que la
+  // invalidación de ConfiguracionPage siga coincidiendo.
+  const { data: backendConfig } = useQuery<BackendShopConfig>({
+    queryKey: ['configuracion', 'public', tallerKey],
     queryFn: () => getPublicConfig(),
-    placeholderData: legacyIdentity,
+    placeholderData: DEFAULT_IDENTITY,
     staleTime: 5 * 60 * 1000,
+    enabled: user !== null,
   });
 
   const config = useMemo<TallerConfig>(

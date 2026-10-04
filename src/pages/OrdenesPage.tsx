@@ -15,7 +15,7 @@ import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { asignarTecnico, createOrden } from '../api/ordenes';
 import { formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
-import { isOrdenAtrasada } from '../utils/ordenes';
+import { isOrdenAtrasada, formatNumeroOrden } from '../utils/ordenes';
 import { useAuth } from '../hooks/useAuth';
 import type { OrdenTrabajo, Cliente, Marca, Modelo, OrdenRequest } from '../types';
 import { EstadoOrden, TIPOS_DISPOSITIVO_ACTIVOS, TipoDispositivo, TipoReparacion } from '../types';
@@ -28,6 +28,7 @@ import { useOrdenes, useClientes, useMarcas, useModelos, useTecnicos } from '../
 
 interface OrdenRow {
   id: number;
+  numeroOrden: string;
   cliente: string;
   equipo: string;
   tecnico: string;
@@ -204,6 +205,7 @@ export function OrdenesPage() {
 
       return {
         id: orden.id,
+        numeroOrden: formatNumeroOrden(orden),
         cliente: cliente?.nombre ?? `Cliente #${orden.clienteId}`,
         equipo: dispLabel,
         tecnico:
@@ -223,7 +225,7 @@ export function OrdenesPage() {
   // ───── Columns ─────
 
   const columns: Column<OrdenRow>[] = [
-    { key: 'id', label: 'ID', sortable: true },
+    { key: 'numeroOrden', label: 'N°', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
     { key: 'equipo', label: 'Equipo' },
     ...(isAdmin
@@ -673,7 +675,7 @@ export function OrdenesPage() {
             <>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-700">
-                  #{row.id}
+                  #{row.numeroOrden}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   {row.atrasada && <Badge variant="danger">Atrasada</Badge>}
@@ -1072,7 +1074,7 @@ export function OrdenesPage() {
       <ConfirmDialog
         isOpen={asignTarget !== null}
         title="Asignar reparación"
-        message={`¿Quieres asignarte la reparación #${asignTarget?.id}?`}
+        message={`¿Quieres asignarte la reparación #${asignTarget ? formatNumeroOrden(asignTarget) : ''}?`}
         confirmLabel="Asignarme"
         cancelLabel="Cancelar"
         variant="warning"

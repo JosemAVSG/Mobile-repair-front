@@ -8,6 +8,7 @@ import { Spinner } from '../atoms/Spinner';
 import { Badge } from '../atoms/Badge';
 import { ApiError } from '../../api/ApiClient';
 import { useOrdenes } from '../../hooks/useQueries';
+import { formatNumeroOrden } from '../../utils/ordenes';
 import type {
   MovimientoRequest,
   ProductoInventario,
@@ -66,7 +67,7 @@ export function MovimientoInventarioModal({
 
   const ordenOptions = (ordenes ?? []).map((o) => ({
     value: String(o.id),
-    label: `Orden #${o.id}`,
+    label: `Orden #${formatNumeroOrden(o)}`,
   }));
 
   const validate = useCallback((): boolean => {

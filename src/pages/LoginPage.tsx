@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '../components/atoms/Input';
 import { Button } from '../components/atoms/Button';
 import { Icon } from '../components/atoms/Icon';
 import { AuthLayout } from '../components/templates/AuthLayout';
 import { useAuth } from '../hooks/useAuth';
 import { useConfig } from '../context/ConfigContext';
+import { ApiError } from '../api/ApiClient';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -40,9 +41,11 @@ export function LoginPage() {
       navigate(user.rol === 'ADMIN' ? '/' : '/reparaciones', { replace: true });
     } catch (err) {
       const msg =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Error al iniciar sesión. Intenta de nuevo.';
+        err instanceof ApiError && err.status === 429
+          ? 'Demasiados intentos. Espera un momento e inténtalo de nuevo.'
+          : err instanceof Error && err.message
+            ? err.message
+            : 'Error al iniciar sesión. Intenta de nuevo.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -113,7 +116,14 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-xs text-slate-400">
+      <p className="mt-6 text-center text-sm text-slate-500">
+        ¿No tienes cuenta?{' '}
+        <Link to="/registro" className="font-medium text-primary hover:underline">
+          Crea tu taller
+        </Link>
+      </p>
+
+      <p className="mt-4 text-center text-xs text-slate-400">
         {config.nombreTaller} · Sistema de gestión de reparaciones
       </p>
     </AuthLayout>

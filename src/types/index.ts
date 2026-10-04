@@ -28,12 +28,28 @@ export interface AuthUser {
    *  usuario (todo usuario es una fila en `tecnicos`), por lo que coincide
    *  con `id` en la práctica. */
   tecnicoId?: number | null;
+  /** Taller (tenant) al que pertenece el usuario. */
+  tallerId?: number | null;
 }
 
 export interface LoginResponse {
   token: string;
   user: AuthUser;
   rol: RolUsuario;
+  tallerId?: number | null;
+  nombreTaller?: string | null;
+}
+
+/** Cuerpo de POST /api/auth/register-taller. */
+export interface RegisterTallerRequest {
+  nombreTaller: string;
+  adminNombre: string;
+  username: string;
+  password: string;
+  correo: string;
+  telefono?: string;
+  /** Honeypot anti-bots: debe viajar vacío. */
+  website?: string;
 }
 
 export enum CategoriaMarca {
@@ -113,6 +129,8 @@ export interface Marca {
   nombre: string;
   categoria: CategoriaMarca;
   createdAt: string;
+  /** true = registro del catálogo global (solo lectura para los talleres). */
+  global?: boolean;
 }
 
 export interface Modelo {
@@ -120,6 +138,8 @@ export interface Modelo {
   nombre: string;
   marcaId: number;
   createdAt: string;
+  /** true = registro del catálogo global (solo lectura para los talleres). */
+  global?: boolean;
 }
 
 export interface Cliente {
@@ -143,6 +163,8 @@ export interface Tecnico {
 
 export interface OrdenTrabajo {
   id: number;
+  /** Número de orden por taller (p.ej. "0001"). Si falta, se usa el id. */
+  numeroOrden?: string | null;
   /** Código no adivinable usado en el QR público */
   codigoPublico?: string | null;
   clienteId: number;
@@ -308,6 +330,8 @@ export type PublicStage =
 export type PublicRepairStatus = {
   id: string;
   numeroOrden: string;
+  nombreTaller?: string | null;
+  logoUrl?: string | null;
   cliente: { nombre?: string | null };
   equipo: { modelo: string; marca?: string };
   estadoOrden: EstadoOrden;

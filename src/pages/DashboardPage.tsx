@@ -21,6 +21,7 @@ import {
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { formatDate, formatCurrency } from '../utils/formatters';
+import { formatNumeroOrden } from '../utils/ordenes';
 import type { OrdenTrabajo, Cliente, EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
 import { useConfig } from '../context/ConfigContext';
@@ -31,6 +32,7 @@ import { useConfig } from '../context/ConfigContext';
 
 interface OrdenRow {
   id: number;
+  numeroOrden: string;
   cliente: string;
   estado: OrdenTrabajo['estado'];
   fechaEntrada: string;
@@ -151,6 +153,7 @@ export function DashboardPage() {
 
       const rows: OrdenRow[] = last10.map((o) => ({
         id: o.id,
+        numeroOrden: formatNumeroOrden(o),
         cliente: clienteMap.get(o.clienteId) ?? `Cliente #${o.clienteId}`,
         estado: o.estado,
         fechaEntrada: o.fechaEntrada,
@@ -312,7 +315,7 @@ export function DashboardPage() {
   // ───── Data ─────
 
   const columns: Column<OrdenRow>[] = [
-    { key: 'id', label: 'ID', sortable: true },
+    { key: 'numeroOrden', label: 'N°', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
     {
       key: 'estado',
@@ -426,7 +429,7 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <p className="text-sm font-medium text-blue-600">
-                    Reparación #{o.id}
+                    Reparación #{formatNumeroOrden(o)}
                   </p>
                 </button>
               ))}
@@ -514,7 +517,7 @@ export function DashboardPage() {
                 <>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-slate-700">
-                      #{row.id}
+                      #{row.numeroOrden}
                     </span>
                     <StatusBadge estado={row.estado} />
                   </div>
