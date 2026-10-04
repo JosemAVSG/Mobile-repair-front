@@ -59,12 +59,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
               {initialsOf(displayName)}
             </div>
           )}
-          <span className="text-sm font-medium text-slate-700">{displayName}</span>
-          {user?.rol && (
-            <Badge variant={ROL_BADGE[user.rol]}>
-              {ROL_LABELS[user.rol]}
-            </Badge>
-          )}
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="max-w-[16rem] truncate text-sm font-medium text-slate-700" title={displayName}>
+              {displayName}
+            </span>
+            {user?.rol && (
+              <span className="mt-0.5 self-start">
+                <Badge variant={ROL_BADGE[user.rol]}>{ROL_LABELS[user.rol]}</Badge>
+              </span>
+            )}
+          </div>
         </div>
         <Button variant="ghost" size="sm" onClick={logout}>
           Cerrar Sesión
