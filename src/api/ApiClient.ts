@@ -12,12 +12,14 @@ import type { ApiResponse } from '../types';
 export class ApiError extends Error {
   status: number;
   data: unknown;
+  codigo?: string;
 
-  constructor(message: string, status: number, data?: unknown) {
+  constructor(message: string, status: number, data?: unknown, codigo?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.codigo = codigo;
   }
 }
 
@@ -68,14 +70,17 @@ function toApiError(error: unknown): unknown {
     const status = error.response?.status;
     const body = error.response?.data;
     if (status != null) {
-      const metaMessage =
+      const meta =
         body && typeof body === 'object' && 'meta' in body
-          ? (body as { meta?: { message?: string } }).meta?.message
+          ? (body as { meta?: { message?: string; codigo?: string } }).meta
           : undefined;
+      const metaMessage = meta?.message;
+      const metaCodigo = meta?.codigo;
       return new ApiError(
         metaMessage ?? `Error ${status}: ${error.response?.statusText ?? ''}`,
         status,
         body,
+        metaCodigo,
       );
     }
   }
@@ -102,11 +107,33 @@ instance.interceptors.request.use((config) => {
 
 // Desenvuelve el envelope y normaliza los errores.
 // Un 401 con sesión guardada = token vencido o inválido: se limpia y vuelve al login.
+// 403 con meta.codigo SUSPENDIDO/CANCELADO no debe hacer logout (billing bloqueado).
 instance.interceptors.response.use(
   (response) => unwrapResponse(response) as unknown as AxiosResponse,
   (error) => {
+    const status = error?.response?.status;
+    const body = error?.response?.data;
     const isLogin = error?.config?.url?.includes('/api/auth/login');
-    if (error?.response?.status === 401 && !isLogin && getToken()) {
+
+    // Handle code-aware 403 for billing: keep session
+    if (status === 403 && body && typeof body === 'object' && 'meta' in body) {
+      const meta = (body as { meta?: { codigo?: string; message?: string } }).meta;
+      const codigo = meta?.codigo;
+      if (codigo === 'SUSPENDIDO' || codigo === 'CANCELADO') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('fixtra:billing-block', {
+              detail: { codigo, message: meta?.message },
+            }),
+          );
+        } catch {
+          // ignore
+        }
+        return Promise.reject(toApiError(error));
+      }
+    }
+
+    if (status === 401 && !isLogin && getToken()) {
       localStorage.removeItem('auth');
       if (window.location.pathname !== '/login') {
         window.location.assign('/login');

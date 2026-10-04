@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { ApiError } from '../api/ApiClient';
 import { getMe, login as loginRequest, registerTaller } from '../api/auth';
 import type { AuthUser, LoginResponse, RegisterTallerRequest } from '../types';
 
@@ -24,6 +25,22 @@ interface AuthContextType {
   isAdmin: boolean;
   /** true mientras se valida el token guardado contra GET /api/auth/me */
   validating: boolean;
+  /** Bloqueo de facturación: estado SUSPENDIDO/CANCELADO del usuario (fuente primaria)
+   *  o un 403 de billing observado (fallback: token/estado guardado stale). */
+  billingBlocked: boolean;
+  /** Detalle del 403 de billing (codigo + mensaje del backend), si se observó uno. */
+  billingBlock: BillingBlock | null;
+}
+
+export interface BillingBlock {
+  codigo: 'SUSPENDIDO' | 'CANCELADO';
+  message?: string;
+}
+
+export const BILLING_BLOCK_EVENT = 'fixtra:billing-block';
+
+function isBillingCodigo(codigo: unknown): codigo is BillingBlock['codigo'] {
+  return codigo === 'SUSPENDIDO' || codigo === 'CANCELADO';
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -87,7 +104,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(() => initialStored?.user ?? null);
   const [token, setToken] = useState<string | null>(() => initialStored?.token ?? null);
   const [validating, setValidating] = useState<boolean>(() => initialStored != null);
+  const [billingBlock, setBillingBlock] = useState<BillingBlock | null>(null);
   const sessionRevision = useRef(0);
+
+  // El provider vive en la raíz: es el único lugar que no pierde el evento que
+  // ApiClient emite durante el /me del mount, antes de que monte ningún banner.
+  useEffect(() => {
+    const handleBlock = (event: Event) => {
+      const detail = (event as CustomEvent<{ codigo?: unknown; message?: string }>).detail;
+      if (!detail || !isBillingCodigo(detail.codigo)) return;
+      setBillingBlock({ codigo: detail.codigo, message: detail.message });
+    };
+    window.addEventListener(BILLING_BLOCK_EVENT, handleBlock);
+    return () => window.removeEventListener(BILLING_BLOCK_EVENT, handleBlock);
+  }, []);
 
   // Storage events only fire for changes made by another document. Adopt a
   // valid session without writing it back, so this listener cannot loop.
@@ -100,6 +130,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       sessionRevision.current += 1;
       queryClient.clear();
+      setBillingBlock(null);
       setValidating(false);
 
       if (!next) {
@@ -117,7 +148,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [queryClient]);
 
   // En el mount: si hay token guardado, validar contra GET /api/auth/me.
-  // Si falla (token expirado/inválido o backend caído) → logout.
+  // Si falla (token expirado/inválido o backend caído) → logout; 403 billing (token stale) → keep session.
   useEffect(() => {
     const stored = initialStored;
     if (!stored) return;
@@ -140,11 +171,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(next.user);
         setToken(next.token);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled || sessionRevision.current !== revisionAtStart) return;
-        clearStorage();
-        setUser(null);
-        setToken(null);
+        if (err instanceof ApiError && err.status === 403 && isBillingCodigo(err.codigo)) {
+          // Token válido pero taller bloqueado: se conserva la sesión (sin clearStorage)
+          // y se registra el bloqueo, porque el estado guardado puede estar desactualizado.
+          setBillingBlock({ codigo: err.codigo, message: err.message });
+          setUser(stored.user);
+          setToken(stored.token);
+        } else {
+          clearStorage();
+          setUser(null);
+          setToken(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setValidating(false);
@@ -163,10 +202,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       sessionRevision.current += 1;
       queryClient.clear();
       const tallerId = response.tallerId ?? response.user.tallerId ?? null;
+      // El backend replica la facturación en la raíz de la respuesta; user manda si la trae.
       const next: StoredAuth = {
         token: response.token,
-        user: normalizeUser({ ...response.user, tallerId }),
+        user: normalizeUser({
+          ...response.user,
+          tallerId,
+          plan: response.user.plan ?? response.plan,
+          estado: response.user.estado ?? response.estado,
+          trialEndsAt: response.user.trialEndsAt ?? response.trialEndsAt,
+          currentPeriodEnd: response.user.currentPeriodEnd ?? response.currentPeriodEnd,
+        }),
       };
+      setBillingBlock(null);
       saveToStorage(next);
       setUser(next.user);
       setToken(response.token);
@@ -194,11 +242,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     sessionRevision.current += 1;
     queryClient.clear();
     clearStorage();
+    setBillingBlock(null);
     setUser(null);
     setToken(null);
   }, [queryClient]);
 
   const isAdmin = user?.rol === 'ADMIN';
+  const billingBlocked =
+    user?.estado === 'SUSPENDIDO' || user?.estado === 'CANCELADO' || billingBlock !== null;
 
   return (
     <AuthContext.Provider
@@ -211,6 +262,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated: user !== null,
         isAdmin,
         validating,
+        billingBlocked,
+        billingBlock,
       }}
     >
       {children}

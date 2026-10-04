@@ -157,6 +157,18 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
+ * Format a COP amount (SaaS prices) - always uses COP regardless of browser locale.
+ * Example: 49900 → "$49.900" (es-CO style)
+ */
+export function formatCop(amount: number): string {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/**
  * Format an ISO date string to Spanish short date.
  * Example: "2026-07-20T14:30:00Z" → "20/07/2026"
  */
