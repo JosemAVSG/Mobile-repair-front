@@ -50,6 +50,7 @@ export function MetodoPagoFlow({
   const [plan, setPlan] = useState<PlanSuscripcion | ''>(initialPlan ?? '');
   const [tokenizing, setTokenizing] = useState(false);
   const [widgetError, setWidgetError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const inFlight = useRef(false);
   const attempt = useRef(0);
 
@@ -63,6 +64,7 @@ export function MetodoPagoFlow({
       setEmail(defaultEmail);
       setPlan(initialPlan ?? '');
       setWidgetError(null);
+      setDismissed(false);
       // Un intento anterior que nunca respondió no debe dejar el botón en "cargando".
       attempt.current += 1;
       inFlight.current = false;
@@ -92,6 +94,7 @@ export function MetodoPagoFlow({
     const myAttempt = ++attempt.current;
     setTokenizing(true);
     setWidgetError(null);
+    setDismissed(false);
 
     let cardToken: string | null;
     try {
@@ -107,8 +110,11 @@ export function MetodoPagoFlow({
     if (myAttempt !== attempt.current) return;
     inFlight.current = false;
     setTokenizing(false);
-    // Silent no-op when the user closes the widget without producing a token.
-    if (!cardToken) return;
+    // El usuario cerró el widget sin tokenizar: no es un error, pero se le avisa.
+    if (!cardToken) {
+      setDismissed(true);
+      return;
+    }
 
     registrar({
       cardToken,
@@ -118,6 +124,15 @@ export function MetodoPagoFlow({
       plan: requiresPlan && plan ? plan : undefined,
     });
   };
+
+  // Por qué está deshabilitado "Agregar tarjeta": el botón solo se apaga cuando falta algo.
+  const missing = !termsChecked
+    ? 'Acepta los dos términos de Wompi para continuar.'
+    : email.trim().length === 0
+      ? 'Escribe tu correo electrónico para continuar.'
+      : requiresPlan && plan === ''
+        ? 'Elige un plan para continuar.'
+        : null;
 
   const errorMessage = widgetError ?? apiErrorMessage(error);
 
@@ -186,6 +201,14 @@ export function MetodoPagoFlow({
               {errorMessage}
             </p>
           )}
+
+          {dismissed && !errorMessage && (
+            <p role="status" className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              Cerraste el formulario de Wompi y la tarjeta no se agregó. Puedes intentarlo de nuevo.
+            </p>
+          )}
+
+          {missing && !isPending && !tokenizing && <p className="text-right text-xs text-slate-500">{missing}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={isPending}>
