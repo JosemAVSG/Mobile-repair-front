@@ -24,7 +24,6 @@ const baseSuscripcion: Suscripcion = {
   enMora: false,
   pagosHabilitados: true,
   features: ['Up to 2 technicians'],
-  contactoEmpresarial: false,
 };
 
 const useCobrosMock = vi.fn();
@@ -88,17 +87,6 @@ describe('SuscripcionSection', () => {
   it('shows legacy plan badge only for LEGACY', () => {
     renderSection({ ...baseSuscripcion, plan: 'LEGACY', planDisplayName: 'Legacy' });
     expect(screen.getByText(/plan heredado/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  it('shows Contact sales for EMPRESARIAL', () => {
-    renderSection({
-      ...baseSuscripcion,
-      plan: 'EMPRESARIAL',
-      planDisplayName: 'Enterprise',
-      contactoEmpresarial: true,
-    });
-    expect(screen.getByRole('link', { name: /contactar a ventas/i })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

@@ -42,7 +42,6 @@ const baseSuscripcion: Suscripcion = {
   enMora: false,
   pagosHabilitados: true,
   features: [],
-  contactoEmpresarial: false,
 };
 
 let flowProps: { open: boolean } = { open: false };

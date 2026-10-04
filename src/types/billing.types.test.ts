@@ -37,7 +37,6 @@ const sus: Suscripcion = {
   enMora: false,
   pagosHabilitados: true,
   features: [],
-  contactoEmpresarial: false,
 };
 
 const acceptance: WompiAcceptance = {
