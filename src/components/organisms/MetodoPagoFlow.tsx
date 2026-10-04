@@ -57,9 +57,13 @@ export function MetodoPagoFlow({
   const planOptions = planes.map((p) => ({ value: p.plan, label: `${p.nombre} · ${formatCop(p.precioCop)}/mes` }));
   const selectedPlanInfo = planes.find((p) => p.plan === plan);
 
-  // Reset form state whenever the flow opens.
+  // Reset form state only when the flow goes from closed to open: a change of defaultEmail or
+  // initialPlan while the user is filling the form must not wipe the checkboxes.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    const justOpened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (justOpened) {
       setTermsChecked(false);
       setEmail(defaultEmail);
       setPlan(initialPlan ?? '');
@@ -134,6 +138,14 @@ export function MetodoPagoFlow({
         ? 'Elige un plan para continuar.'
         : null;
 
+  // Salida manual por si no detectamos que el usuario cerró el widget: descarta el intento en curso.
+  const cancelAttempt = () => {
+    attempt.current += 1;
+    inFlight.current = false;
+    setTokenizing(false);
+    setDismissed(true);
+  };
+
   const errorMessage = widgetError ?? apiErrorMessage(error);
 
   return (
@@ -205,6 +217,15 @@ export function MetodoPagoFlow({
           {dismissed && !errorMessage && (
             <p role="status" className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
               Cerraste el formulario de Wompi y la tarjeta no se agregó. Puedes intentarlo de nuevo.
+            </p>
+          )}
+
+          {tokenizing && !isPending && (
+            <p className="text-right text-xs text-slate-500">
+              ¿Cerraste la ventana de Wompi?{' '}
+              <button type="button" onClick={cancelAttempt} className="font-medium text-blue-600 hover:underline">
+                Reintentar
+              </button>
             </p>
           )}
 
