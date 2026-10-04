@@ -67,6 +67,21 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
     await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
   });
 
+  it.each([
+    ['card.id', { card: { id: 'tok_test_card' } }, 'tok_test_card'],
+    ['data.id (tokens API shape)', { status: 'CREATED', data: { id: 'tok_test_data', last_four: '5786' } }, 'tok_test_data'],
+    ['top-level id', { id: 'tok_test_top' }, 'tok_test_top'],
+    ['nested unknown key', { payload: { result: { cardToken: 'tok_test_deep' } } }, 'tok_test_deep'],
+  ])('resolves the token when the widget returns it in %s', async (_label, result, expected) => {
+    fakeWidget(result);
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBe(expected);
+  });
+
+  it('rejects (never silent) when the widget returns data without a recognizable token', async () => {
+    fakeWidget({ transaction: { id: '123-abc', status: 'APPROVED' } });
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).rejects.toThrow(/token/i);
+  });
+
   it('does not log card data or the token', async () => {
     const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) => vi.spyOn(console, m));
     fakeWidget({ token: { id: 'tok_secret' } });
