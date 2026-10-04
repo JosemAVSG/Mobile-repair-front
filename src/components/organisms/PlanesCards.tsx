@@ -9,18 +9,21 @@ interface PlanesCardsProps {
   currentPlan?: PlanSuscripcion | null;
   /** Plan que se aplicará en el próximo cobro, si ya hay un cambio agendado. */
   pendingPlan?: PlanSuscripcion | null;
+  /** Plan que el usuario eligió antes de registrarse (landing), si lo hay. */
+  suggestedPlan?: PlanSuscripcion | null;
   /** Texto del botón de los planes elegibles. */
   actionLabel: string;
   disabled?: boolean;
   onSelect: (plan: PlanCatalogo['plan']) => void;
 }
 
-export function PlanesCards({ planes, currentPlan, pendingPlan, actionLabel, disabled, onSelect }: PlanesCardsProps) {
+export function PlanesCards({ planes, currentPlan, pendingPlan, suggestedPlan, actionLabel, disabled, onSelect }: PlanesCardsProps) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2" aria-label="Planes disponibles">
       {planes.map((p) => {
         const isCurrent = p.plan === currentPlan;
         const isPending = p.plan === pendingPlan;
+        const isSuggested = p.plan === suggestedPlan && !isCurrent && !isPending;
         return (
           <li
             key={p.plan}
@@ -34,6 +37,8 @@ export function PlanesCards({ planes, currentPlan, pendingPlan, actionLabel, dis
                 <Badge variant="success">Plan actual</Badge>
               ) : isPending ? (
                 <Badge variant="info">Próximo plan</Badge>
+              ) : isSuggested ? (
+                <Badge variant="info">Tu elección</Badge>
               ) : p.destacado ? (
                 <Badge variant="info">Más elegido</Badge>
               ) : null}

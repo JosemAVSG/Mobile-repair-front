@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Input } from '../components/atoms/Input';
 import { Button } from '../components/atoms/Button';
 import { Icon } from '../components/atoms/Icon';
 import { AuthLayout } from '../components/templates/AuthLayout';
 import { useAuth } from '../hooks/useAuth';
+import { savePlanIntentFromSearch } from '../lib/planIntent';
 import {
   buildRegisterRequest,
   mapRegisterError,
@@ -33,6 +34,11 @@ export function RegistroPage() {
   const [fieldErrors, setFieldErrors] = useState<RegistroErrors>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // La landing enlaza a /registro?plan=pro: se recuerda para sugerirlo al elegir plan.
+  useEffect(() => {
+    savePlanIntentFromSearch(window.location.search);
+  }, []);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;

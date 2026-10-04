@@ -8,6 +8,7 @@ import { CobroStatusBadge } from '../molecules/CobroStatusBadge';
 import { MetodoPagoFlow } from './MetodoPagoFlow';
 import { HistorialCobros } from './HistorialCobros';
 import { PlanesCards } from './PlanesCards';
+import { clearPlanIntent, getPlanIntent } from '../../lib/planIntent';
 import {
   useCambiarPlan,
   useCancelarSuscripcion,
@@ -121,6 +122,9 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
   // Con tarjeta y suscripción viva el plan se cambia directo; si no, se pasa por el flujo de pago.
   const canSwitchPlan = hasCard && (estado === 'ACTIVO' || isTrial);
   const showPlanes = pagosHabilitados && !isLegacy && !isEmpresarial && planes.length > 0;
+  // Ya contrató un plan: la sugerencia de la landing deja de tener sentido.
+  if (estado === 'ACTIVO' && hasCard) clearPlanIntent();
+
   const planToConfirmInfo = planes.find((p) => p.plan === planToConfirm);
 
   const handleSelectPlan = (target: PlanSuscripcion) => {
@@ -243,6 +247,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
                 planes={planes}
                 currentPlan={estado === 'ACTIVO' ? plan : null}
                 pendingPlan={pendingPlan}
+                suggestedPlan={estado === 'ACTIVO' ? null : getPlanIntent()}
                 actionLabel={canSwitchPlan ? 'Cambiar a' : 'Elegir'}
                 disabled={cambiarPlan.isPending}
                 onSelect={handleSelectPlan}
