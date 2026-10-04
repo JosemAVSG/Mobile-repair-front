@@ -6,12 +6,12 @@ interface CobroStatusBadgeProps {
 }
 
 const LABELS: Record<Cobro['status'], string> = {
-  APPROVED: 'Approved',
-  DECLINED: 'Declined',
+  APPROVED: 'Aprobado',
+  DECLINED: 'Rechazado',
   ERROR: 'Error',
-  VOIDED: 'Voided',
-  PENDING: 'Payment in process',
-  CLAIMED: 'Payment in process',
+  VOIDED: 'Anulado',
+  PENDING: 'Pago en proceso',
+  CLAIMED: 'Pago en proceso',
 };
 
 const VARIANTS: Record<Cobro['status'], 'success' | 'danger' | 'warning' | 'info'> = {

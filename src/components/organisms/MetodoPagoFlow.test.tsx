@@ -64,19 +64,19 @@ describe('MetodoPagoFlow', () => {
 
     rerender(<MetodoPagoFlow open onClose={vi.fn()} />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(screen.getByText(/cargando/i)).toBeInTheDocument();
   });
 
   it('shows an error and keeps the widget closed when acceptance fails', () => {
     acceptanceQuery = { data: undefined, isLoading: false, error: new ApiError('Unavailable', 503) };
     renderFlow();
-    expect(screen.getByText(/payment service unavailable/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /add card/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/servicio de pagos no disponible/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /agregar tarjeta/i })).not.toBeInTheDocument();
   });
 
   it('blocks "Add card" until both terms are checked and email is filled', () => {
     renderFlow({ open: true, defaultEmail: 'user@x.co' });
-    const addButton = screen.getByRole('button', { name: /add card/i });
+    const addButton = screen.getByRole('button', { name: /agregar tarjeta/i });
     expect(addButton).toBeDisabled();
 
     const [terms, auth] = screen.getAllByRole('checkbox');
@@ -96,7 +96,7 @@ describe('MetodoPagoFlow', () => {
 
     fireEvent.change(screen.getByLabelText(/plan/i), { target: { value: 'PRO' } });
 
-    fireEvent.click(screen.getByRole('button', { name: /add card/i }));
+    fireEvent.click(screen.getByRole('button', { name: /agregar tarjeta/i }));
 
     await waitFor(() => expect(tokenizeCardMock).toHaveBeenCalledWith({ publicKey: acceptance.publicKey }));
     await waitFor(() =>
@@ -116,7 +116,7 @@ describe('MetodoPagoFlow', () => {
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    fireEvent.click(screen.getByRole('button', { name: /add card/i }));
+    fireEvent.click(screen.getByRole('button', { name: /agregar tarjeta/i }));
 
     await waitFor(() => expect(tokenizeCardMock).toHaveBeenCalled());
     expect(registrarMutation.mutate).not.toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('MetodoPagoFlow', () => {
     registrarMutation = { ...registrarMutation, error: new ApiError('Bad gateway', 503) };
     renderFlow({ open: true, defaultEmail: 'user@x.co' });
 
-    expect(screen.getByText(/payment service unavailable, please try again/i)).toBeInTheDocument();
+    expect(screen.getByText(/servicio de pagos no disponible, intenta de nuevo/i)).toBeInTheDocument();
   });
 
   it('renders a 400 error inline using the envelope message', async () => {

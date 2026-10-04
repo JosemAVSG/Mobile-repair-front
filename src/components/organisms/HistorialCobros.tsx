@@ -14,16 +14,16 @@ export function HistorialCobros({ cobros, ultimoCobro }: HistorialCobrosProps) {
 
   return (
     <div className="space-y-2">
-      <h5 className="text-sm font-medium text-slate-700">Payment history</h5>
+      <h5 className="text-sm font-medium text-slate-700">Historial de pagos</h5>
 
       {ultimoCobro?.status === 'DECLINED' && ultimoCobro.statusMessage && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          Last charge: {ultimoCobro.statusMessage}
+          Último cobro: {ultimoCobro.statusMessage}
         </p>
       )}
 
       {newestFirst.length === 0 ? (
-        <p className="text-sm text-slate-500">No payment history yet.</p>
+        <p className="text-sm text-slate-500">Aún no hay pagos registrados.</p>
       ) : (
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
           {newestFirst.map((cobro, idx) => (

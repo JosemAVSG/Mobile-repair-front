@@ -4,12 +4,12 @@ import { CobroStatusBadge } from './CobroStatusBadge';
 
 describe('CobroStatusBadge', () => {
   it.each([
-    ['APPROVED', 'Approved'],
-    ['DECLINED', 'Declined'],
+    ['APPROVED', 'Aprobado'],
+    ['DECLINED', 'Rechazado'],
     ['ERROR', 'Error'],
-    ['VOIDED', 'Voided'],
-    ['PENDING', 'Payment in process'],
-    ['CLAIMED', 'Payment in process'],
+    ['VOIDED', 'Anulado'],
+    ['PENDING', 'Pago en proceso'],
+    ['CLAIMED', 'Pago en proceso'],
   ] as const)('status %s renders "%s"', (status, label) => {
     render(<CobroStatusBadge status={status} />);
     expect(screen.getByText(label)).toBeInTheDocument();

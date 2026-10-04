@@ -32,16 +32,16 @@ describe('HistorialCobros', () => {
     // Newest first
     expect(rows[0]).toHaveTextContent(/\$\s?99\.900/);
     expect(rows[0]).toHaveTextContent(/PRO/);
-    expect(rows[0]).toHaveTextContent(/Approved/);
+    expect(rows[0]).toHaveTextContent(/Aprobado/);
 
     expect(rows[1]).toHaveTextContent(/\$\s?49\.900/);
     expect(rows[1]).toHaveTextContent(/BASICO/);
-    expect(rows[1]).toHaveTextContent(/Declined/);
+    expect(rows[1]).toHaveTextContent(/Rechazado/);
   });
 
   it('shows an empty state when there are no charges', () => {
     render(<HistorialCobros cobros={[]} />);
-    expect(screen.getByText(/no payment history/i)).toBeInTheDocument();
+    expect(screen.getByText(/aún no hay pagos registrados/i)).toBeInTheDocument();
   });
 
   it('shows the last declined charge status message', () => {

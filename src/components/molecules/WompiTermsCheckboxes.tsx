@@ -44,14 +44,14 @@ export function WompiTermsCheckboxes({
           onChange={(e) => toggle(0, e.target.checked)}
         />
         <span>
-          I accept the{' '}
+          Acepto los{' '}
           <a
             href={acceptance.acceptancePermalink}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline"
           >
-            Wompi terms and conditions
+            términos y condiciones de Wompi
           </a>
           .
         </span>
@@ -65,14 +65,14 @@ export function WompiTermsCheckboxes({
           onChange={(e) => toggle(1, e.target.checked)}
         />
         <span>
-          I authorize the processing of my personal data as described in the{' '}
+          Autorizo el tratamiento de mis datos personales según la{' '}
           <a
             href={acceptance.personalAuthPermalink}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline"
           >
-            privacy authorization
+            autorización de datos personales
           </a>
           .
         </span>

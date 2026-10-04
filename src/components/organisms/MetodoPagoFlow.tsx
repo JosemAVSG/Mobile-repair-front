@@ -19,7 +19,7 @@ interface MetodoPagoFlowProps {
 }
 
 const PLAN_OPTIONS: { value: PlanSuscripcion; label: string }[] = [
-  { value: 'BASICO', label: 'Basic' },
+  { value: 'BASICO', label: 'Básico' },
   { value: 'PRO', label: 'Pro' },
 ];
 
@@ -27,7 +27,7 @@ function apiErrorMessage(error: Error | null): string | null {
   if (!error) return null;
   if (error instanceof ApiError) {
     if (error.status === 503) {
-      return 'Payment service unavailable, please try again.';
+      return 'Servicio de pagos no disponible, intenta de nuevo.';
     }
     return error.message;
   }
@@ -94,35 +94,35 @@ export function MetodoPagoFlow({
   const errorMessage = apiErrorMessage(error);
 
   return (
-    <Modal isOpen={open} onClose={onClose} title="Add payment method" size="md">
+    <Modal isOpen={open} onClose={onClose} title="Agregar método de pago" size="md">
       {loadingAcceptance ? (
         <div className="flex items-center justify-center py-8">
           <Spinner size="md" />
-          <span className="ml-2 text-sm text-slate-600">Loading Wompi acceptance tokens…</span>
+          <span className="ml-2 text-sm text-slate-600">Cargando términos de Wompi…</span>
         </div>
       ) : acceptanceError || !acceptance ? (
         <div className="space-y-4">
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
             {apiErrorMessage(acceptanceError) ??
-              'Payment service unavailable, please try again.'}
+              'Servicio de pagos no disponible, intenta de nuevo.'}
           </p>
           <div className="flex justify-end">
             <Button variant="secondary" onClick={onClose}>
-              Close
+              Cerrar
             </Button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Add a debit or credit card to activate your subscription. Card data is handled by Wompi;
-            we never store or log it.
+            Agrega una tarjeta de débito o crédito para activar tu suscripción. Wompi procesa los datos de la tarjeta;
+            nosotros nunca los guardamos ni registramos.
           </p>
 
           <Input
             type="email"
-            label="Email"
-            placeholder="billing@company.com"
+            label="Correo electrónico"
+            placeholder="facturacion@empresa.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isPending}
@@ -131,7 +131,7 @@ export function MetodoPagoFlow({
           {requiresPlan && (
             <Select
               label="Plan"
-              placeholder="Select a plan…"
+              placeholder="Selecciona un plan…"
               options={PLAN_OPTIONS}
               value={plan}
               onChange={(e) => setPlan(e.target.value as PlanSuscripcion)}
@@ -154,10 +154,10 @@ export function MetodoPagoFlow({
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={isPending}>
-              Cancel
+              Cancelar
             </Button>
             <Button onClick={handleSubmit} loading={isPending} disabled={!canSubmit}>
-              Add card
+              Agregar tarjeta
             </Button>
           </div>
         </div>

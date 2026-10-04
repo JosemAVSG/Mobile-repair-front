@@ -3,12 +3,12 @@ import { useAuth } from '../../hooks/useAuth';
 
 const COPY = {
   SUSPENDIDO: {
-    title: 'Subscription suspended',
-    message: 'Your subscription is suspended. Update your card to continue.',
+    title: 'Suscripción suspendida',
+    message: 'Tu suscripción está suspendida. Actualiza tu tarjeta para continuar.',
   },
   CANCELADO: {
-    title: 'Subscription cancelled',
-    message: 'Your subscription was cancelled. Update your card to reactivate your shop.',
+    title: 'Suscripción cancelada',
+    message: 'Tu suscripción fue cancelada. Actualiza tu tarjeta para reactivar tu taller.',
   },
 } as const;
 
@@ -35,7 +35,7 @@ export function SuspendedBanner() {
           <strong>{title}</strong>: {copy}
         </div>
         <Link to="/configuracion?pagar=1" className="font-medium underline">
-          Update card
+          Actualizar tarjeta
         </Link>
       </div>
     </div>

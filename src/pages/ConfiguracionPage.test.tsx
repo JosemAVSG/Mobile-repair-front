@@ -60,7 +60,7 @@ vi.mock('../hooks/useBilling', () => ({
 vi.mock('../components/organisms/MetodoPagoFlow', () => ({
   MetodoPagoFlow: (props: { open: boolean }) => {
     flowProps = props;
-    return props.open ? <div role="dialog">Payment method flow</div> : null;
+    return props.open ? <div role="dialog">Flujo de método de pago</div> : null;
   },
 }));
 

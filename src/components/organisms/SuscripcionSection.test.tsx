@@ -42,8 +42,8 @@ vi.mock('../../hooks/useBilling', () => ({
 vi.mock('./MetodoPagoFlow', () => ({
   MetodoPagoFlow: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
     open ? (
-      <div role="dialog" aria-label="Payment method">
-        <button onClick={onClose}>Close payment flow</button>
+      <div role="dialog" aria-label="Método de pago">
+        <button onClick={onClose}>Cerrar flujo de pago</button>
       </div>
     ) : null,
 }));
@@ -75,12 +75,12 @@ describe('SuscripcionSection', () => {
 
   it('shows "online payments coming soon" when pagosHabilitados is false', () => {
     renderSection({ ...baseSuscripcion, pagosHabilitados: false });
-    expect(screen.getByText(/online payments coming soon/i)).toBeInTheDocument();
+    expect(screen.getByText(/pagos en línea estarán disponibles pronto/i)).toBeInTheDocument();
   });
 
   it('shows legacy plan badge only for LEGACY', () => {
     renderSection({ ...baseSuscripcion, plan: 'LEGACY', planDisplayName: 'Legacy' });
-    expect(screen.getByText(/legacy plan/i)).toBeInTheDocument();
+    expect(screen.getByText(/plan heredado/i)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe('SuscripcionSection', () => {
       planDisplayName: 'Enterprise',
       contactoEmpresarial: true,
     });
-    expect(screen.getByRole('link', { name: /contact sales/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /contactar a ventas/i })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -108,16 +108,16 @@ describe('SuscripcionSection', () => {
       metodoPago: null,
     });
 
-    expect(screen.getByText(/days left/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add card/i })).toBeInTheDocument();
-    expect(screen.getByText(/you will be charged on/i)).toBeInTheDocument();
+    expect(screen.getByText(/de tu prueba gratuita/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /agregar tarjeta/i })).toBeInTheDocument();
+    expect(screen.getByText(/se te cobrará el/i)).toBeInTheDocument();
   });
 
   it('ACTIVO: shows card on file, next charge amount and date, and history', () => {
     renderSection(baseSuscripcion);
 
     expect(screen.getByText(/VISA •••• 4242/i)).toBeInTheDocument();
-    const nextCharge = screen.getByText(/next charge/i);
+    const nextCharge = screen.getByText(/próximo cobro/i);
     expect(nextCharge).toHaveTextContent(/01\/12\/2026/);
     expect(nextCharge).toHaveTextContent(/\$\s?49\.900/);
   });
@@ -128,44 +128,44 @@ describe('SuscripcionSection', () => {
       pendingPlan: 'PRO',
       pendingPlanDisplayName: 'Pro',
     });
-    expect(screen.getByText(/pro applies from/i)).toBeInTheDocument();
+    expect(screen.getByText(/pro se aplica desde/i)).toBeInTheDocument();
   });
 
   it('shows cancel notice and calls reactivar when undo is clicked', () => {
     renderSection({ ...baseSuscripcion, cancelAtPeriodEnd: true });
-    expect(screen.getByText(/it will cancel on/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /undo cancellation/i }));
+    expect(screen.getByText(/se cancelará el/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /deshacer cancelación/i }));
     expect(reactivarMutation.mutate).toHaveBeenCalled();
   });
 
   it('opens a confirmation dialog before cancelling', () => {
     renderSection(baseSuscripcion);
-    fireEvent.click(screen.getByRole('button', { name: /cancel subscription/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cancelar suscripción/i }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
     expect(cancelarMutation.mutate).toHaveBeenCalled();
   });
 
   it('SUSPENDIDO: offers update card and pay, hides plan/cancel actions', () => {
     renderSection({ ...baseSuscripcion, estado: 'SUSPENDIDO' });
-    expect(screen.getByRole('button', { name: /update card and pay/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /cancel subscription/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /change plan/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /actualizar tarjeta y pagar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cancelar suscripción/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cambiar plan/i })).not.toBeInTheDocument();
   });
 
   it('CANCELADO: offers reactivate with card', () => {
     renderSection({ ...baseSuscripcion, estado: 'CANCELADO' });
-    expect(screen.getByRole('button', { name: /reactivate with card/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reactivar con tarjeta/i })).toBeInTheDocument();
   });
 
   it('PENDING: shows "payment in process"', () => {
     renderSection({ ...baseSuscripcion, cobroEnCurso: true });
-    expect(screen.getByText(/payment in process/i)).toBeInTheDocument();
+    expect(screen.getByText(/pago en proceso/i)).toBeInTheDocument();
   });
 
   it('enMora: shows retry warning', () => {
     renderSection({ ...baseSuscripcion, enMora: true, nextChargeAt: '2026-12-02T00:00:00' });
-    expect(screen.getByText(/we will retry on/i)).toBeInTheDocument();
+    expect(screen.getByText(/reintentaremos el/i)).toBeInTheDocument();
   });
 });

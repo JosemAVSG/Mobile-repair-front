@@ -32,8 +32,8 @@ describe('SuspendedBanner', () => {
   it('S-UI5.1: SUSPENDIDO estado → suspension copy + "Update card" link to /configuracion?pagar=1', () => {
     renderBanner({ billingBlocked: true, user: { estado: 'SUSPENDIDO' } });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/suspended/i);
-    const link = screen.getByRole('link', { name: 'Update card' });
+    expect(screen.getByRole('alert')).toHaveTextContent(/suspendida/i);
+    const link = screen.getByRole('link', { name: 'Actualizar tarjeta' });
     expect(link).toHaveAttribute('href', '/configuracion?pagar=1');
   });
 
@@ -41,9 +41,9 @@ describe('SuspendedBanner', () => {
     renderBanner({ billingBlocked: true, user: { estado: 'CANCELADO' } });
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent(/cancelled/i);
-    expect(alert).not.toHaveTextContent(/suspended/i);
-    expect(screen.getByRole('link', { name: 'Update card' })).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/cancelada/i);
+    expect(alert).not.toHaveTextContent(/suspendida/i);
+    expect(screen.getByRole('link', { name: 'Actualizar tarjeta' })).toBeInTheDocument();
   });
 
   it('S-BU4.1b: 403 block (stale ACTIVO saved estado) uses the 403 codigo', () => {
@@ -53,17 +53,17 @@ describe('SuspendedBanner', () => {
       user: { estado: 'ACTIVO' },
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/cancelled/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/cancelada/i);
   });
 
   it('A-SP2: prefers block.message', () => {
     renderBanner({
       billingBlocked: true,
-      billingBlock: { codigo: 'SUSPENDIDO', message: 'Your trial period ended. Choose a plan.' },
+      billingBlock: { codigo: 'SUSPENDIDO', message: 'Tu período de prueba terminó. Elige un plan.' },
       user: { estado: 'TRIAL' },
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Your trial period ended. Choose a plan.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Tu período de prueba terminó. Elige un plan.');
   });
 
   it('S-UI5.3: no banner for non-billing errors (billingBlocked false)', () => {

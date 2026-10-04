@@ -33,14 +33,14 @@ const ESTADO_BADGE: Record<string, 'success' | 'info' | 'warning' | 'danger' | '
 };
 
 const ESTADO_LABEL: Record<string, string> = {
-  ACTIVO: 'Active',
-  TRIAL: 'Free trial',
-  SUSPENDIDO: 'Suspended',
-  CANCELADO: 'Cancelled',
+  ACTIVO: 'Activa',
+  TRIAL: 'Prueba gratuita',
+  SUSPENDIDO: 'Suspendida',
+  CANCELADO: 'Cancelada',
 };
 
 const PLAN_OPTIONS = [
-  { value: 'BASICO', label: 'Basic' },
+  { value: 'BASICO', label: 'Básico' },
   { value: 'PRO', label: 'Pro' },
 ];
 
@@ -78,7 +78,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
     return (
       <section aria-label="Suscripción">
         <Card title="Suscripción">
-          <p className="text-sm text-slate-600">No subscription information available.</p>
+          <p className="text-sm text-slate-600">No hay información de suscripción disponible.</p>
         </Card>
       </section>
     );
@@ -132,7 +132,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
             <h4 className="text-lg font-semibold text-slate-800">{planDisplayName}</h4>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {isLegacy ? (
-                <Badge variant="default">Legacy plan</Badge>
+                <Badge variant="default">Plan heredado</Badge>
               ) : (
                 <Badge variant={ESTADO_BADGE[estado] ?? 'default'}>
                   {ESTADO_LABEL[estado] ?? estado}
@@ -147,63 +147,63 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
 
             {isTrial && trialDays != null && (
               <p className="mt-2 text-sm text-slate-600">
-                {trialDays === 1 ? '1 day left' : `${trialDays} days left`} in your free trial
-                {trialEndsAt ? ` (until ${formatDate(trialEndsAt)})` : ''}.
+                {trialDays === 1 ? 'Queda 1 día' : `Quedan ${trialDays} días`} de tu prueba gratuita
+                {trialEndsAt ? ` (hasta el ${formatDate(trialEndsAt)})` : ''}.
               </p>
             )}
 
             {isTrial && trialEndsAt && (
               <p className="mt-1 text-sm text-slate-600">
-                You will be charged on {formatDate(trialEndsAt)}.
+                Se te cobrará el {formatDate(trialEndsAt)}.
               </p>
             )}
 
             {!isLegacy && currentPeriodEnd && (
               <p className="mt-2 text-sm text-slate-600">
-                Current period until {formatDate(currentPeriodEnd)}.
+                Período actual hasta el {formatDate(currentPeriodEnd)}.
               </p>
             )}
 
             {nextChargeAt && hasCard && (
               <p className="mt-2 text-sm text-slate-600">
-                Next charge {formatDate(nextChargeAt)} on {metodoPago.brand} •••• {metodoPago.last4}
+                Próximo cobro el {formatDate(nextChargeAt)} en {metodoPago.brand} •••• {metodoPago.last4}
                 {montoProximoCobroCop != null ? ` (${formatCop(montoProximoCobroCop)})` : ''}.
               </p>
             )}
 
             {pendingPlan && pendingPlanDisplayName && nextChargeAt && (
               <p className="mt-2 text-sm text-slate-600">
-                {pendingPlanDisplayName} applies from {formatDate(nextChargeAt)}.
+                {pendingPlanDisplayName} se aplica desde el {formatDate(nextChargeAt)}.
               </p>
             )}
 
             {cancelAtPeriodEnd && currentPeriodEnd && (
               <p className="mt-2 text-sm text-amber-700">
-                It will cancel on {formatDate(currentPeriodEnd)}.
+                Se cancelará el {formatDate(currentPeriodEnd)}.
                 <button
                   type="button"
                   onClick={() => reactivar.mutate()}
                   className="ml-2 font-medium text-blue-600 hover:underline"
                 >
-                  Undo cancellation
+                  Deshacer cancelación
                 </button>
               </p>
             )}
 
             {enMora && nextChargeAt && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                We will retry on {formatDate(nextChargeAt)}. Update your card to avoid suspension.
+                Reintentaremos el {formatDate(nextChargeAt)}. Actualiza tu tarjeta para evitar la suspensión.
               </p>
             )}
           </div>
 
           {!pagosHabilitados && (
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Online payments coming soon.
+              Los pagos en línea estarán disponibles pronto.
               {contactEmail && (
                 <>
                   {' '}
-                  Contact <a href={`mailto:${contactEmail}`}>{contactEmail}</a> for help.
+                  Escribe a <a href={`mailto:${contactEmail}`}>{contactEmail}</a> para recibir ayuda.
                 </>
               )}
             </p>
@@ -211,7 +211,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
 
           {features && features.length > 0 && !isLegacy && (
             <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
-              <p className="mb-1 font-medium text-slate-700">Includes</p>
+              <p className="mb-1 font-medium text-slate-700">Incluye</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {features.map((f) => (
                   <li key={f}>{f}</li>
@@ -225,13 +225,13 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
               <>
                 {isTrial && !hasCard && (
                   <Button type="button" onClick={() => openPaymentFlow(true)}>
-                    Add card
+                    Agregar tarjeta
                   </Button>
                 )}
 
                 {(estado === 'SUSPENDIDO' || estado === 'CANCELADO') && (
                   <Button type="button" onClick={() => openPaymentFlow(isTrial || estado === 'CANCELADO')}>
-                    {estado === 'SUSPENDIDO' ? 'Update card and pay' : 'Reactivate with card'}
+                    {estado === 'SUSPENDIDO' ? 'Actualizar tarjeta y pagar' : 'Reactivar con tarjeta'}
                   </Button>
                 )}
 
@@ -241,7 +241,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
                     variant="secondary"
                     onClick={() => openPaymentFlow(false)}
                   >
-                    Change card
+                    Cambiar tarjeta
                   </Button>
                 )}
 
@@ -249,7 +249,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
                   <>
                     <Select
                       options={PLAN_OPTIONS}
-                      placeholder="Change plan…"
+                      placeholder="Cambiar plan…"
                       value={selectedPlan}
                       onChange={(e) => setSelectedPlan(e.target.value as PlanSuscripcion)}
                       className="w-40"
@@ -261,14 +261,14 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
                       loading={cambiarPlan.isPending}
                       onClick={handleChangePlan}
                     >
-                      Change plan
+                      Cambiar plan
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       onClick={() => setShowCancelDialog(true)}
                     >
-                      Cancel subscription
+                      Cancelar suscripción
                     </Button>
                   </>
                 )}
@@ -280,7 +280,7 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
                 href={contactEmail ? `mailto:${contactEmail}` : '#'}
                 className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Contact sales
+                Contactar a ventas
               </a>
             )}
           </div>
@@ -298,10 +298,10 @@ export function SuscripcionSection({ defaultEmail, autoOpenPaymentFlow }: Suscri
 
       <ConfirmDialog
         isOpen={showCancelDialog}
-        title="Cancel subscription"
+        title="Cancelar suscripción"
         message="Your access will remain until the end of the current period. Are you sure?"
-        confirmLabel="Confirm"
-        cancelLabel="Go back"
+        confirmLabel="Confirmar"
+        cancelLabel="Volver"
         onConfirm={() => {
           cancelar.mutate();
           setShowCancelDialog(false);
