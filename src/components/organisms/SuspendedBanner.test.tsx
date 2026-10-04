@@ -29,47 +29,49 @@ const renderBanner = (a: Partial<AuthMock>) => {
 };
 
 describe('SuspendedBanner', () => {
-  it('S-BU4.1: estado SUSPENDIDO (200 login//me) → copy de suspensión + link a /configuracion', () => {
+  it('S-UI5.1: SUSPENDIDO estado → suspension copy + "Update card" link to /configuracion?pagar=1', () => {
     renderBanner({ billingBlocked: true, user: { estado: 'SUSPENDIDO' } });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/suspendida/i);
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/configuracion');
+    expect(screen.getByRole('alert')).toHaveTextContent(/suspended/i);
+    const link = screen.getByRole('link', { name: 'Update card' });
+    expect(link).toHaveAttribute('href', '/configuracion?pagar=1');
   });
 
-  it('S-BU4.2: estado CANCELADO sin evento → copy de cancelación (no cae a SUSPENDIDO)', () => {
+  it('S-UI5.2: CANCELADO estado → cancellation copy + "Update card" reactivation link', () => {
     renderBanner({ billingBlocked: true, user: { estado: 'CANCELADO' } });
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent(/cancelada/i);
-    expect(alert).not.toHaveTextContent(/suspendida/i);
+    expect(alert).toHaveTextContent(/cancelled/i);
+    expect(alert).not.toHaveTextContent(/suspended/i);
+    expect(screen.getByRole('link', { name: 'Update card' })).toBeInTheDocument();
   });
 
-  it('S-BU4.1b: bloqueo por 403 (estado guardado stale ACTIVO) usa el codigo del 403', () => {
+  it('S-BU4.1b: 403 block (stale ACTIVO saved estado) uses the 403 codigo', () => {
     renderBanner({
       billingBlocked: true,
       billingBlock: { codigo: 'CANCELADO' },
       user: { estado: 'ACTIVO' },
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/cancelada/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/cancelled/i);
   });
 
-  it('A-SP2: prefiere block.message (trial vencido colapsa a SUSPENDIDO, el copy viene del mensaje)', () => {
+  it('A-SP2: prefers block.message', () => {
     renderBanner({
       billingBlocked: true,
-      billingBlock: { codigo: 'SUSPENDIDO', message: 'Tu período de prueba terminó. Elige un plan.' },
+      billingBlock: { codigo: 'SUSPENDIDO', message: 'Your trial period ended. Choose a plan.' },
       user: { estado: 'TRIAL' },
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Tu período de prueba terminó. Elige un plan.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Your trial period ended. Choose a plan.');
   });
 
-  it('S-BU4.3: sin bloqueo (p.ej. un 400 de validación) no hay banner', () => {
+  it('S-UI5.3: no banner for non-billing errors (billingBlocked false)', () => {
     renderBanner({ billingBlocked: false });
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('no se muestra sin sesión', () => {
+  it('is not shown when not authenticated', () => {
     renderBanner({ isAuthenticated: false, billingBlocked: true, user: null });
     expect(screen.queryByRole('alert')).toBeNull();
   });

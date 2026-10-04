@@ -57,9 +57,9 @@ const req: MetodoPagoRequest = {
 
 describe('billing types (R-UI1)', () => {
   it('Suscripcion no tiene tienePortal ni tieneSuscripcion', () => {
-    // @ts-expect-error Stripe-era field removed
+    // @ts-expect-error legacy billing field removed
     void sus.tienePortal;
-    // @ts-expect-error Stripe-era field removed
+    // @ts-expect-error legacy billing field removed
     void sus.tieneSuscripcion;
     expect(sus.metodoPago?.last4).toBe('4242');
   });

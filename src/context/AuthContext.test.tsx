@@ -349,6 +349,38 @@ describe('AuthContext: billing (R-BU1/R-BU5)', () => {
     expect(result.current.billingBlock).toBeNull();
   });
 
+  it('refetches /me after fixtra:refresh-me and clears the billing block when ACTIVO', async () => {
+    localStorage.setItem('auth', storedWithEstado('SUSPENDIDO'));
+    vi.mocked(getMe)
+      .mockResolvedValueOnce({
+        ...response(7).user,
+        tallerId: 7,
+        plan: 'BASICO',
+        estado: 'SUSPENDIDO',
+      })
+      .mockResolvedValue({
+        ...response(7).user,
+        tallerId: 7,
+        plan: 'BASICO',
+        estado: 'ACTIVO',
+      });
+    const { result } = setup();
+
+    await waitFor(() => expect(result.current.validating).toBe(false));
+    expect(result.current.user?.estado).toBe('SUSPENDIDO');
+    expect(result.current.billingBlocked).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('fixtra:refresh-me'));
+    });
+
+    await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.user?.estado).toBe('ACTIVO'));
+    expect(result.current.billingBlocked).toBe(false);
+    expect(result.current.billingBlock).toBeNull();
+    expect(JSON.parse(localStorage.getItem('auth')!).user.estado).toBe('ACTIVO');
+  });
+
   it('logout y un nuevo login limpian el bloqueo', async () => {
     vi.mocked(login).mockResolvedValue({ ...response(7), plan: 'PRO', estado: 'ACTIVO' });
     const { result } = setup();

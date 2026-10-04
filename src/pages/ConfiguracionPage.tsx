@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Input } from '../components/atoms/Input';
 import { Icon } from '../components/atoms/Icon';
 import { Spinner } from '../components/atoms/Spinner';
-import { Badge } from '../components/atoms/Badge';
 import { useConfig, DEFAULT_CONFIG } from '../context/ConfigContext';
 import {
   useAdminShopConfig,
   useUpdateShopConfig,
 } from '../hooks/useShopConfig';
-import { useSuscripcion } from '../hooks/useBilling';
-import { formatCop, formatDate } from '../utils/formatters';
+import { useAuth } from '../hooks/useAuth';
+import { SuscripcionSection } from '../components/organisms/SuscripcionSection';
 import type { ShopConfigForm } from '../types';
 
 // ──────────────────────────────────────────────
@@ -35,6 +35,9 @@ export function ConfiguracionPage() {
   const { config, updateConfig } = useConfig();
   const { data: backendConfig, isPending: loadingBackend } = useAdminShopConfig();
   const updateMutation = useUpdateShopConfig();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const autoOpenPaymentFlow = searchParams.get('pagar') === '1';
 
   const [draft, setDraft] = useState<ShopConfigForm>({
     nombreTaller: '',
@@ -288,103 +291,11 @@ export function ConfiguracionPage() {
           logo del taller.
         </span>
       </div>
-      <SuscripcionSection />
+      <SuscripcionSection
+        defaultEmail={user?.correo ?? ''}
+        autoOpenPaymentFlow={autoOpenPaymentFlow}
+      />
     </div>
   );
 }
 
-const DAY_MS = 86_400_000;
-
-const ESTADO_BADGE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'default'> = {
-  ACTIVO: 'success',
-  TRIAL: 'info',
-  SUSPENDIDO: 'warning',
-  CANCELADO: 'danger',
-};
-
-const ESTADO_LABEL: Record<string, string> = {
-  ACTIVO: 'Active',
-  TRIAL: 'Free trial',
-  SUSPENDIDO: 'Suspended',
-  CANCELADO: 'Cancelled',
-};
-
-/** Full days remaining until `iso` (minimum 0), or null if invalid. */
-function daysLeft(iso: string): number | null {
-  const end = new Date(iso).getTime();
-  if (Number.isNaN(end)) return null;
-  return Math.max(0, Math.ceil((end - Date.now()) / DAY_MS));
-}
-
-// TODO(W6): replace this temporary stub with the full SuscripcionSection organism.
-function SuscripcionSection() {
-  const { data: suscripcion, isLoading } = useSuscripcion();
-
-  if (isLoading) {
-    return (
-      <section aria-label="Suscripción">
-        <Card title="Suscripción">
-          <div className="flex items-center justify-center py-8">
-            <Spinner size="md" />
-          </div>
-        </Card>
-      </section>
-    );
-  }
-
-  if (!suscripcion) {
-    return (
-      <section aria-label="Suscripción">
-        <Card title="Suscripción">
-          <p className="text-sm text-slate-600">No subscription information available.</p>
-        </Card>
-      </section>
-    );
-  }
-
-  const { planDisplayName, estado, precioCop, trialEndsAt, currentPeriodEnd, nextChargeAt, metodoPago } =
-    suscripcion;
-  const isLegacy = suscripcion.plan === 'LEGACY';
-  const trialDays = suscripcion.plan === 'TRIAL' && trialEndsAt ? daysLeft(trialEndsAt) : null;
-
-  return (
-    <section aria-label="Suscripción">
-      <Card title="Suscripción">
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-lg font-semibold text-slate-800">{planDisplayName}</h4>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {isLegacy ? (
-                <Badge variant="default">Legacy plan</Badge>
-              ) : (
-                <Badge variant={ESTADO_BADGE[estado] ?? 'default'}>
-                  {ESTADO_LABEL[estado] ?? estado}
-                </Badge>
-              )}
-            </div>
-            {precioCop != null && (
-              <p className="mt-2 text-sm font-medium text-slate-700">{formatCop(precioCop)}</p>
-            )}
-            {trialDays != null && (
-              <p className="mt-2 text-sm text-slate-600">
-                {trialDays === 1 ? '1 day left' : `${trialDays} days left`} in your free trial
-                {trialEndsAt ? ` (until ${formatDate(trialEndsAt)})` : ''}.
-              </p>
-            )}
-            {currentPeriodEnd && !isLegacy && (
-              <p className="mt-2 text-sm text-slate-600">
-                Current period until {formatDate(currentPeriodEnd)}.
-              </p>
-            )}
-            {nextChargeAt && metodoPago && (
-              <p className="mt-2 text-sm text-slate-600">
-                Next charge {formatDate(nextChargeAt)} on {metodoPago.brand} •••• {metodoPago.last4}.
-              </p>
-            )}
-          </div>
-          <p className="text-xs text-slate-400">Subscription management will be enabled in the next release.</p>
-        </div>
-      </Card>
-    </section>
-  );
-}
