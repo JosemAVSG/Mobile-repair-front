@@ -184,4 +184,18 @@ describe('MetodoPagoFlow', () => {
     expect(screen.getAllByRole('checkbox')[0]).toBeChecked();
     expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
   });
+
+  it('lets the user recover manually when the widget never answers', async () => {
+    tokenizeCardMock.mockReturnValue(new Promise(() => {}));
+    renderFlow({ open: true, defaultEmail: 'user@x.co' });
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    fireEvent.click(screen.getByRole('button', { name: /agregar tarjeta/i }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText(/cerraste el formulario de wompi/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /agregar tarjeta/i })).not.toBeDisabled();
+  });
 });

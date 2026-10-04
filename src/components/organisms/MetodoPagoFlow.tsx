@@ -138,6 +138,14 @@ export function MetodoPagoFlow({
         ? 'Elige un plan para continuar.'
         : null;
 
+  // Salida manual por si no detectamos que el usuario cerró el widget: descarta el intento en curso.
+  const cancelAttempt = () => {
+    attempt.current += 1;
+    inFlight.current = false;
+    setTokenizing(false);
+    setDismissed(true);
+  };
+
   const errorMessage = widgetError ?? apiErrorMessage(error);
 
   return (
@@ -209,6 +217,15 @@ export function MetodoPagoFlow({
           {dismissed && !errorMessage && (
             <p role="status" className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
               Cerraste el formulario de Wompi y la tarjeta no se agregó. Puedes intentarlo de nuevo.
+            </p>
+          )}
+
+          {tokenizing && !isPending && (
+            <p className="text-right text-xs text-slate-500">
+              ¿Cerraste la ventana de Wompi?{' '}
+              <button type="button" onClick={cancelAttempt} className="font-medium text-blue-600 hover:underline">
+                Reintentar
+              </button>
             </p>
           )}
 

@@ -152,33 +152,48 @@ export async function tokenizeCard(options: TokenizeOptions): Promise<string | n
 }
 
 const DISMISS_GRACE_MS = 1_500;
+const POLL_MS = 300;
 
-function isWompiFrame(node: Node): boolean {
-  return node instanceof HTMLIFrameElement && node.src.includes('wompi');
+/** Un elemento cuenta como visible si ni él ni sus ancestros están ocultos por estilo o atributo. */
+function isShown(el: Element): boolean {
+  for (let node: Element | null = el; node && node !== document.documentElement; node = node.parentElement) {
+    if (node instanceof HTMLElement && node.hidden) return false;
+    const style = window.getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+  }
+  return el.isConnected;
+}
+
+/** Iframes que pertenecen al widget: los que no estaban en la página cuando se abrió. */
+function widgetFrames(baseline: Set<Element>): HTMLIFrameElement[] {
+  return Array.from(document.querySelectorAll('iframe')).filter((f) => !baseline.has(f));
 }
 
 /**
- * Avisa cuando el iframe de Wompi aparece y luego desaparece del DOM. Espera un margen por si el
- * callback con el token llega justo al cerrarse. Devuelve la función para dejar de observar.
+ * Avisa cuando el widget de Wompi aparece y luego deja de verse (se quita del DOM O se oculta:
+ * no sabemos cuál de las dos hace al cerrarse con la X). Se revisa con un intervalo en vez de
+ * depender de un tipo concreto de mutación. Espera un margen por si el callback con el token
+ * llega justo al cerrarse. Devuelve la función para dejar de observar.
  */
 function watchWidgetDismissed(onDismissed: () => void): () => void {
+  const baseline = new Set<Element>(document.querySelectorAll('iframe'));
   let seen = false;
-  let timer: number | undefined;
+  let goneSince: number | null = null;
 
-  const observer = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      m.addedNodes.forEach((n) => {
-        if (isWompiFrame(n) || (n instanceof Element && n.querySelector('iframe[src*="wompi"]'))) seen = true;
-      });
+  const timer = window.setInterval(() => {
+    const visible = widgetFrames(baseline).some(isShown);
+    if (visible) {
+      seen = true;
+      goneSince = null;
+      return;
     }
-    if (seen && !document.querySelector('iframe[src*="wompi"]') && timer === undefined) {
-      timer = window.setTimeout(onDismissed, DISMISS_GRACE_MS);
+    if (!seen) return;
+    goneSince ??= Date.now();
+    if (Date.now() - goneSince >= DISMISS_GRACE_MS) {
+      window.clearInterval(timer);
+      onDismissed();
     }
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
+  }, POLL_MS);
 
-  return () => {
-    observer.disconnect();
-    if (timer !== undefined) window.clearTimeout(timer);
-  };
+  return () => window.clearInterval(timer);
 }

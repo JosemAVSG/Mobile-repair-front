@@ -123,10 +123,25 @@ describe('wompiWidget (R-UI3, ADR-W12)', () => {
       const frame = document.createElement('iframe');
       frame.src = 'https://checkout.wompi.co/p/';
       document.body.appendChild(frame);
-      setTimeout(() => frame.remove(), 0);
+      setTimeout(() => frame.remove(), 400);
     });
     (window as unknown as { WidgetCheckout: unknown }).WidgetCheckout = vi.fn(() => ({ open }));
 
     await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
+  });
+
+  it('resolves null when the widget iframe is hidden but stays in the DOM', async () => {
+    const open = vi.fn(() => {
+      const frame = document.createElement('iframe');
+      frame.src = 'https://checkout.wompi.co/p/';
+      document.body.appendChild(frame);
+      setTimeout(() => {
+        frame.style.display = 'none';
+      }, 400);
+    });
+    (window as unknown as { WidgetCheckout: unknown }).WidgetCheckout = vi.fn(() => ({ open }));
+
+    await expect(tokenizeCard({ publicKey: 'pub_test_abc' })).resolves.toBeNull();
+    document.querySelectorAll('iframe').forEach((f) => f.remove());
   });
 });
