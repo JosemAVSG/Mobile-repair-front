@@ -35,13 +35,13 @@ export function Header({ onMenuToggle }: HeaderProps) {
           <Icon name="menu" size={20} />
         </button>
         <h1 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-          {config.logo && (
-            <img
-              src={config.logo}
-              alt="Logo del taller"
-              className="h-7 w-7 rounded-full object-cover"
-            />
-          )}
+          <img
+            src={config.logo || '/favicon.svg'}
+            alt={config.logo ? 'Logo del taller' : ''}
+            className={`h-7 w-7 ${
+              config.logo ? 'rounded-full object-cover' : 'object-contain'
+            }`}
+          />
           {config.nombreTaller}
         </h1>
       </div>

@@ -20,11 +20,15 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const logo = config.logo ? (
     <img
       src={config.logo}
-      alt=""
+      alt="Logo del taller"
       className="h-full w-full object-cover"
     />
   ) : (
-    <Icon name="smartphone" size={24} className="text-white" />
+    <img
+      src="/favicon.svg"
+      alt=""
+      className="h-full w-full object-contain"
+    />
   );
 
   return (

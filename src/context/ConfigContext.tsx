@@ -160,7 +160,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     if (!iconLink.parentNode) {
       document.head.appendChild(iconLink);
     }
-    iconLink.href = config.logo || '/vite.svg';
+    iconLink.href = config.logo || '/favicon.svg';
     // No asumir el tipo: si el logo es png/jpg y el link decía svg,
     // algunos navegadores no cargan el favicon.
     iconLink.removeAttribute('type');

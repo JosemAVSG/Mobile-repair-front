@@ -117,9 +117,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               className="h-8 w-8 shrink-0 rounded-full object-cover"
             />
           ) : (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-              <Icon name="smartphone" size={18} className="text-white" />
-            </div>
+            <img
+              src="/favicon.svg"
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-lg object-contain"
+            />
           )}
           <span className="truncate text-base font-semibold tracking-tight">
             {config.nombreTaller}

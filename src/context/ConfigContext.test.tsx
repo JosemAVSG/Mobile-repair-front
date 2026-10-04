@@ -50,6 +50,9 @@ function setup() {
 describe('ConfigContext anonymous branding', () => {
   beforeEach(() => {
     localStorage.clear();
+    document
+      .querySelectorAll('link[rel~="icon"]')
+      .forEach((link) => link.remove());
     vi.mocked(login).mockReset();
     vi.mocked(getPublicConfig).mockReset();
   });
@@ -69,6 +72,16 @@ describe('ConfigContext anonymous branding', () => {
     expect(getPublicConfig).not.toHaveBeenCalled();
   });
 
+  it('keeps the product favicon when no tenant logo is configured', async () => {
+    setup();
+
+    await waitFor(() =>
+      expect(
+        document.querySelector<HTMLLinkElement>('link[rel~="icon"]'),
+      ).toHaveAttribute('href', '/favicon.svg'),
+    );
+  });
+
   it('fetches tenant branding after a session is established', async () => {
     vi.mocked(login).mockResolvedValue(registeredSession);
     vi.mocked(getPublicConfig).mockResolvedValue({
@@ -84,5 +97,8 @@ describe('ConfigContext anonymous branding', () => {
 
     expect(result.current.config.nombreTaller).toBe('Taller 7');
     expect(result.current.config.logo).toBe('https://example.com/taller-7.png');
+    expect(
+      document.querySelector<HTMLLinkElement>('link[rel~="icon"]'),
+    ).toHaveAttribute('href', 'https://example.com/taller-7.png');
   });
 });
