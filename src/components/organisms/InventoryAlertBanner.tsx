@@ -30,7 +30,7 @@ export function InventoryAlertBanner({ productos }: InventoryAlertBannerProps) {
   }, []);
 
   const alertas = productos.filter(
-    (p) => p.estado === 'BAJO' || p.estado === 'SIN_STOCK',
+    (p) => p.estadoStock === 'BAJO' || p.estadoStock === 'SIN_STOCK',
   );
 
   if (alertas.length === 0 || dismissed) return null;
@@ -73,8 +73,8 @@ export function InventoryAlertBanner({ productos }: InventoryAlertBannerProps) {
               >
                 <span className="font-medium">{producto.nombre}</span>
                 <span className="text-amber-700">({producto.codigo})</span>
-                <Badge variant={ESTADO_STOCK_VARIANTS[producto.estado]}>
-                  {ESTADO_STOCK_LABELS[producto.estado]}
+                <Badge variant={ESTADO_STOCK_VARIANTS[producto.estadoStock]}>
+                  {ESTADO_STOCK_LABELS[producto.estadoStock]}
                 </Badge>
                 <span className="text-amber-700">
                   Stock: {producto.stock} / Mín: {producto.stockMinimo}

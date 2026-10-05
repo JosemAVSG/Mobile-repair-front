@@ -426,7 +426,7 @@ export interface ProductoInventario {
   descripcion?: string | null;
   stock: number;
   stockMinimo: number;
-  estado: EstadoStock;
+  estadoStock: EstadoStock;
   costoUnitario: number;
   createdAt: string;
 }

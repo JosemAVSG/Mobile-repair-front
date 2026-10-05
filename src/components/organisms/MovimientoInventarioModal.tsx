@@ -154,8 +154,8 @@ export function MovimientoInventarioModal({
             <span>
               Mín: <strong>{producto.stockMinimo}</strong>
             </span>
-            <Badge variant={ESTADO_STOCK_VARIANTS[producto.estado]}>
-              {ESTADO_STOCK_LABELS[producto.estado]}
+            <Badge variant={ESTADO_STOCK_VARIANTS[producto.estadoStock]}>
+              {ESTADO_STOCK_LABELS[producto.estadoStock]}
             </Badge>
             <span className="text-slate-500">{formatCurrency(producto.costoUnitario)}</span>
           </div>

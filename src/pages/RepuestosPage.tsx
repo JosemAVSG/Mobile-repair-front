@@ -12,6 +12,7 @@ import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { createRepuesto, deleteRepuesto, updateRepuesto } from '../api/repuestos';
+import { ApiError } from '../api/ApiClient';
 import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import { buildMarcaMap, buildModeloMap } from '../utils/maps';
 import type { Repuesto, RepuestoRequest } from '../types';
@@ -175,8 +176,13 @@ export function RepuestosPage() {
       setEditingRepuesto(null);
       resetForm();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar repuesto';
-      setFieldErrors({ nombre: msg });
+      if (err instanceof ApiError && err.status === 409) {
+        // El backend devuelve 409 cuando el código de repuesto ya existe en el taller.
+        setFieldErrors({ codigo: err.message });
+      } else {
+        const msg = err instanceof Error ? err.message : 'Error al guardar repuesto';
+        setFieldErrors({ nombre: msg });
+      }
     } finally {
       setSubmitting(false);
     }

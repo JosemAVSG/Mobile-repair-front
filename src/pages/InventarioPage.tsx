@@ -107,7 +107,7 @@ export function InventarioPage() {
   const productosFiltrados = useMemo(() => {
     let data = productos ?? [];
     if (estadoFiltro) {
-      data = data.filter((p) => p.estado === estadoFiltro);
+      data = data.filter((p) => p.estadoStock === estadoFiltro);
     }
     return data;
   }, [productos, estadoFiltro]);
@@ -251,7 +251,7 @@ export function InventarioPage() {
       descripcion: p.descripcion ?? null,
       stock: p.stock,
       stockMinimo: p.stockMinimo,
-      estado: p.estado,
+      estado: p.estadoStock,
       costoUnitario: p.costoUnitario,
     }));
   }, [productosFiltrados]);
