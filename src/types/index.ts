@@ -249,6 +249,14 @@ export interface Repuesto {
   createdAt: string;
 }
 
+export interface TarifaManoObra {
+  id: number;
+  tipoReparacion: TipoReparacion;
+  marcaId: number | null;
+  modeloId: number | null;
+  precio: number;
+}
+
 export interface HistorialEntry {
   id: number;
   entidadTipo: string;
@@ -331,6 +339,13 @@ export interface RepuestoRequest {
   marcaId?: number;
   modeloId?: number;
   tipoReparacion: TipoReparacion;
+}
+
+export interface TarifaManoObraRequest {
+  tipoReparacion: TipoReparacion;
+  marcaId?: number | null;
+  modeloId?: number | null;
+  precio: number;
 }
 
 // ──────────────────────────────────────────────

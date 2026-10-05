@@ -17,8 +17,9 @@ import {
   type OrdenesFiltro,
 } from '../api/ordenes';
 import { getRepuestos } from '../api/repuestos';
+import { getTarifas } from '../api/tarifas';
 import { getTecnicos } from '../api/tecnicos';
-import type { EtapaFoto } from '../types';
+import type { EtapaFoto, TipoReparacion } from '../types';
 
 export function useMarcas() {
   return useQuery({
@@ -102,6 +103,13 @@ export function useRepuestos(nombre?: string) {
   return useQuery({
     queryKey: nombre ? ['repuestos', 'nombre', nombre] : ['repuestos'],
     queryFn: () => getRepuestos(nombre),
+  });
+}
+
+export function useTarifas(tipo?: TipoReparacion) {
+  return useQuery({
+    queryKey: tipo ? ['tarifas', 'tipo', tipo] : ['tarifas'],
+    queryFn: () => getTarifas(tipo),
   });
 }
 

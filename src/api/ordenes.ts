@@ -9,6 +9,7 @@ import type {
   PublicRepairStatus,
   Reparacion,
   ReparacionRequest,
+  TipoReparacion,
 } from '../types';
 
 /** Filtros adicionales del listado de órdenes (GET /api/ordenes?tecnicoId=X
@@ -61,6 +62,7 @@ export const updateOrdenEstado = async (
 export const iniciarReparacion = async (
   ordenId: number,
   body: {
+    tipo: TipoReparacion;
     precio: number;
     repuestoIds: number[];
     descuentoDiagnostico: boolean;

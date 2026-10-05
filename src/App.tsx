@@ -13,6 +13,7 @@ import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
 import { PublicRepairStatusPage } from './pages/PublicRepairStatusPage';
 import { RepuestosPage } from './pages/RepuestosPage';
+import { TarifasPage } from './pages/TarifasPage';
 import { ConfiguracionPage } from './pages/ConfiguracionPage';
 import { TecnicosPage } from './pages/TecnicosPage';
 import { InventarioPage } from './pages/InventarioPage';
@@ -123,6 +124,14 @@ export default function App() {
           element={
             <RequireRole roles={['ADMIN']}>
               <RepuestosPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="tarifas"
+          element={
+            <RequireRole roles={['ADMIN']}>
+              <TarifasPage />
             </RequireRole>
           }
         />

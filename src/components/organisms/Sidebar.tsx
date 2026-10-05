@@ -42,6 +42,7 @@ const navGroups: NavGroup[] = [
     icon: 'dollar-sign',
     items: [
       { path: '/repuestos', label: 'Repuestos', icon: 'package' },
+      { path: '/tarifas', label: 'Tarifas', icon: 'dollar-sign' },
     ],
   },
 ];

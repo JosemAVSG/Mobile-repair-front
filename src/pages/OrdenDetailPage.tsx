@@ -43,6 +43,7 @@ import {
   updateEntrega,
   updateOrdenEstado,
 } from '../api/ordenes';
+import { resolverPrecioTarifa } from '../api/tarifas';
 import { useAuth } from '../hooks/useAuth';
 import { useCan } from '../hooks/useCan';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
@@ -511,6 +512,11 @@ export function OrdenDetailPage() {
   const [repCompleteSubmitting, setRepCompleteSubmitting] = useState(false);
   const [repCompleteDiscount, setRepCompleteDiscount] = useState(false);
   const [repPrecioReal, setRepPrecioReal] = useState('');
+  const [repCompleteTipo, setRepCompleteTipo] = useState<TipoReparacion | ''>('');
+  // Tipo y valor que produjo el autocompletado vigente. Sirve para distinguir "precio que
+  // puso la tarifa" (se puede re-resolver al cambiar de tipo) de "precio editado a mano"
+  // (nunca se pisa).
+  const autoPrecioRef = useRef<{ tipo: TipoReparacion; value: string } | null>(null);
 
   const executeTransition = useCallback(
     async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
@@ -572,15 +578,17 @@ export function OrdenDetailPage() {
   const iniciarReparacionMutation = useMutation({
     mutationFn: ({
       ordenId: oId,
+      tipo,
       precio,
       repuestoIds,
       descuentoDiagnostico,
     }: {
       ordenId: number;
+      tipo: TipoReparacion;
       precio: number;
       repuestoIds: number[];
       descuentoDiagnostico: boolean;
-    }) => iniciarReparacion(oId, { precio, repuestoIds, descuentoDiagnostico }),
+    }) => iniciarReparacion(oId, { tipo, precio, repuestoIds, descuentoDiagnostico }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
@@ -593,7 +601,51 @@ export function OrdenDetailPage() {
     setRepCompleteSearch('');
     setRepCompleteDiscount(false);
     setRepPrecioReal('');
+    setRepCompleteTipo('');
+    autoPrecioRef.current = null;
   }, []);
+
+  // Al elegir el tipo de reparación, resuelve la tarifa aplicable (modelo >
+  // marca > genérico) y autocompleta el precio. Reglas:
+  //  - Campo vacío: resuelve (como siempre).
+  //  - El precio sigue siendo el que autocompletó la tarifa anterior (el usuario
+  //    NO lo editó): re-resuelve con el tipo nuevo.
+  //  - El usuario editó el precio a mano: NO se pisa.
+  // Un error o ausencia de tarifa deja el campo intacto.
+  const handleRepCompleteTipoChange = useCallback(
+    async (value: string) => {
+      const tipo = value as TipoReparacion | '';
+      setRepCompleteTipo(tipo);
+      if (!tipo || !orden) return;
+
+      const autocompletado = autoPrecioRef.current;
+      const campoVacio = repPrecioReal.trim() === '';
+      const sigueAutocompletado =
+        autocompletado != null && repPrecioReal === autocompletado.value;
+      if (!campoVacio && !sigueAutocompletado) return;
+
+      try {
+        const precio = await resolverPrecioTarifa({
+          tipo,
+          marcaId: orden.marcaId,
+          modeloId: orden.modeloId,
+        });
+        if (precio != null) {
+          const valor = String(precio);
+          setRepPrecioReal((prev) => {
+            const prevVacio = prev.trim() === '';
+            const prevSigueAutocompletado =
+              autocompletado != null && prev === autocompletado.value;
+            return prevVacio || prevSigueAutocompletado ? valor : prev;
+          });
+          autoPrecioRef.current = { tipo, value: valor };
+        }
+      } catch {
+        // Sin tarifa o error del resolver: no bloquea el flujo manual.
+      }
+    },
+    [orden, repPrecioReal],
+  );
 
   // Bloquea el cierre (botón Cancelar, backdrop o Escape) en pleno envío.
   const handleCancelRepuestos = useCallback(() => {
@@ -603,6 +655,10 @@ export function OrdenDetailPage() {
 
   const confirmRepuestos = useCallback(async () => {
     if (!orden) return;
+    if (!repCompleteTipo) {
+      showToast('Seleccione el tipo de reparación', 'warning');
+      return;
+    }
     const precio = Number(repPrecioReal);
     if (!repPrecioReal || isNaN(precio) || precio <= 0) {
       showToast('Ingrese el precio de la reparación', 'warning');
@@ -612,6 +668,7 @@ export function OrdenDetailPage() {
     try {
       await iniciarReparacionMutation.mutateAsync({
         ordenId: orden.id,
+        tipo: repCompleteTipo,
         precio,
         repuestoIds: Array.from(repCompleteSelectedIds),
         descuentoDiagnostico: repCompleteDiscount,
@@ -621,6 +678,8 @@ export function OrdenDetailPage() {
       setRepCompleteSearch('');
       setRepCompleteDiscount(false);
       setRepPrecioReal('');
+      setRepCompleteTipo('');
+      autoPrecioRef.current = null;
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al iniciar reparación';
@@ -628,7 +687,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation, showToast]);
+  }, [orden, repCompleteTipo, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation, showToast]);
 
   // ───── Reparacion modal ─────
 
@@ -1620,9 +1679,24 @@ export function OrdenDetailPage() {
           </label>
         </div>
 
+        {/* Tipo de reparación (obligatorio) — resuelve y autocompleta el precio */}
+        <div className="mb-4">
+          <FormField label="Tipo de reparación" required>
+            <Select
+              options={Object.values(TipoReparacion).map((t) => ({
+                value: t,
+                label: TIPO_REPARACION_LABELS[t] ?? t,
+              }))}
+              value={repCompleteTipo}
+              onChange={(e) => void handleRepCompleteTipoChange(e.target.value)}
+              placeholder="Seleccionar tipo..."
+            />
+          </FormField>
+        </div>
+
         {/* Price input */}
         <div className="mb-4">
-          <FormField label="Precio de la reparación">
+          <FormField label="Precio de la reparación" required>
             <Input
               type="number"
               placeholder="Ej: 150"
