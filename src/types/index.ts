@@ -434,6 +434,9 @@ export type EstadoStock = 'OK' | 'BAJO' | 'SIN_STOCK';
 
 export type TipoMovimiento = 'COMPRA' | 'CONSUMO';
 
+/** Destino del producto: repuesto de reparación, venta directa o ambos. */
+export type UsoProducto = 'REPUESTO' | 'VENTA' | 'AMBOS';
+
 export interface ProductoInventario {
   id: number;
   codigo: string;
@@ -443,6 +446,14 @@ export interface ProductoInventario {
   stockMinimo: number;
   estadoStock: EstadoStock;
   costoUnitario: number;
+  uso?: UsoProducto;
+  /** Precio de venta al público. `null` = no aplica / no definido. */
+  precioVenta: number | null;
+  categoria?: string | null;
+  variante?: string | null;
+  proveedor?: string | null;
+  controlaStock?: boolean;
+  modelosCompatibles?: number[];
   createdAt: string;
 }
 
@@ -464,6 +475,14 @@ export interface ProductoInventarioRequest {
   stock: number;
   stockMinimo: number;
   costoUnitario: number;
+  /** Obligatorio cuando `uso` es VENTA o AMBOS (regla del backend). */
+  precioVenta: number;
+  uso?: UsoProducto;
+  categoria?: string;
+  variante?: string;
+  proveedor?: string;
+  controlaStock?: boolean;
+  modeloIds?: number[];
 }
 
 export interface MovimientoRequest {

@@ -52,6 +52,7 @@ interface ProductoRow {
   stockMinimo: number;
   estado: EstadoStock;
   costoUnitario: number;
+  precioVenta: number | null;
 }
 
 // ──────────────────────────────────────────────
@@ -200,6 +201,13 @@ export function InventarioPage() {
       render: (row) => formatCurrency(row.costoUnitario),
     },
     {
+      key: 'precioVenta',
+      label: 'Precio venta',
+      sortable: true,
+      render: (row) =>
+        row.precioVenta == null ? '—' : formatCurrency(row.precioVenta),
+    },
+    {
       key: 'id',
       label: 'Acciones',
       render: (row) => {
@@ -253,6 +261,7 @@ export function InventarioPage() {
       stockMinimo: p.stockMinimo,
       estado: p.estadoStock,
       costoUnitario: p.costoUnitario,
+      precioVenta: p.precioVenta ?? null,
     }));
   }, [productosFiltrados]);
 
@@ -372,8 +381,13 @@ export function InventarioPage() {
                       (mín. {row.stockMinimo})
                     </span>
                   </span>
-                  <span className="shrink-0 text-slate-600">
-                    {formatCurrency(row.costoUnitario)}
+                  <span className="shrink-0 text-right text-slate-600">
+                    <span className="block text-xs text-slate-400">
+                      Costo: {formatCurrency(row.costoUnitario)}
+                    </span>
+                    <span className="block font-medium text-slate-700">
+                      Venta: {row.precioVenta == null ? '—' : formatCurrency(row.precioVenta)}
+                    </span>
                   </span>
                 </div>
                 {producto && (

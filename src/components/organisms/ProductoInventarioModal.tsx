@@ -4,7 +4,11 @@ import { Button } from '../atoms/Button';
 import { Input } from '../atoms/Input';
 import { FormField } from '../molecules/FormField';
 import { ApiError } from '../../api/ApiClient';
-import type { ProductoInventario, ProductoInventarioRequest } from '../../types';
+import type {
+  ProductoInventario,
+  ProductoInventarioRequest,
+  UsoProducto,
+} from '../../types';
 
 interface ProductoInventarioModalProps {
   isOpen: boolean;
@@ -20,16 +24,34 @@ interface FormErrors {
   stock?: string;
   stockMinimo?: string;
   costoUnitario?: string;
+  precioVenta?: string;
   general?: string;
 }
 
-const emptyForm: ProductoInventarioRequest = {
+/**
+ * Estado del form. `precioVenta` se maneja como string para distinguir "vacío" de 0: un precio
+ * de venta de 0 es sospechoso y debe disparar validación, no guardarse en silencio.
+ */
+interface ProductoFormState {
+  codigo: string;
+  nombre: string;
+  descripcion: string;
+  stock: number;
+  stockMinimo: number;
+  costoUnitario: number;
+  precioVenta: string;
+  uso: UsoProducto;
+}
+
+const emptyForm: ProductoFormState = {
   codigo: '',
   nombre: '',
   descripcion: '',
   stock: 0,
   stockMinimo: 0,
   costoUnitario: 0,
+  precioVenta: '',
+  uso: 'VENTA',
 };
 
 export function ProductoInventarioModal({
@@ -40,7 +62,7 @@ export function ProductoInventarioModal({
   loading = false,
 }: ProductoInventarioModalProps) {
   const isEditing = producto != null;
-  const [form, setForm] = useState<ProductoInventarioRequest>(emptyForm);
+  const [form, setForm] = useState<ProductoFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
 
   useEffect(() => {
@@ -53,6 +75,9 @@ export function ProductoInventarioModal({
           stock: producto.stock,
           stockMinimo: producto.stockMinimo,
           costoUnitario: producto.costoUnitario,
+          precioVenta:
+            producto.precioVenta != null ? String(producto.precioVenta) : '',
+          uso: producto.uso ?? 'VENTA',
         });
       } else {
         setForm(emptyForm);
@@ -62,7 +87,7 @@ export function ProductoInventarioModal({
   }, [isOpen, producto]);
 
   const setValue = useCallback(
-    <K extends keyof ProductoInventarioRequest>(key: K, value: ProductoInventarioRequest[K]) => {
+    <K extends keyof ProductoFormState>(key: K, value: ProductoFormState[K]) => {
       setForm((prev) => ({ ...prev, [key]: value }));
     },
     [],
@@ -91,6 +116,11 @@ export function ProductoInventarioModal({
       errors.costoUnitario = 'Ingrese un costo unitario válido (≥ 0)';
     }
 
+    const precioVentaNum = Number(form.precioVenta);
+    if (form.precioVenta.trim() === '' || Number.isNaN(precioVentaNum) || precioVentaNum <= 0) {
+      errors.precioVenta = 'Ingrese un precio de venta mayor a 0';
+    }
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }, [form]);
@@ -101,6 +131,7 @@ export function ProductoInventarioModal({
     try {
       await onSubmit({
         ...form,
+        precioVenta: Number(form.precioVenta),
         codigo: form.codigo.trim(),
         nombre: form.nombre.trim(),
         descripcion: form.descripcion?.trim() || undefined,
@@ -128,6 +159,12 @@ export function ProductoInventarioModal({
     const normalized = value.replace(',', '.');
     const num = normalized === '' ? 0 : Number(normalized);
     setValue(key, num);
+  };
+
+  // El precio de venta conserva el string crudo: vacío debe seguir siendo vacío para que la
+  // validación lo detecte, en vez de convertirse en 0 silenciosamente.
+  const handlePrecioVentaChange = (value: string) => {
+    setValue('precioVenta', value.replace(',', '.'));
   };
 
   return (
@@ -211,6 +248,18 @@ export function ProductoInventarioModal({
             placeholder="0"
             value={form.costoUnitario}
             onChange={(e) => handleNumberChange('costoUnitario', e.target.value)}
+            disabled={loading}
+          />
+        </FormField>
+
+        <FormField label="Precio de venta" required error={fieldErrors.precioVenta}>
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            placeholder="0"
+            value={form.precioVenta}
+            onChange={(e) => handlePrecioVentaChange(e.target.value)}
             disabled={loading}
           />
         </FormField>
