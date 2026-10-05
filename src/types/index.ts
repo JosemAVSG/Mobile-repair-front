@@ -215,6 +215,10 @@ export interface RepuestoSnapshot {
   repuestoId: number | null;
   nombre: string;
   precioCosto: number;
+  /** Precio de venta congelado al momento de usar el repuesto (si existía). */
+  precioVenta?: number | null;
+  /** Monto efectivamente cobrado por el repuesto (venta o costo como fallback). */
+  precioCobrado?: number | null;
 }
 
 export interface Reparacion {
@@ -224,6 +228,8 @@ export interface Reparacion {
   descripcion: string | null;
   precio: number;
   costoRepuesto?: number | null;
+  /** Total cobrado por repuestos de esta reparación (precio de venta, con fallback al costo). */
+  precioRepuesto?: number | null;
   ganancia?: number | null;
   repuestos?: RepuestoSnapshot[];
   createdAt: string;
@@ -235,6 +241,8 @@ export interface Repuesto {
   descripcion: string | null;
   codigo: string;
   precioCosto: number;
+  /** Precio de venta al público. `null` = se cobra el costo como fallback. */
+  precioVenta: number | null;
   marcaId: number | null;
   modeloId: number | null;
   tipoReparacion: TipoReparacion;
@@ -318,6 +326,8 @@ export interface RepuestoRequest {
   descripcion?: string;
   codigo: string;
   precioCosto: number;
+  /** Opcional. `null`/ausente = se cobra el costo como fallback. */
+  precioVenta?: number | null;
   marcaId?: number;
   modeloId?: number;
   tipoReparacion: TipoReparacion;

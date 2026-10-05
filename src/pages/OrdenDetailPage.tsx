@@ -55,7 +55,7 @@ import {
 import { isOrdenAtrasada, formatNumeroOrden } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
 import { useToast } from '../context/ToastContext';
-import type { EtapaFoto, FotoOrden, ReparacionRequest } from '../types';
+import type { EtapaFoto, FotoOrden, ReparacionRequest, Repuesto } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
   useOrden,
@@ -168,6 +168,14 @@ function toDatetimeLocal(iso: string | null | undefined): string {
 /** datetime-local (YYYY-MM-DDTHH:mm) → ISO con segundos (YYYY-MM-DDTHH:mm:ss) */
 function normalizeEntrega(value: string): string {
   return value.length === 16 ? `${value}:00` : value;
+}
+
+/**
+ * Precio a cobrar por un repuesto: su precio de venta si existe, con
+ * fallback al costo. Espeja `precioCobrado` del backend.
+ */
+function precioCobradoRepuesto(repuesto: Repuesto): number {
+  return repuesto.precioVenta ?? repuesto.precioCosto;
 }
 
 // ──────────────────────────────────────────────
@@ -653,6 +661,11 @@ export function OrdenDetailPage() {
     [selectedRepuestos],
   );
 
+  const repuestosACobrarPreview = useMemo(
+    () => selectedRepuestos.reduce((sum, r) => sum + precioCobradoRepuesto(r), 0),
+    [selectedRepuestos],
+  );
+
   const precioFinalPreview = useMemo(() => {
     if (repPrecio !== '' && !isNaN(Number(repPrecio)) && Number(repPrecio) > 0) {
       return Number(repPrecio);
@@ -660,10 +673,11 @@ export function OrdenDetailPage() {
     return null;
   }, [repPrecio]);
 
+  // Espeja al backend: ganancia = precio + repuestos cobrados − costo de repuestos.
   const gananciaPreview = useMemo(() => {
     if (precioFinalPreview == null) return null;
-    return precioFinalPreview - costoRepuestosPreview;
-  }, [precioFinalPreview, costoRepuestosPreview]);
+    return precioFinalPreview + repuestosACobrarPreview - costoRepuestosPreview;
+  }, [precioFinalPreview, repuestosACobrarPreview, costoRepuestosPreview]);
 
   const toggleRepuesto = useCallback((id: number) => {
     setSelectedRepuestoIds((prev) => {
@@ -686,8 +700,8 @@ export function OrdenDetailPage() {
     [repuestos, repCompleteSelectedIds],
   );
 
-  const repCompleteCostoPreview = useMemo(
-    () => repCompleteSelected.reduce((sum, r) => sum + r.precioCosto, 0),
+  const repCompleteRepuestosPreview = useMemo(
+    () => repCompleteSelected.reduce((sum, r) => sum + precioCobradoRepuesto(r), 0),
     [repCompleteSelected],
   );
 
@@ -893,6 +907,20 @@ export function OrdenDetailPage() {
             r.descripcion !== 'Revisión inicial',
         )
         .reduce((sum, r) => sum + r.precio, 0) ?? 0,
+    [orden],
+  );
+
+  // Σ de repuestos cobrados (precioRepuesto), con el mismo filtro que totalReparaciones
+  // para que "Total reparaciones + Repuestos" cuadre con orden.precioTotal.
+  const totalRepuestos = useMemo(
+    () =>
+      orden?.reparaciones
+        .filter(
+          (r) =>
+            !orden.descuentoDiagnostico ||
+            r.descripcion !== 'Revisión inicial',
+        )
+        .reduce((sum, r) => sum + (r.precioRepuesto ?? 0), 0) ?? 0,
     [orden],
   );
 
@@ -1222,7 +1250,7 @@ export function OrdenDetailPage() {
             <div className="border-t border-slate-100 pt-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-slate-700">
-                  Total reparaciones
+                  Mano de obra y revisiones
                 </span>
                 <span className="text-slate-700">
                   {formatCurrency(totalReparaciones)}
@@ -1230,9 +1258,25 @@ export function OrdenDetailPage() {
               </div>
               <div className="mt-1 flex items-center justify-between text-sm">
                 <span className="font-medium text-slate-700">
-                  Costo de materiales
+                  Repuestos (cobrado)
                 </span>
                 <span className="text-slate-700">
+                  {formatCurrency(totalRepuestos)}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
+                <span className="font-semibold text-slate-700">
+                  Total cobrado
+                </span>
+                <span className="font-semibold text-slate-800">
+                  {formatCurrency(totalReparaciones + totalRepuestos)}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-500">
+                  Costo de materiales (no cobrado)
+                </span>
+                <span className="text-slate-500">
                   {formatCurrency(costoMateriales)}
                 </span>
               </div>
@@ -1633,7 +1677,7 @@ export function OrdenDetailPage() {
                       {repuesto.nombre}
                     </span>
                     <span className="text-xs text-slate-500">
-                      {formatCurrency(repuesto.precioCosto)}
+                      {formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
                     </span>
                   </label>
                 );
@@ -1642,16 +1686,16 @@ export function OrdenDetailPage() {
           )}
         </div>
         <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="text-slate-600">Costo de repuestos:</span>
+          <span className="text-slate-600">Repuestos (a cobrar):</span>
           <span className="font-medium text-slate-800">
-            {formatCurrency(repCompleteCostoPreview)}
+            {formatCurrency(repCompleteRepuestosPreview)}
           </span>
         </div>
         {repPrecioReal && (
           <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2 text-sm">
             <span className="font-semibold text-slate-700">Total a cobrar:</span>
             <span className="font-bold text-emerald-700">
-              {formatCurrency(Number(repPrecioReal) + repCompleteCostoPreview)}
+              {formatCurrency(Number(repPrecioReal) + repCompleteRepuestosPreview)}
             </span>
           </div>
         )}
@@ -1754,7 +1798,7 @@ export function OrdenDetailPage() {
                           {repuesto.nombre}
                         </span>
                         <span className="text-xs text-slate-500">
-                          {formatCurrency(repuesto.precioCosto)}
+                          {formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
                         </span>
                       </label>
                     );
@@ -1764,9 +1808,9 @@ export function OrdenDetailPage() {
             </div>
             <div className="mt-2 flex flex-col gap-1 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Costo de repuestos:</span>
+                <span className="text-slate-600">Repuestos (a cobrar):</span>
                 <span className="font-medium text-slate-800">
-                  {formatCurrency(costoRepuestosPreview)}
+                  {formatCurrency(repuestosACobrarPreview)}
                 </span>
               </div>
               <div className="flex items-center justify-between">

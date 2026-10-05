@@ -38,6 +38,7 @@ interface RepuestoRow {
   nombre: string;
   descripcion: string | null;
   precioCosto: number;
+  precioVenta: number | null;
   marcaNombre: string;
   modeloNombre: string;
   tipoReparacion: TipoReparacion;
@@ -47,6 +48,7 @@ interface FormErrors {
   nombre?: string;
   codigo?: string;
   precioCosto?: string;
+  precioVenta?: string;
   tipoReparacion?: string;
 }
 
@@ -106,6 +108,7 @@ export function RepuestosPage() {
   const [editDescripcion, setEditDescripcion] = useState('');
   const [editCodigo, setEditCodigo] = useState('');
   const [editPrecioCosto, setEditPrecioCosto] = useState('');
+  const [editPrecioVenta, setEditPrecioVenta] = useState('');
   const [editMarcaId, setEditMarcaId] = useState('');
   const [editModeloId, setEditModeloId] = useState('');
   const [editTipo, setEditTipo] = useState('');
@@ -133,10 +136,16 @@ export function RepuestosPage() {
     if (!editPrecioCosto || isNaN(Number(editPrecioCosto)) || Number(editPrecioCosto) < 0) {
       errors.precioCosto = 'Ingrese un precio de costo válido';
     }
+    if (
+      editPrecioVenta.trim() !== '' &&
+      (isNaN(Number(editPrecioVenta)) || Number(editPrecioVenta) < 0)
+    ) {
+      errors.precioVenta = 'Ingrese un precio de venta válido';
+    }
     if (!editTipo) errors.tipoReparacion = 'Seleccione un tipo de reparación';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [editNombre, editCodigo, editPrecioCosto, editTipo]);
+  }, [editNombre, editCodigo, editPrecioCosto, editPrecioVenta, editTipo]);
 
   // ───── Create / Update ─────
 
@@ -150,6 +159,7 @@ export function RepuestosPage() {
         descripcion: editDescripcion.trim() || undefined,
         codigo: editCodigo.trim(),
         precioCosto: Number(editPrecioCosto),
+        precioVenta: editPrecioVenta.trim() === '' ? null : Number(editPrecioVenta),
         marcaId: editMarcaId ? Number(editMarcaId) : undefined,
         modeloId: editModeloId ? Number(editModeloId) : undefined,
         tipoReparacion: editTipo as TipoReparacion,
@@ -172,7 +182,7 @@ export function RepuestosPage() {
     }
   }, [
     editNombre, editDescripcion, editCodigo,
-    editPrecioCosto, editMarcaId, editModeloId, editTipo,
+    editPrecioCosto, editPrecioVenta, editMarcaId, editModeloId, editTipo,
     editingRepuesto, validate, saveMutation,
   ]);
 
@@ -200,6 +210,7 @@ export function RepuestosPage() {
     setEditDescripcion('');
     setEditCodigo('');
     setEditPrecioCosto('');
+    setEditPrecioVenta('');
     setEditMarcaId('');
     setEditModeloId('');
     setEditTipo('');
@@ -218,6 +229,7 @@ export function RepuestosPage() {
     setEditDescripcion(repuesto.descripcion ?? '');
     setEditCodigo(repuesto.codigo);
     setEditPrecioCosto(String(repuesto.precioCosto));
+    setEditPrecioVenta(repuesto.precioVenta != null ? String(repuesto.precioVenta) : '');
     setEditMarcaId(repuesto.marcaId != null ? String(repuesto.marcaId) : '');
     setEditModeloId(repuesto.modeloId != null ? String(repuesto.modeloId) : '');
     setEditTipo(repuesto.tipoReparacion);
@@ -241,6 +253,13 @@ export function RepuestosPage() {
       label: 'Costo',
       sortable: true,
       render: (row) => formatCurrency(row.precioCosto),
+    },
+    {
+      key: 'precioVenta',
+      label: 'Precio venta',
+      sortable: true,
+      render: (row) =>
+        row.precioVenta != null ? formatCurrency(row.precioVenta) : '—',
     },
     {
       key: 'marcaNombre',
@@ -306,6 +325,7 @@ export function RepuestosPage() {
       nombre: r.nombre,
       descripcion: r.descripcion,
       precioCosto: r.precioCosto,
+      precioVenta: r.precioVenta ?? null,
       marcaNombre:
         r.marcaId != null ? (marcaMap.get(r.marcaId) ?? `Marca #${r.marcaId}`) : '—',
       modeloNombre:
@@ -381,9 +401,16 @@ export function RepuestosPage() {
                   {row.codigo}
                 </p>
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-slate-800">
-                    {formatCurrency(row.precioCosto)}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-800">
+                      {formatCurrency(row.precioCosto)}
+                    </span>
+                    {row.precioVenta != null && (
+                      <span className="text-xs text-slate-500">
+                        Venta: {formatCurrency(row.precioVenta)}
+                      </span>
+                    )}
+                  </div>
                   <span className="truncate text-xs text-slate-500">
                     {[row.marcaNombre, row.modeloNombre]
                       .filter((v) => v && v !== '—')
@@ -474,6 +501,17 @@ export function RepuestosPage() {
               placeholder="Ej: 15000"
               value={editPrecioCosto}
               onChange={(e) => setEditPrecioCosto(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Precio de venta (opcional)" error={fieldErrors.precioVenta}>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Ej: 15000"
+              value={editPrecioVenta}
+              onChange={(e) => setEditPrecioVenta(e.target.value)}
             />
           </FormField>
 
