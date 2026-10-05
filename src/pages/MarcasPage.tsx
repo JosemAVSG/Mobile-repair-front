@@ -17,6 +17,7 @@ import type { Marca, MarcaRequest } from '../types';
 import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas } from '../hooks/useQueries';
 import { catalogoCreateError, catalogoDeleteError } from '../utils/catalogo';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -32,6 +33,7 @@ const CATEGORIA_OPTIONS = [
 
 export function MarcasPage() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const {
     data: marcas,
@@ -124,11 +126,11 @@ export function MarcasPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = catalogoDeleteError(err);
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleteMutation]);
+  }, [deleteTarget, deleteMutation, showToast]);
 
   // ───── Close modal helpers ─────
 

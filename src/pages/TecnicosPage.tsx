@@ -16,6 +16,7 @@ import { formatDate, rolBadgeConfig } from '../utils/formatters';
 import type { Tecnico, TecnicoRequest, RolUsuario } from '../types';
 import { useTecnicos } from '../hooks/useQueries';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -41,6 +42,7 @@ interface FormErrors {
 export function TecnicosPage() {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
+  const { showToast } = useToast();
 
   const {
     data: tecnicos,
@@ -190,11 +192,11 @@ export function TecnicosPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleteMutation]);
+  }, [deleteTarget, deleteMutation, showToast]);
 
   // ───── Columns ─────
 
@@ -414,10 +416,13 @@ export function TecnicosPage() {
 
             <FormField label="Teléfono">
               <Input
-                placeholder="+56 9 1234 5678"
+                placeholder="+57 300 1234567"
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
               />
+              <p className="text-xs text-slate-500">
+                Incluye el código de país (ej: +57 300 1234567)
+              </p>
             </FormField>
           </div>
 

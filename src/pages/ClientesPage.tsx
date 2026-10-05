@@ -14,6 +14,7 @@ import { createCliente, deleteCliente, updateCliente } from '../api/clientes';
 import { formatDate } from '../utils/formatters';
 import type { Cliente, ClienteRequest } from '../types';
 import { useClientes } from '../hooks/useQueries';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Clientes Page
@@ -22,6 +23,7 @@ import { useClientes } from '../hooks/useQueries';
 export function ClientesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const {
     data: clientes,
@@ -142,11 +144,11 @@ export function ClientesPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleteMutation]);
+  }, [deleteTarget, deleteMutation, showToast]);
 
   // ───── Row click ─────
 
@@ -327,10 +329,13 @@ export function ClientesPage() {
           <FormField label="Teléfono">
             <Input
               type="tel"
-              placeholder="+56 9 1234 5678"
+              placeholder="+57 300 1234567"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
             />
+            <p className="text-xs text-slate-500">
+              Incluye el código de país (ej: +57 300 1234567)
+            </p>
           </FormField>
 
           <FormField label="Email">

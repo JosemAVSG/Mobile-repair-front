@@ -18,6 +18,7 @@ import type { Modelo, ModeloRequest } from '../types';
 import { CategoriaMarca, CATEGORIAS_MARCA_ACTIVAS } from '../types';
 import { useMarcas, useModelos } from '../hooks/useQueries';
 import { catalogoCreateError, catalogoDeleteError } from '../utils/catalogo';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Types
@@ -46,6 +47,7 @@ const CATEGORIA_FILTER_OPTIONS = [
 
 export function ModelosPage() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const {
     data: modelos,
@@ -173,11 +175,11 @@ export function ModelosPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = catalogoDeleteError(err);
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleteMutation]);
+  }, [deleteTarget, deleteMutation, showToast]);
 
   // ───── Close modal helpers ─────
 

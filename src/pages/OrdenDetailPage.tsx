@@ -49,11 +49,12 @@ import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_
 import {
   buildWhatsAppLink,
   buildMensajeCita,
-  buildMensajeEntregaGeneral,
+  buildMensajeEstado,
   copyTextToClipboard,
 } from '../utils/whatsapp';
 import { isOrdenAtrasada, formatNumeroOrden } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
+import { useToast } from '../context/ToastContext';
 import type { EtapaFoto, FotoOrden, ReparacionRequest } from '../types';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
@@ -194,6 +195,7 @@ export function OrdenDetailPage() {
   const queryClient = useQueryClient();
   const { config } = useConfig();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const ordenId = Number(id);
 
   // ───── Data ─────
@@ -448,9 +450,9 @@ export function OrdenDetailPage() {
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al eliminar la foto';
-      alert(msg);
+      showToast(msg, 'error');
     }
-  }, [fotoAEliminar, eliminarFotoMutation]);
+  }, [fotoAEliminar, eliminarFotoMutation, showToast]);
 
   // ───── Técnico responsable state ─────
 
@@ -470,11 +472,11 @@ export function OrdenDetailPage() {
       setConfirmAsignarme(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al asignar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setAsignando(false);
     }
-  }, [orden, user?.tecnicoId, asignarTecnicoMutation]);
+  }, [orden, user?.tecnicoId, asignarTecnicoMutation, showToast]);
 
   const handleAsignarSelect = useCallback(async () => {
     if (!orden) return;
@@ -484,11 +486,11 @@ export function OrdenDetailPage() {
       await asignarTecnicoMutation.mutateAsync({ targetOrdenId: orden.id, tecnicoId });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al asignar técnico';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setAsignando(false);
     }
-  }, [orden, asignTecnicoSel, asignarTecnicoMutation]);
+  }, [orden, asignTecnicoSel, asignarTecnicoMutation, showToast]);
 
   // ───── Transition state ─────
 
@@ -511,12 +513,12 @@ export function OrdenDetailPage() {
       } catch (err: unknown) {
         const msg =
           err instanceof Error ? err.message : 'Error al cambiar estado';
-        alert(msg);
+        showToast(msg, 'error');
       } finally {
         setTransitioningTarget(null);
       }
     },
-    [orden, transitionMutation],
+    [orden, transitionMutation, showToast],
   );
 
   const handleTransition = useCallback(
@@ -552,11 +554,11 @@ export function OrdenDetailPage() {
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al registrar pago';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setFacturaConfirmandoPago(false);
     }
-  }, [orden, transitionMutation]);
+  }, [orden, transitionMutation, showToast]);
 
   // ───── Mutation: iniciar reparación (creates repair + advances state) ─────
   const iniciarReparacionMutation = useMutation({
@@ -585,11 +587,17 @@ export function OrdenDetailPage() {
     setRepPrecioReal('');
   }, []);
 
+  // Bloquea el cierre (botón Cancelar, backdrop o Escape) en pleno envío.
+  const handleCancelRepuestos = useCallback(() => {
+    if (repCompleteSubmitting) return;
+    cancelTransition();
+  }, [repCompleteSubmitting, cancelTransition]);
+
   const confirmRepuestos = useCallback(async () => {
     if (!orden) return;
     const precio = Number(repPrecioReal);
     if (!repPrecioReal || isNaN(precio) || precio <= 0) {
-      alert('Ingrese el precio de la reparación');
+      showToast('Ingrese el precio de la reparación', 'warning');
       return;
     }
     setRepCompleteSubmitting(true);
@@ -608,11 +616,11 @@ export function OrdenDetailPage() {
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Error al iniciar reparación';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation]);
+  }, [orden, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation, showToast]);
 
   // ───── Reparacion modal ─────
 
@@ -838,20 +846,14 @@ export function OrdenDetailPage() {
 
   // Reenvío del aviso desde la cabecera (fuera del modal de agenda)
   const handleReenviarAviso = useCallback(() => {
-    if (!cliente?.telefono || !cliente.nombre) return;
-    const mensaje = orden?.fechaEntrega
-      ? buildMensajeCita({
-          tipo: 'reprogramar',
-          clienteNombre: cliente.nombre,
-          fechaEntrega: orden.fechaEntrega,
-          nombreTaller: config.nombreTaller,
-        })
-      : buildMensajeEntregaGeneral({
-          clienteNombre: cliente.nombre,
-          nombreTaller: config.nombreTaller,
-        });
+    if (!orden || !cliente?.telefono || !cliente.nombre) return;
+    const mensaje = buildMensajeEstado(orden.estado, {
+      clienteNombre: cliente.nombre,
+      nombreTaller: config.nombreTaller,
+      fechaEntrega: orden.fechaEntrega,
+    });
     window.open(buildWhatsAppLink(cliente.telefono, mensaje), '_blank');
-  }, [cliente, orden?.fechaEntrega, config.nombreTaller]);
+  }, [orden, cliente, config.nombreTaller]);
 
   // ───── Reparaciones columns ─────
 
@@ -1534,12 +1536,16 @@ export function OrdenDetailPage() {
       {/* ───── Diagnóstico → Reparación Modal ───── */}
       <Modal
         isOpen={repuestosModalOpen}
-        onClose={cancelTransition}
+        onClose={handleCancelRepuestos}
         title="Diagnóstico → Reparación"
         size="md"
         footer={
           <>
-            <Button variant="secondary" onClick={cancelTransition}>
+            <Button
+              variant="secondary"
+              onClick={handleCancelRepuestos}
+              disabled={repCompleteSubmitting}
+            >
               Cancelar
             </Button>
             <Button

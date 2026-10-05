@@ -2,6 +2,8 @@
 // WhatsApp helpers (mensajes de entrega)
 // ──────────────────────────────────────────────
 
+import type { EstadoOrden } from '../types';
+
 export interface MensajeCitaParams {
   tipo: 'agendar' | 'reprogramar';
   clienteNombre: string;
@@ -45,25 +47,78 @@ export function buildMensajeCita({
   return `Hola ${clienteNombre}, te informamos que tu reparación estará lista para retirar el ${fecha} a las ${hora}. ¡Te esperamos! — ${nombreTaller}`;
 }
 
-/**
- * Aviso general de entrega (cuando aún no hay cita agendada).
- */
-export function buildMensajeEntregaGeneral({
-  clienteNombre,
-  nombreTaller,
-}: {
+export interface MensajeEstadoParams {
   clienteNombre: string;
   nombreTaller: string;
-}): string {
-  return `Hola ${clienteNombre}, te informamos que tu reparación está lista para retirar. ¡Te esperamos! — ${nombreTaller}`;
+  fechaEntrega?: string | null;
 }
 
 /**
- * Construye el enlace de WhatsApp. Normaliza el teléfono quitando espacios,
- * guiones y paréntesis; conserva el `+` inicial (formato internacional).
+ * Mensaje breve y neutro según el estado de la orden. Para ESPERANDO_ENTREGA
+ * con fecha agendada reutiliza el texto de cita; el resto de estados usa un
+ * aviso genérico. Siempre cierra con "— {nombreTaller}".
+ */
+export function buildMensajeEstado(
+  estado: EstadoOrden,
+  { clienteNombre, nombreTaller, fechaEntrega }: MensajeEstadoParams,
+): string {
+  const saludo = `Hola ${clienteNombre}`;
+  const cierre = `— ${nombreTaller}`;
+
+  switch (estado) {
+    case 'REGISTRO':
+      return `${saludo}, recibimos tu equipo y quedó registrado. ${cierre}`;
+    case 'DIAGNOSTICO':
+      return `${saludo}, estamos revisando tu equipo (diagnóstico). ${cierre}`;
+    case 'REPARACION':
+      return `${saludo}, tu equipo está en reparación. ${cierre}`;
+    case 'ESPERANDO_REPUESTO':
+      return `${saludo}, estamos esperando un repuesto para continuar con tu reparación. ${cierre}`;
+    case 'REPARACION_COMPLETADA':
+    case 'CONTROL_CALIDAD':
+      return `${saludo}, la reparación avanzó y está en control de calidad. ${cierre}`;
+    case 'ESPERANDO_ENTREGA':
+      if (fechaEntrega) {
+        return buildMensajeCita({
+          tipo: 'agendar',
+          clienteNombre,
+          fechaEntrega,
+          nombreTaller,
+        });
+      }
+      return `${saludo}, tu equipo está listo para retirar. ${cierre}`;
+    case 'PAGADO':
+      return `${saludo}, registramos tu pago; coordina el retiro de tu equipo. ${cierre}`;
+    case 'PRESUPUESTO_RECHAZADO':
+      return `${saludo}, el presupuesto fue rechazado; puedes pasar por tu equipo. ${cierre}`;
+    case 'DEVUELTO':
+      return `${saludo}, tu equipo fue devuelto. ${cierre}`;
+    case 'ENTREGADO':
+      return `${saludo}, gracias por tu preferencia. ${cierre}`;
+    case 'GARANTIA':
+      return `${saludo}, estamos atendiendo tu garantía. ${cierre}`;
+    default:
+      return `${saludo}, te informamos sobre el avance de tu reparación. ${cierre}`;
+  }
+}
+
+/**
+ * Construye el enlace de WhatsApp. Normaliza el teléfono quitando TODO
+ * carácter no numérico. Si la cadena ORIGINAL contenía un `+` en cualquier
+ * posición se antepone un `+` al resultado, de modo que formatos como
+ * "(+57) 300 1234567" conserven el carácter internacional. Si no queda
+ * ningún dígito se devuelve `https://wa.me/?text=...` (número vacío) sin
+ * lanzar, para no romper el flujo de la UI ante un teléfono ausente.
+ *
+ * IMPORTANTE: el número debe venir en formato internacional (p. ej.
+ * "+57 300 1234567"). Si no incluye `+` NO se antepone ningún código de
+ * país: `wa.me` recibiría un número local inválido.
  */
 export function buildWhatsAppLink(telefono: string, mensaje: string): string {
-  const numero = telefono.replace(/[\s\-()]/g, '');
+  const trimmed = (telefono ?? '').trim();
+  const hasPlus = trimmed.includes('+');
+  const digits = trimmed.replace(/\D/g, '');
+  const numero = hasPlus ? `+${digits}` : digits;
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 }
 

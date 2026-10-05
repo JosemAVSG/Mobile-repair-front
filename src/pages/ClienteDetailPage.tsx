@@ -17,6 +17,7 @@ import { formatDate, formatCurrency, tipoBadgeConfig } from '../utils/formatters
 import { formatNumeroOrden } from '../utils/ordenes';
 import type { ClienteRequest, OrdenTrabajo } from '../types';
 import { useCliente, useOrdenes, useMarcas, useModelos } from '../hooks/useQueries';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Cliente Detail Page
@@ -26,6 +27,7 @@ export function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const idNum = id ? Number(id) : undefined;
 
   // Fetch cliente
@@ -200,11 +202,11 @@ export function ClienteDetailPage() {
       await deleteMutation.mutateAsync();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeletingDetail(false);
     }
-  }, [deleteMutation]);
+  }, [deleteMutation, showToast]);
 
   // ───── Render ─────
 
@@ -386,10 +388,13 @@ export function ClienteDetailPage() {
           <FormField label="Teléfono">
             <Input
               type="tel"
-              placeholder="+56 9 1234 5678"
+              placeholder="+57 300 1234567"
               value={editTelefono}
               onChange={(e) => setEditTelefono(e.target.value)}
             />
+            <p className="text-xs text-slate-500">
+              Incluye el código de país (ej: +57 300 1234567)
+            </p>
           </FormField>
 
           <FormField label="Email">

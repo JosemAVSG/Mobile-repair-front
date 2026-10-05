@@ -21,6 +21,7 @@ import type { OrdenTrabajo, Cliente, Marca, Modelo, OrdenRequest } from '../type
 import { EstadoOrden, TIPOS_DISPOSITIVO_ACTIVOS, TipoDispositivo, TipoReparacion } from '../types';
 import { buildMarcasPorCategoria } from '../utils/maps';
 import { useOrdenes, useClientes, useMarcas, useModelos, useTecnicos } from '../hooks/useQueries';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Types
@@ -86,6 +87,7 @@ export function OrdenesPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdmin = user?.rol === 'ADMIN';
+  const { showToast } = useToast();
 
   // ───── Estado filter / tabs ─────
 
@@ -337,11 +339,11 @@ export function OrdenesPage() {
       setAsignTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al asignar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setAsignando(false);
     }
-  }, [asignTarget, user?.tecnicoId, asignarMutation]);
+  }, [asignTarget, user?.tecnicoId, asignarMutation, showToast]);
 
   // ───── Cascade: marcas by tipo, modelos by marca ─────
 

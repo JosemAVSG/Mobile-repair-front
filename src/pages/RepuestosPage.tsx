@@ -17,6 +17,7 @@ import { buildMarcaMap, buildModeloMap } from '../utils/maps';
 import type { Repuesto, RepuestoRequest } from '../types';
 import { TipoReparacion } from '../types';
 import { useRepuestos, useMarcas, useModelos } from '../hooks/useQueries';
+import { useToast } from '../context/ToastContext';
 
 // ──────────────────────────────────────────────
 // Constants
@@ -54,6 +55,8 @@ interface FormErrors {
 // ──────────────────────────────────────────────
 
 export function RepuestosPage() {
+  const { showToast } = useToast();
+
   // ───── Filter state ─────
   const [busqueda, setBusqueda] = useState('');
 
@@ -184,11 +187,11 @@ export function RepuestosPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, deleteMutation]);
+  }, [deleteTarget, deleteMutation, showToast]);
 
   // ───── Helpers ─────
 

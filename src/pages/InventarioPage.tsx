@@ -19,6 +19,7 @@ import {
   useEliminarProductoInventario,
   useCrearMovimientoInventario,
 } from '../hooks/useInventory';
+import { useToast } from '../context/ToastContext';
 import {
   ESTADO_STOCK_LABELS,
   ESTADO_STOCK_VARIANTS,
@@ -58,6 +59,8 @@ interface ProductoRow {
 // ──────────────────────────────────────────────
 
 export function InventarioPage() {
+  const { showToast } = useToast();
+
   // ───── Filter state ─────
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
@@ -161,11 +164,11 @@ export function InventarioPage() {
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar el producto';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, eliminarProducto]);
+  }, [deleteTarget, eliminarProducto, showToast]);
 
   // ───── Columns ─────
   const columns: Column<ProductoRow>[] = [
