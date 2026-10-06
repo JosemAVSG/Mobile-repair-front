@@ -17,7 +17,8 @@ export const updateConfig = async (
     const formData = new FormData();
     formData.append('nombreTaller', values.nombreTaller);
     formData.append('logo', values.logo);
-    // axios setea el Content-Type multipart con boundary automáticamente.
+    // ApiClient quita el Content-Type JSON para FormData; el navegador pone
+    // multipart/form-data con su boundary.
     return ApiClient.put<BackendShopConfig>('/api/configuracion', formData);
   }
 

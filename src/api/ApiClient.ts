@@ -98,6 +98,12 @@ const instance = axios.create({
 
 // Adjunta el JWT guardado en localStorage (key `auth` → { token }).
 instance.interceptors.request.use((config) => {
+  // Un FormData no puede viajar con el default `application/json`: axios lo
+  // serializaría a JSON y se perdería el archivo. Se quita el Content-Type
+  // para que el navegador ponga multipart/form-data con su boundary.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.setContentType(false);
+  }
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

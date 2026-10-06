@@ -117,7 +117,8 @@ export const uploadFotoOrden = async (
   const formData = new FormData();
   formData.append('file', file);
   formData.append('etapa', etapa);
-  // axios setea el Content-Type multipart con boundary automáticamente.
+  // ApiClient quita el Content-Type JSON para FormData; el navegador pone
+  // multipart/form-data con su boundary.
   return ApiClient.post<FotoOrden>(`/api/ordenes/${ordenId}/fotos`, formData);
 };
 
