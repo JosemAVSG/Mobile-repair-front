@@ -7,7 +7,7 @@ import { formatDateTime } from '../../utils/formatters';
 export interface TimelineEvent {
   date: string;
   content: string;
-  type: 'created' | 'status' | 'note';
+  type: 'created' | 'status' | 'note' | 'repuesto-add' | 'repuesto-remove';
 }
 
 interface OrderTimelineProps {
@@ -22,6 +22,8 @@ const dotColors: Record<TimelineEvent['type'], string> = {
   created: 'bg-blue-500',
   status: 'bg-amber-500',
   note: 'bg-slate-400',
+  'repuesto-add': 'bg-emerald-500',
+  'repuesto-remove': 'bg-slate-300',
 };
 
 // ──────────────────────────────────────────────
@@ -64,7 +66,9 @@ export function OrderTimeline({ events }: OrderTimelineProps) {
 
                   {/* Content */}
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-slate-700">
+                    <div
+                      className={`break-words text-sm ${event.type === 'repuesto-remove' ? 'text-slate-500' : 'text-slate-700'}`}
+                    >
                       {event.content}
                     </div>
                     <div className="mt-0.5 text-xs text-slate-400">

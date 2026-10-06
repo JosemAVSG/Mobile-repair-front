@@ -34,6 +34,7 @@ import { puedeSubirFotoEtapa, FOTO_ETAPA_STATES } from '../utils/estados';
 import { TicketEquipoModal } from '../components/organisms/TicketEquipoModal';
 import { FacturaModal } from '../components/organisms/FacturaModal';
 import { OrderTimeline, type TimelineEvent } from '../components/molecules/OrderTimeline';
+import { humanizarHistorial, tipoEventoHistorial } from '../utils/historial';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { ApiError } from '../api/ApiClient';
 import {
@@ -510,6 +511,12 @@ export function OrdenDetailPage() {
   // ───── Repuestos de la orden (agregar/quitar sobre una orden existente) ─────
 
   const [repuestoAgregarSel, setRepuestoAgregarSel] = useState('');
+  const [repuestoQuitar, setRepuestoQuitar] = useState<{
+    reparacion: NonNullable<ReturnType<typeof reparacionEditable>>;
+    productoId: number;
+    nombre: string;
+    precio: number | null;
+  } | null>(null);
   const reparacionRepuestos = useMemo(
     () => reparacionEditable(orden?.reparaciones),
     [orden?.reparaciones],
@@ -1056,14 +1063,16 @@ export function OrdenDetailPage() {
   // ───── Timeline events from historial ─────
 
   const timelineEvents = useMemo<TimelineEvent[]>(() => {
-    return historial.map((entry) => ({
-      date: entry.createdAt,
-      content: entry.contenido,
-      type: entry.contenido.includes('creada') ? 'created' as const
-        : entry.contenido.includes('estado') || entry.contenido.includes('Estado')
-          ? 'status' as const
-          : 'note' as const,
-    }));
+    return [...historial]
+      .sort(
+        (x, y) =>
+          new Date(x.createdAt).getTime() - new Date(y.createdAt).getTime() || x.id - y.id,
+      )
+      .map((entry) => ({
+        date: entry.createdAt,
+        content: humanizarHistorial(entry.contenido),
+        type: tipoEventoHistorial(entry.contenido),
+      }));
   }, [historial]);
 
   // ───── Disponible transitions ─────
@@ -1457,7 +1466,7 @@ export function OrdenDetailPage() {
               {puedeVerCostos && (
               <div className="mt-1 flex items-center justify-between text-sm">
                 <span className="font-medium text-slate-500">
-                  Costo de materiales (no cobrado)
+                  Costo de repuestos
                 </span>
                 <span className="text-slate-500">
                   {formatCurrency(costoMateriales)}
@@ -1666,7 +1675,16 @@ export function OrdenDetailPage() {
                       size="sm"
                       aria-label={`Quitar ${snap.nombre}`}
                       disabled={repuestosOrdenMutation.isPending || repuestosBloqueadosOrden}
-                      onClick={() => void cambiarRepuestosOrden(reparacion, { quitar: productoId })}
+                      onClick={() =>
+                        setRepuestoQuitar({
+                          reparacion,
+                          productoId,
+                          nombre: snap.nombre,
+                          precio: noCobrado
+                            ? null
+                            : (snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto ?? null),
+                        })
+                      }
                     >
                       Quitar
                     </Button>
@@ -2262,6 +2280,28 @@ export function OrdenDetailPage() {
         loading={asignando}
         onConfirm={handleAsignarme}
         onCancel={() => setConfirmAsignarme(false)}
+      />
+
+      {/* ───── Confirmar Quitar Repuesto ───── */}
+      <ConfirmDialog
+        isOpen={repuestoQuitar !== null}
+        title="Quitar repuesto"
+        message={
+          repuestoQuitar
+            ? `¿Quitar ${repuestoQuitar.nombre}${repuestoQuitar.precio != null ? ` (${formatCurrency(repuestoQuitar.precio)})` : ''} de la orden? El total se recalculará.`
+            : ''
+        }
+        confirmLabel="Quitar"
+        cancelLabel="Cancelar"
+        variant="danger"
+        loading={repuestosOrdenMutation.isPending}
+        onConfirm={async () => {
+          if (!repuestoQuitar) return;
+          const { reparacion, productoId } = repuestoQuitar;
+          await cambiarRepuestosOrden(reparacion, { quitar: productoId });
+          setRepuestoQuitar(null);
+        }}
+        onCancel={() => setRepuestoQuitar(null)}
       />
 
       {/* ───── Confirmar Eliminar Foto ───── */}

@@ -173,7 +173,20 @@ describe('OrdenDetailPage', () => {
     it('quita un repuesto enviando el resto', async () => {
       renderPage();
       fireEvent.click(screen.getByRole('button', { name: 'Quitar Batería Y' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(/¿Quitar Batería Y .*de la orden\? El total se recalculará\./)).toBeInTheDocument();
+      expect(updateReparacionRepuestos).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Quitar' }));
       await waitFor(() => expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, []));
+    });
+
+    it('cancelar la confirmación no quita nada', async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Quitar Batería Y' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(updateReparacionRepuestos).not.toHaveBeenCalled();
     });
 
     it('un TECNICO que no es el de la orden no ve controles de edición', () => {
@@ -266,6 +279,7 @@ describe('OrdenDetailPage', () => {
       expect(within(lista).getByText(/legado/)).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Quitar Viejo' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Quitar Cable Z' }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
       await waitFor(() => expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, []));
     });
 
@@ -331,6 +345,7 @@ describe('OrdenDetailPage', () => {
       vi.mocked(updateReparacionRepuestos).mockRejectedValueOnce(new Error(msg));
       renderPage();
       fireEvent.click(screen.getByRole('button', { name: 'Quitar Batería Y' }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
       await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(msg, 'error'));
     });
   });
@@ -407,18 +422,18 @@ describe('OrdenDetailPage', () => {
         ],
       });
 
-    it('ADMIN ve costo de materiales y ganancia estimada total', () => {
+    it('ADMIN ve costo de repuestos y ganancia estimada total', () => {
       state.user = ADMIN;
       state.orden = conCostos();
       renderPage();
-      expect(screen.getByText('Costo de materiales (no cobrado)')).toBeInTheDocument();
+      expect(screen.getByText('Costo de repuestos')).toBeInTheDocument();
       expect(screen.getByText('Ganancia estimada total')).toBeInTheDocument();
     });
 
     it('TECNICO no ve costo ni ganancia, pero sí lo cobrado', () => {
       state.orden = conCostos();
       renderPage();
-      expect(screen.queryByText('Costo de materiales (no cobrado)')).not.toBeInTheDocument();
+      expect(screen.queryByText('Costo de repuestos')).not.toBeInTheDocument();
       expect(screen.queryByText('Ganancia estimada total')).not.toBeInTheDocument();
       expect(screen.getByText('Total cobrado')).toBeInTheDocument();
     });
