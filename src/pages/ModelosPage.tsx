@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { IconActionButton } from '../components/molecules/IconActionButton';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
 import { Select } from '../components/atoms/Select';
@@ -228,18 +229,17 @@ export function ModelosPage() {
         row.global ? (
           <span className="text-xs text-slate-400">Solo lectura</span>
         ) : (
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
+          <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               // Reconstruct full Modelo from row
               const target = (modelos ?? []).find((m) => m.id === row.id);
               if (target) setDeleteTarget(target);
             }}
-          >
-            Eliminar
-          </Button>
+/>
         ),
     },
   ];
@@ -340,10 +340,12 @@ export function ModelosPage() {
                   {row.global ? (
                     <span className="text-xs text-slate-400">Solo lectura</span>
                   ) : (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
+                    <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         // Reconstruct full Modelo from row
                         const target = (modelos ?? []).find(
@@ -351,9 +353,7 @@ export function ModelosPage() {
                         );
                         if (target) setDeleteTarget(target);
                       }}
-                    >
-                      Eliminar
-                    </Button>
+/>
                   )}
                 </div>
               </>

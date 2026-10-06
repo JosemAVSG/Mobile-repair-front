@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { IconActionButton } from '../components/molecules/IconActionButton';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
 import { FormField } from '../components/molecules/FormField';
@@ -182,26 +183,23 @@ export function ClientesPage() {
       label: 'Acciones',
       render: (row) => (
         <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
+          <IconActionButton
+ icon="edit"
+ label="Editar"
+ onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               openEdit(row);
             }}
-          >
-            Editar
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
+/>
+          <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               setDeleteTarget(row);
             }}
-          >
-            Eliminar
-          </Button>
+/>
         </div>
       ),
     },
@@ -273,26 +271,25 @@ export function ClientesPage() {
                   Creado {formatDate(cliente.createdAt)}
                 </span>
                 <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
+                  <IconActionButton
+ icon="edit"
+ label="Editar"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       openEdit(cliente);
                     }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
+/>
+                  <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       setDeleteTarget(cliente);
                     }}
-                  >
-                    Eliminar
-                  </Button>
+/>
                 </div>
               </div>
             </>

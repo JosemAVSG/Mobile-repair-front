@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { IconActionButton } from '../components/molecules/IconActionButton';
 import { Badge } from '../components/atoms/Badge';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
@@ -177,16 +178,15 @@ export function MarcasPage() {
         row.global ? (
           <span className="text-xs text-slate-400">Solo lectura</span>
         ) : (
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={(e: React.MouseEvent) => {
+          <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               setDeleteTarget(row);
             }}
-          >
-            Eliminar
-          </Button>
+/>
         ),
     },
   ];
@@ -273,16 +273,16 @@ export function MarcasPage() {
                   {marca.global ? (
                     <span className="text-xs text-slate-400">Solo lectura</span>
                   ) : (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
+                    <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         setDeleteTarget(marca);
                       }}
-                    >
-                      Eliminar
-                    </Button>
+/>
                   )}
                 </div>
               </>

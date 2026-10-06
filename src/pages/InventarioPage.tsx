@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { IconActionButton } from '../components/molecules/IconActionButton';
 import { Badge } from '../components/atoms/Badge';
 import { Select } from '../components/atoms/Select';
 import { MetricCard } from '../components/molecules/MetricCard';
@@ -265,38 +266,33 @@ export function InventarioPage() {
         if (!producto) return null;
         return (
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e: React.MouseEvent) => {
+            <IconActionButton
+ icon="edit"
+ label="Editar"
+ onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 openEditProducto(producto);
               }}
-            >
-              Editar
-            </Button>
+/>
             {inventarioHabilitado && producto.controlaStock !== false && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={(e: React.MouseEvent) => {
+              <IconActionButton
+ icon="repeat"
+ label="Movimiento"
+ onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   openMovimientoModal(producto);
                 }}
-              >
-                Movimiento
-              </Button>
+/>
             )}
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={(e: React.MouseEvent) => {
+            <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 setDeleteTarget(producto);
               }}
-            >
-              Eliminar
-            </Button>
+/>
           </div>
         );
       },
@@ -488,38 +484,36 @@ export function InventarioPage() {
                 </div>
                 {producto && (
                   <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
+                    <IconActionButton
+ icon="edit"
+ label="Editar"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         openEditProducto(producto);
                       }}
-                    >
-                      Editar
-                    </Button>
+/>
                     {inventarioHabilitado && producto.controlaStock !== false && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
+                    <IconActionButton
+ icon="repeat"
+ label="Movimiento"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         openMovimientoModal(producto);
                       }}
-                    >
-                      Movimiento
-                    </Button>
+/>
                     )}
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
+                    <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         setDeleteTarget(producto);
                       }}
-                    >
-                      Eliminar
-                    </Button>
+/>
                   </div>
                 )}
               </>

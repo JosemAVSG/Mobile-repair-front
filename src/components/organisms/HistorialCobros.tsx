@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '../atoms/Button';
+import { IconActionButton } from '../molecules/IconActionButton';
 import { ReciboCobroModal } from './ReciboCobroModal';
 import { CobroStatusBadge } from '../molecules/CobroStatusBadge';
 import { formatCop, formatDate } from '../../utils/formatters';
@@ -40,9 +40,7 @@ export function HistorialCobros({ cobros, ultimoCobro }: HistorialCobrosProps) {
               </div>
               <div className="flex items-center gap-2">
                 {cobro.status === 'APPROVED' && (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setRecibo(cobro)}>
-                    Ver comprobante
-                  </Button>
+                  <IconActionButton icon="eye" label="Ver comprobante" onClick={() => setRecibo(cobro)} />
                 )}
                 <CobroStatusBadge status={cobro.status} />
               </div>

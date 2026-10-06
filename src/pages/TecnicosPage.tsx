@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
+import { IconActionButton } from '../components/molecules/IconActionButton';
 import { Badge } from '../components/atoms/Badge';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
@@ -240,27 +241,24 @@ export function TecnicosPage() {
         label: 'Acciones',
         render: (row) => (
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={(e: React.MouseEvent) => {
+            <IconActionButton
+ icon="edit"
+ label="Editar"
+ onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 openEdit(row);
               }}
-            >
-              Editar
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={(e: React.MouseEvent) => {
+/>
+            <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ disabled={currentUser?.id === row.id}
+ onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 setDeleteTarget(row);
               }}
-              disabled={currentUser?.id === row.id}
-            >
-              Eliminar
-            </Button>
+/>
           </div>
         ),
       },
@@ -349,27 +347,26 @@ export function TecnicosPage() {
                   </span>
                 </div>
                 <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-2.5">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
+                  <IconActionButton
+ icon="edit"
+ label="Editar"
+ size="lg"
+ onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       openEdit(tecnico);
                     }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={(e: React.MouseEvent) => {
+/>
+                  <IconActionButton
+ icon="trash"
+ label="Eliminar"
+ variant="danger"
+ size="lg"
+ disabled={currentUser?.id === tecnico.id}
+ onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       setDeleteTarget(tecnico);
                     }}
-                    disabled={currentUser?.id === tecnico.id}
-                  >
-                    Eliminar
-                  </Button>
+/>
                 </div>
               </>
             );
