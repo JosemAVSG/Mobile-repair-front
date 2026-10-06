@@ -8,13 +8,14 @@ import { Input } from '../components/atoms/Input';
 import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { ModelosCompatiblesSelect } from '../components/molecules/ModelosCompatiblesSelect';
 import { SearchField } from '../components/molecules/SearchField';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
 import { createRepuesto, deleteRepuesto, updateRepuesto } from '../api/repuestos';
 import { ApiError } from '../api/ApiClient';
 import { formatCurrency, TIPO_REPARACION_LABELS } from '../utils/formatters';
-import { buildMarcaMap, buildModeloMap } from '../utils/maps';
+import { buildMarcaMap, buildModeloMap, getModeloIds, sameIdSet } from '../utils/maps';
 import type { Repuesto, RepuestoRequest } from '../types';
 import { TipoReparacion } from '../types';
 import { useRepuestos, useMarcas, useModelos } from '../hooks/useQueries';
@@ -111,18 +112,10 @@ export function RepuestosPage() {
   const [editPrecioCosto, setEditPrecioCosto] = useState('');
   const [editPrecioVenta, setEditPrecioVenta] = useState('');
   const [editMarcaId, setEditMarcaId] = useState('');
-  const [editModeloId, setEditModeloId] = useState('');
+  const [editModeloIds, setEditModeloIds] = useState<number[]>([]);
   const [editTipo, setEditTipo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
-
-  // Modelos filtered by selected marca
-  const filteredModeloOptions = useMemo(() => {
-    if (!editMarcaId) return [];
-    return (modelosReq.data ?? [])
-      .filter((m) => m.marcaId === Number(editMarcaId))
-      .map((m) => ({ value: String(m.id), label: m.nombre }));
-  }, [editMarcaId, modelosReq.data]);
 
   // ───── Delete state ─────
   const [deleteTarget, setDeleteTarget] = useState<Repuesto | null>(null);
@@ -162,9 +155,16 @@ export function RepuestosPage() {
         precioCosto: Number(editPrecioCosto),
         precioVenta: editPrecioVenta.trim() === '' ? null : Number(editPrecioVenta),
         marcaId: editMarcaId ? Number(editMarcaId) : undefined,
-        modeloId: editModeloId ? Number(editModeloId) : undefined,
         tipoReparacion: editTipo as TipoReparacion,
       };
+
+      // Siempre se envía al crear; al editar solo si el usuario cambió la selección.
+      const modelosChanged =
+        !editingRepuesto || !sameIdSet(editModeloIds, getModeloIds(editingRepuesto));
+      if (modelosChanged) {
+        body.modeloId = editModeloIds.length ? Math.min(...editModeloIds) : undefined;
+        body.modeloIds = editModeloIds;
+      }
 
       if (editingRepuesto) {
         await updateRepuesto(editingRepuesto.id, body);
@@ -188,7 +188,7 @@ export function RepuestosPage() {
     }
   }, [
     editNombre, editDescripcion, editCodigo,
-    editPrecioCosto, editPrecioVenta, editMarcaId, editModeloId, editTipo,
+    editPrecioCosto, editPrecioVenta, editMarcaId, editModeloIds, editTipo,
     editingRepuesto, validate, saveMutation,
   ]);
 
@@ -218,7 +218,7 @@ export function RepuestosPage() {
     setEditPrecioCosto('');
     setEditPrecioVenta('');
     setEditMarcaId('');
-    setEditModeloId('');
+    setEditModeloIds([]);
     setEditTipo('');
     setFieldErrors({});
   }, []);
@@ -237,7 +237,7 @@ export function RepuestosPage() {
     setEditPrecioCosto(String(repuesto.precioCosto));
     setEditPrecioVenta(repuesto.precioVenta != null ? String(repuesto.precioVenta) : '');
     setEditMarcaId(repuesto.marcaId != null ? String(repuesto.marcaId) : '');
-    setEditModeloId(repuesto.modeloId != null ? String(repuesto.modeloId) : '');
+    setEditModeloIds(getModeloIds(repuesto));
     setEditTipo(repuesto.tipoReparacion);
     setFieldErrors({});
     setCreateOpen(true);
@@ -275,7 +275,7 @@ export function RepuestosPage() {
     },
     {
       key: 'modeloNombre',
-      label: 'Modelo',
+      label: 'Modelos',
       sortable: true,
       render: (row) => row.modeloNombre,
     },
@@ -335,7 +335,9 @@ export function RepuestosPage() {
       marcaNombre:
         r.marcaId != null ? (marcaMap.get(r.marcaId) ?? `Marca #${r.marcaId}`) : '—',
       modeloNombre:
-        r.modeloId != null ? (modeloMap.get(r.modeloId) ?? `Modelo #${r.modeloId}`) : '—',
+        getModeloIds(r)
+          .map((id) => modeloMap.get(id) ?? `Modelo #${id}`)
+          .join(', ') || '—',
       tipoReparacion: r.tipoReparacion,
     }));
   }, [repuestos, marcaMap, modeloMap]);
@@ -538,26 +540,20 @@ export function RepuestosPage() {
               }))}
               placeholder="Seleccionar marca (opcional)..."
               value={editMarcaId}
-              onChange={(e) => {
-                setEditMarcaId(e.target.value);
-                setEditModeloId('');
-              }}
+              onChange={(e) => setEditMarcaId(e.target.value)}
             />
           </FormField>
 
-          <FormField label="Modelo">
-            <Select
-              options={filteredModeloOptions}
-              placeholder={
-                editMarcaId
-                  ? 'Seleccionar modelo (opcional)...'
-                  : 'Primero seleccione una marca'
-              }
-              value={editModeloId}
-              onChange={(e) => setEditModeloId(e.target.value)}
-              disabled={!editMarcaId}
-            />
-          </FormField>
+          <div className="sm:col-span-2">
+            <FormField label="Modelos compatibles">
+              <ModelosCompatiblesSelect
+                modelos={modelosReq.data ?? []}
+                marcas={marcasReq.data ?? []}
+                value={editModeloIds}
+                onChange={setEditModeloIds}
+              />
+            </FormField>
+          </div>
         </div>
       </Modal>
 

@@ -75,3 +75,21 @@ export function buildModeloOptions(modelos: Modelo[]): { value: string; label: s
 export function buildClienteOptions(clientes: Cliente[]): { value: string; label: string }[] {
   return clientes.map((c) => ({ value: String(c.id), label: c.nombre }));
 }
+
+/** Ids de modelos compatibles: `modeloIds` > `modelosCompatibles` (ids) > `modeloId` legacy. */
+export function getModeloIds(item: {
+  modeloIds?: number[] | null;
+  modelosCompatibles?: number[] | null;
+  modeloId?: number | null;
+}): number[] {
+  if (item.modeloIds) return item.modeloIds;
+  if (item.modelosCompatibles) return item.modelosCompatibles;
+  return item.modeloId != null ? [item.modeloId] : [];
+}
+
+/** Compara dos listas de ids como conjuntos (ignora orden y duplicados). */
+export function sameIdSet(a: number[], b: number[]): boolean {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  return sa.size === sb.size && [...sa].every((id) => sb.has(id));
+}

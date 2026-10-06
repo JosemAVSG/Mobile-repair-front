@@ -3,6 +3,9 @@ import { Modal } from '../atoms/Modal';
 import { Button } from '../atoms/Button';
 import { Input } from '../atoms/Input';
 import { FormField } from '../molecules/FormField';
+import { ModelosCompatiblesSelect } from '../molecules/ModelosCompatiblesSelect';
+import { useMarcas, useModelos } from '../../hooks/useQueries';
+import { getModeloIds, sameIdSet } from '../../utils/maps';
 import { ApiError } from '../../api/ApiClient';
 import type {
   ProductoInventario,
@@ -41,6 +44,7 @@ interface ProductoFormState {
   costoUnitario: number;
   precioVenta: string;
   uso: UsoProducto;
+  modeloIds: number[];
 }
 
 const emptyForm: ProductoFormState = {
@@ -52,6 +56,7 @@ const emptyForm: ProductoFormState = {
   costoUnitario: 0,
   precioVenta: '',
   uso: 'VENTA',
+  modeloIds: [],
 };
 
 export function ProductoInventarioModal({
@@ -62,8 +67,11 @@ export function ProductoInventarioModal({
   loading = false,
 }: ProductoInventarioModalProps) {
   const isEditing = producto != null;
+  const usoReadOnly = isEditing && producto.uso === 'REPUESTO';
   const [form, setForm] = useState<ProductoFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
+  const marcasReq = useMarcas();
+  const modelosReq = useModelos();
 
   useEffect(() => {
     if (isOpen) {
@@ -78,6 +86,7 @@ export function ProductoInventarioModal({
           precioVenta:
             producto.precioVenta != null ? String(producto.precioVenta) : '',
           uso: producto.uso ?? 'VENTA',
+          modeloIds: getModeloIds(producto),
         });
       } else {
         setForm(emptyForm);
@@ -129,8 +138,13 @@ export function ProductoInventarioModal({
     if (!validate()) return;
 
     try {
+      const { modeloIds, ...rest } = form;
+      // En edición solo se envía modeloIds si el usuario lo cambió: omitirlo deja intacta la compatibilidad.
+      const modelosChanged =
+        !isEditing || !sameIdSet(modeloIds, getModeloIds(producto));
       await onSubmit({
-        ...form,
+        ...rest,
+        ...(modelosChanged ? { modeloIds } : {}),
         precioVenta: Number(form.precioVenta),
         codigo: form.codigo.trim(),
         nombre: form.nombre.trim(),
@@ -150,7 +164,7 @@ export function ProductoInventarioModal({
         err instanceof Error ? err.message : 'Error al guardar el producto';
       setFieldErrors((prev) => ({ ...prev, general: message }));
     }
-  }, [form, validate, onSubmit, onClose]);
+  }, [form, validate, onSubmit, onClose, isEditing, producto]);
 
   const handleNumberChange = (
     key: 'stock' | 'stockMinimo' | 'costoUnitario',
@@ -263,6 +277,39 @@ export function ProductoInventarioModal({
             disabled={loading}
           />
         </FormField>
+
+        <div className="sm:col-span-2">
+          <FormField label="Uso">
+            <select
+              aria-label="Uso"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
+              value={form.uso}
+              onChange={(e) => setValue('uso', e.target.value as UsoProducto)}
+              disabled={loading || usoReadOnly}
+            >
+              {usoReadOnly && <option value="REPUESTO">Repuesto</option>}
+              <option value="VENTA">Venta</option>
+              <option value="AMBOS">Ambos</option>
+            </select>
+            <p className="text-xs text-slate-500">
+              {usoReadOnly
+                ? 'Este producto es solo repuesto y su uso no se puede cambiar desde Inventario.'
+                : 'Venta = solo se vende. Ambos = se vende y se usa en reparaciones.'}
+            </p>
+          </FormField>
+        </div>
+
+        <div className="sm:col-span-2">
+          <FormField label="Modelos compatibles">
+            <ModelosCompatiblesSelect
+              modelos={modelosReq.data ?? []}
+              marcas={marcasReq.data ?? []}
+              value={form.modeloIds}
+              onChange={(ids) => setValue('modeloIds', ids)}
+              disabled={loading}
+            />
+          </FormField>
+        </div>
 
         {fieldErrors.general && (
           <div className="sm:col-span-2">

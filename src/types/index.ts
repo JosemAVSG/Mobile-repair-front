@@ -247,6 +247,8 @@ export interface Repuesto {
   precioVenta: number | null;
   marcaId: number | null;
   modeloId: number | null;
+  /** Todos los modelos compatibles (`modeloId` es el menor). Ausente en backends viejos. */
+  modeloIds?: number[];
   tipoReparacion: TipoReparacion;
   createdAt: string;
 }
@@ -340,6 +342,8 @@ export interface RepuestoRequest {
   precioVenta?: number | null;
   marcaId?: number;
   modeloId?: number;
+  /** En PUT reemplaza la lista completa (`[]` la vacía). */
+  modeloIds?: number[];
   tipoReparacion: TipoReparacion;
 }
 
@@ -456,6 +460,8 @@ export interface ProductoInventario {
   proveedor?: string | null;
   controlaStock?: boolean;
   modelosCompatibles?: number[];
+  /** Ids de modelos compatibles. Ausente en backends viejos. */
+  modeloIds?: number[];
   createdAt: string;
 }
 
