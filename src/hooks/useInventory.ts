@@ -19,7 +19,11 @@ const QUERY_KEY = ['inventario'] as const;
 export function useProductosInventario() {
   return useQuery({
     queryKey: [...QUERY_KEY, 'productos'],
-    queryFn: () => getProductosInventario(),
+    // Resiliencia: el backend ya excluye REPUESTO puros; si llega `uso`, filtramos igual.
+    queryFn: async () => {
+      const productos = await getProductosInventario();
+      return productos.filter((p) => p.uso == null || p.uso === 'VENTA' || p.uso === 'AMBOS');
+    },
   });
 }
 

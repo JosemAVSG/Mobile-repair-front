@@ -213,6 +213,8 @@ export interface OrdenTrabajo {
 export interface RepuestoSnapshot {
   id: number;
   repuestoId: number | null;
+  /** Producto del catálogo unificado (A4); puede venir en lugar de `repuestoId`. */
+  productoId?: number | null;
   nombre: string;
   precioCosto: number;
   /** Precio de venta congelado al momento de usar el repuesto (si existía). */
