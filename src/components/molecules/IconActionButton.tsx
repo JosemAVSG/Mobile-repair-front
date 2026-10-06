@@ -13,6 +13,8 @@ interface IconActionButtonProps {
   variant?: IconActionVariant;
   disabled?: boolean;
   size?: IconActionSize;
+  ariaExpanded?: boolean;
+  ariaControls?: string;
 }
 
 const variantStyles: Record<IconActionVariant, string> = {
@@ -35,6 +37,8 @@ export function IconActionButton({
   variant = 'default',
   disabled = false,
   size = 'md',
+  ariaExpanded,
+  ariaControls,
 }: IconActionButtonProps) {
   const s = sizeStyles[size];
   return (
@@ -42,6 +46,8 @@ export function IconActionButton({
       <button
         type="button"
         aria-label={label}
+        aria-expanded={ariaExpanded}
+        aria-controls={ariaControls}
         onClick={onClick}
         disabled={disabled}
         className={`inline-flex items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${s.box} ${variantStyles[variant]}`}

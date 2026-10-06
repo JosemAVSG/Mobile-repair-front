@@ -1,12 +1,19 @@
 import { Icon } from '../atoms/Icon';
 import { Button } from '../atoms/Button';
 import { Badge } from '../atoms/Badge';
+import { IconActionButton } from '../molecules/IconActionButton';
+import { PRODUCT_NAME } from '../../utils/brand';
 import { useAuth } from '../../hooks/useAuth';
 import { useConfig } from '../../context/ConfigContext';
 import { ROL_LABELS, ROL_BADGE } from '../../utils/formatters';
 
 interface HeaderProps {
-  onMenuToggle: () => void;
+  /** false cuando el sidebar no se renderiza (una sola entrada de navegación). */
+  hasSidebar?: boolean;
+  sidebarCollapsed?: boolean;
+  sidebarId?: string;
+  onMenuToggle?: () => void;
+  onSidebarCollapseToggle?: () => void;
 }
 
 /** Iniciales a partir del nombre (o del username si no hay nombre). */
@@ -18,7 +25,13 @@ function initialsOf(name: string | null | undefined): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export function Header({ onMenuToggle }: HeaderProps) {
+export function Header({
+  hasSidebar = true,
+  sidebarCollapsed = false,
+  sidebarId,
+  onMenuToggle,
+  onSidebarCollapseToggle,
+}: HeaderProps) {
   const { user, logout } = useAuth();
   const { config } = useConfig();
 
@@ -27,13 +40,29 @@ export function Header({ onMenuToggle }: HeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-6">
       <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuToggle}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
-          aria-label="Abrir menú"
-        >
-          <Icon name="menu" size={20} />
-        </button>
+        {hasSidebar && (
+          <>
+            {/* Mobile: abre el drawer */}
+            <button
+              onClick={onMenuToggle}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+              aria-label="Abrir menú"
+              aria-controls={sidebarId}
+            >
+              <Icon name="menu" size={20} />
+            </button>
+            {/* Desktop: colapsa / muestra el sidebar */}
+            <div className="hidden lg:block">
+              <IconActionButton
+                icon="panel-left"
+                label={sidebarCollapsed ? 'Mostrar menú' : 'Ocultar menú'}
+                onClick={onSidebarCollapseToggle}
+                ariaExpanded={!sidebarCollapsed}
+                ariaControls={sidebarId}
+              />
+            </div>
+          </>
+        )}
         <h1 className="flex items-center gap-2 text-lg font-bold text-slate-800">
           <img
             src={config.logo || '/favicon.svg'}
@@ -42,7 +71,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
               config.logo ? 'rounded-full object-cover' : 'object-contain'
             }`}
           />
-          {config.nombreTaller}
+          <span className="flex flex-col leading-tight">
+            <span>{config.nombreTaller}</span>
+            <span className="text-[11px] font-medium text-slate-400">{PRODUCT_NAME}</span>
+          </span>
         </h1>
       </div>
 

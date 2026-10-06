@@ -1,62 +1,26 @@
 import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Icon, type IconName } from '../atoms/Icon';
+import { Icon } from '../atoms/Icon';
 import { useConfig } from '../../context/ConfigContext';
 import { useAuth } from '../../hooks/useAuth';
 import { PRODUCT_NAME } from '../../utils/brand';
-
-interface NavItem {
-  path: string;
-  label: string;
-  icon: IconName;
-}
-
-interface NavGroup {
-  label: string;
-  icon: IconName;
-  items: NavItem[];
-}
-
-const adminNavItems: NavItem[] = [
-  { path: '/', label: 'Dashboard', icon: 'home' },
-  { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
-  { path: '/inventario', label: 'Inventario', icon: 'package' },
-];
-
-const tecnicNavItems: NavItem[] = [
-  { path: '/reparaciones', label: 'Reparaciones', icon: 'clipboard' },
-];
-
-const navGroups: NavGroup[] = [
-  {
-    label: 'Catálogo',
-    icon: 'layers',
-    items: [
-      { path: '/marcas', label: 'Marcas', icon: 'tag' },
-      { path: '/modelos', label: 'Modelos', icon: 'layers' },
-      { path: '/clientes', label: 'Clientes', icon: 'users' },
-    ],
-  },
-];
-
-// Acciones del área inferior (solo admin): Configuración + Técnicos
-const bottomItems: NavItem[] = [
-  { path: '/tecnicos', label: 'Técnicos', icon: 'users' },
-  { path: '/configuracion', label: 'Configuración', icon: 'settings' },
-];
+import { getNavEntries, type NavGroup } from '../../utils/navigation';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Colapsado en desktop (oculto por completo). No afecta al drawer mobile. */
+  collapsed?: boolean;
+  id?: string;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, collapsed = false, id }: SidebarProps) {
   const location = useLocation();
   const { config } = useConfig();
   const { user } = useAuth();
   const isAdmin = user?.rol === 'ADMIN';
 
-  const navItems = isAdmin ? adminNavItems : tecnicNavItems;
+  const { navItems, groups, bottom } = getNavEntries(isAdmin);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -68,7 +32,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     group.items.some((item) => isActive(item.path));
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(navGroups.map((g) => [g.label, groupInitiallyOpen(g)])),
+    Object.fromEntries(groups.map((g) => [g.label, groupInitiallyOpen(g)])),
   );
 
   const toggleGroup = (label: string) => {
@@ -97,9 +61,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden bg-slate-900 text-white transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        id={id}
+        data-collapsed={collapsed}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden bg-slate-900 text-white transition-[transform,width,visibility] duration-200 motion-reduce:transition-none lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        } ${collapsed ? 'lg:invisible lg:w-0' : 'lg:w-64'}`}
       >
         {/* Logo area */}
         <div className="flex h-16 items-center gap-2 border-b border-slate-700 px-5">
@@ -146,8 +112,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               );
             })}
 
-            {isAdmin &&
-              navGroups.map((group) => {
+            {groups.map((group) => {
                 const active = groupActive(group);
                 const open = openGroups[group.label] ?? false;
 
@@ -216,7 +181,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             técnico esta sección se oculta por completo. */}
         {isAdmin && (
           <div className="mt-auto shrink-0 border-t border-slate-700 px-3 py-3">
-            {bottomItems.map((item) => (
+            {bottom.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
