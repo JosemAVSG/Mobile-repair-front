@@ -146,7 +146,8 @@ function detectCurrency(locale: string): string {
  * Example (es-CO): 60000 → "$60.000"
  * Example (en-US): 60000 → "$60,000"
  */
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount == null || Number.isNaN(amount)) return '—';
   const locale = navigator.language || 'es-CO';
   const currency = detectCurrency(locale);
   return new Intl.NumberFormat(locale, {

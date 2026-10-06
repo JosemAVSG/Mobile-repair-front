@@ -235,7 +235,7 @@ export function RepuestosPage() {
     setEditNombre(repuesto.nombre);
     setEditDescripcion(repuesto.descripcion ?? '');
     setEditCodigo(repuesto.codigo);
-    setEditPrecioCosto(String(repuesto.precioCosto));
+    setEditPrecioCosto(String(repuesto.precioCosto ?? ''));
     setEditPrecioVenta(repuesto.precioVenta != null ? String(repuesto.precioVenta) : '');
     setEditMarcaId(repuesto.marcaId != null ? String(repuesto.marcaId) : '');
     setEditModeloIds(getModeloIds(repuesto));
@@ -328,7 +328,7 @@ export function RepuestosPage() {
       codigo: r.codigo,
       nombre: r.nombre,
       descripcion: r.descripcion,
-      precioCosto: r.precioCosto,
+      precioCosto: r.precioCosto ?? 0,
       precioVenta: r.precioVenta ?? null,
       marcaNombre:
         r.marcaId != null ? (marcaMap.get(r.marcaId) ?? `Marca #${r.marcaId}`) : '—',

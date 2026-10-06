@@ -46,7 +46,7 @@ import {
 } from '../api/ordenes';
 import { resolverPrecioTarifa } from '../api/tarifas';
 import { useAuth } from '../hooks/useAuth';
-import { useCan } from '../hooks/useCan';
+import { useCan, usePuedeVerCostos } from '../hooks/useCan';
 import { formatDate, formatDateTime, formatCurrency, tipoDispositivoLabel, TIPO_REPARACION_LABELS } from '../utils/formatters';
 import {
   buildWhatsAppLink,
@@ -187,8 +187,8 @@ function normalizeEntrega(value: string): string {
  * Precio a cobrar por un repuesto: su precio de venta si existe, con
  * fallback al costo. Espeja `precioCobrado` del backend.
  */
-function precioCobradoRepuesto(repuesto: Repuesto): number {
-  return repuesto.precioVenta ?? repuesto.precioCosto;
+function precioCobradoRepuesto(repuesto: Repuesto): number | null {
+  return repuesto.precioVenta ?? repuesto.precioCosto ?? null;
 }
 
 // ──────────────────────────────────────────────
@@ -241,12 +241,16 @@ export function OrdenDetailPage() {
   const { data: tecnicos } = useTecnicos();
   const { data: repuestos = [], isPending: repuestosPending } = useRepuestos();
 
-  const esAdmin = user?.rol === 'ADMIN';
 
   const canViewOrden = useCan('orden:view', orden ?? undefined);
   const canEditOrden = useCan('orden:edit', orden ?? undefined);
   const canManageEntrega = useCan('entrega:manage', orden ?? undefined);
   const canManageFotos = useCan('foto:manage', orden ?? undefined);
+  // Asignación: ADMIN cualquier técnico; TECNICO solo "Asignarme" en una orden sin técnico.
+  const canAssignTecnico = useCan('orden:assign');
+  const canSelfAssign = useCan('orden:self-assign', orden ?? undefined);
+  // Costos y ganancias: solo ADMIN (el backend también los enmascara).
+  const puedeVerCostos = usePuedeVerCostos();
 
   // GET /api/tecnicos es ADMIN-only: para un TECNICO la lista llega vacía, así que se
   // resuelve también desde la sesión (ver resolverTecnicoResponsable).
@@ -256,13 +260,23 @@ export function OrdenDetailPage() {
   );
 
   // Técnico que verá el select del admin en el detalle
-  const tecnicoOptions = useMemo(
-    () =>
+  const asignadoId = orden?.tecnicoId;
+  const asignadoNombre = orden?.tecnicoNombre;
+  const tecnicoOptions = useMemo(() => {
+    const opts =
       tecnicos
         ?.filter((t) => t.activo)
-        .map((t) => ({ value: String(t.id), label: `${t.nombre} (${t.username})` })) ?? [],
-    [tecnicos],
-  );
+        .map((t) => ({ value: String(t.id), label: `${t.nombre} (${t.username})` })) ?? [];
+    // Si el técnico asignado no está en la lista (cargando/inactivo), se conserva como opción
+    // para que el selector no muestre "Sin asignar" por error.
+    if (asignadoId != null && !opts.some((o) => o.value === String(asignadoId))) {
+      opts.unshift({
+        value: String(asignadoId),
+        label: asignadoNombre?.trim() || `Técnico #${asignadoId}`,
+      });
+    }
+    return opts;
+  }, [tecnicos, asignadoId, asignadoNombre]);
 
   const [asignTecnicoSel, setAsignTecnicoSel] = useState('');
   useEffect(() => {
@@ -516,7 +530,7 @@ export function OrdenDetailPage() {
       .filter((r) => !cobrados.has(r.id))
       .map((r) => ({
         value: String(r.id),
-        label: `${r.nombre} (${formatCurrency(r.precioVenta ?? r.precioCosto)})`,
+        label: `${r.nombre} (${formatCurrency(precioCobradoRepuesto(r))})`,
       }));
   }, [repuestos, orden?.reparaciones, orden?.descuentoDiagnostico]);
 
@@ -822,12 +836,12 @@ export function OrdenDetailPage() {
   );
 
   const costoRepuestosPreview = useMemo(
-    () => selectedRepuestos.reduce((sum, r) => sum + r.precioCosto, 0),
+    () => selectedRepuestos.reduce((sum, r) => sum + (r.precioCosto ?? 0), 0),
     [selectedRepuestos],
   );
 
   const repuestosACobrarPreview = useMemo(
-    () => selectedRepuestos.reduce((sum, r) => sum + precioCobradoRepuesto(r), 0),
+    () => selectedRepuestos.reduce((sum, r) => sum + (precioCobradoRepuesto(r) ?? 0), 0),
     [selectedRepuestos],
   );
 
@@ -840,9 +854,9 @@ export function OrdenDetailPage() {
 
   // Espeja al backend: ganancia = precio + repuestos cobrados − costo de repuestos.
   const gananciaPreview = useMemo(() => {
-    if (precioFinalPreview == null) return null;
+    if (!puedeVerCostos || precioFinalPreview == null) return null;
     return precioFinalPreview + repuestosACobrarPreview - costoRepuestosPreview;
-  }, [precioFinalPreview, repuestosACobrarPreview, costoRepuestosPreview]);
+  }, [puedeVerCostos, precioFinalPreview, repuestosACobrarPreview, costoRepuestosPreview]);
 
   const toggleRepuesto = useCallback((id: number) => {
     setSelectedRepuestoIds((prev) => {
@@ -869,7 +883,7 @@ export function OrdenDetailPage() {
   );
 
   const repCompleteRepuestosPreview = useMemo(
-    () => repCompleteSelected.reduce((sum, r) => sum + precioCobradoRepuesto(r), 0),
+    () => repCompleteSelected.reduce((sum, r) => sum + (precioCobradoRepuesto(r) ?? 0), 0),
     [repCompleteSelected],
   );
 
@@ -1440,6 +1454,7 @@ export function OrdenDetailPage() {
                   {formatCurrency(totalReparaciones + totalRepuestos)}
                 </span>
               </div>
+              {puedeVerCostos && (
               <div className="mt-1 flex items-center justify-between text-sm">
                 <span className="font-medium text-slate-500">
                   Costo de materiales (no cobrado)
@@ -1448,7 +1463,8 @@ export function OrdenDetailPage() {
                   {formatCurrency(costoMateriales)}
                 </span>
               </div>
-              {gananciaTotal != null && (
+              )}
+              {puedeVerCostos && gananciaTotal != null && (
                 <div className="mt-1 flex items-center justify-between text-sm">
                   <span className="font-medium text-emerald-700">
                     Ganancia estimada total
@@ -1551,7 +1567,7 @@ export function OrdenDetailPage() {
                 </p>
               </div>
             </div>
-            {canEditOrden && (
+            {canAssignTecnico && (
               <div className="flex items-end gap-2">
                 <div className="w-56">
                   <Select
@@ -1576,7 +1592,7 @@ export function OrdenDetailPage() {
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-sm text-slate-500">Sin técnico asignado</p>
-            {!esAdmin && user?.tecnicoId != null && (
+            {canSelfAssign && user?.tecnicoId != null && (
               <Button
                 variant="secondary"
                 onClick={() => setConfirmAsignarme(true)}
@@ -1585,7 +1601,7 @@ export function OrdenDetailPage() {
                 Asignarme
               </Button>
             )}
-            {canEditOrden && (
+            {canAssignTecnico && (
               <div className="flex items-end gap-2">
                 <div className="w-56">
                   <Select
@@ -1641,7 +1657,7 @@ export function OrdenDetailPage() {
                     <span className="text-xs text-slate-500">no cobrado</span>
                   ) : (
                     <span className="text-slate-600">
-                      {formatCurrency(snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto)}
+                      {formatCurrency(snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto ?? null)}
                     </span>
                   )}
                   {canEditOrden && !legado && (
@@ -1947,7 +1963,7 @@ export function OrdenDetailPage() {
                     <span className="text-xs text-slate-500">
                       {yaCobrado
                         ? 'ya cobrado'
-                        : formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
+                        : formatCurrency(precioCobradoRepuesto(repuesto))}
                     </span>
                   </label>
                 );
@@ -2068,7 +2084,7 @@ export function OrdenDetailPage() {
                           {repuesto.nombre}
                         </span>
                         <span className="text-xs text-slate-500">
-                          {formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
+                          {formatCurrency(precioCobradoRepuesto(repuesto))}
                         </span>
                       </label>
                     );
@@ -2083,6 +2099,7 @@ export function OrdenDetailPage() {
                   {formatCurrency(repuestosACobrarPreview)}
                 </span>
               </div>
+              {puedeVerCostos && (
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Ganancia estimada:</span>
                 <span className="font-medium text-emerald-700">
@@ -2091,6 +2108,7 @@ export function OrdenDetailPage() {
                     : '—'}
                 </span>
               </div>
+              )}
             </div>
           </FormField>
         </div>

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { OrdenDetailPage } from './OrdenDetailPage';
-import { iniciarReparacion, updateReparacionRepuestos } from '../api/ordenes';
+import { asignarTecnico, iniciarReparacion, updateReparacionRepuestos } from '../api/ordenes';
 import { EstadoOrden } from '../types';
 
 const state = vi.hoisted(() => ({
@@ -332,6 +332,121 @@ describe('OrdenDetailPage', () => {
       renderPage();
       fireEvent.click(screen.getByRole('button', { name: 'Quitar Batería Y' }));
       await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(msg, 'error'));
+    });
+  });
+  describe('permisos de asignación de técnico', () => {
+    const ADMIN = { id: 1, nombre: 'Admin', username: 'admin', rol: 'ADMIN', activo: true, tecnicoId: 1 };
+    const TECS = [{ id: 7, nombre: 'Tec Uno', username: 'tec', activo: true, correo: 't@x.com' }];
+
+    it('ADMIN ve el selector "Cambiar técnico" y no "Asignarme"', () => {
+      state.user = ADMIN;
+      state.tecnicos = TECS;
+      renderPage();
+      expect(screen.getByLabelText('Cambiar técnico')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Asignarme' })).not.toBeInTheDocument();
+    });
+
+    it('ADMIN con lista vacía conserva al técnico asignado en el selector (no "Sin asignar")', () => {
+      state.user = ADMIN;
+      state.tecnicos = [];
+      state.orden = makeOrden({ tecnicoId: 7, tecnicoNombre: 'Tec Uno' });
+      renderPage();
+      expect(screen.getByLabelText('Cambiar técnico')).toHaveValue('7');
+    });
+
+    it('ADMIN ve "Asignar técnico" en una orden sin técnico', () => {
+      state.user = ADMIN;
+      state.tecnicos = TECS;
+      state.orden = makeOrden({ tecnicoId: null });
+      renderPage();
+      expect(screen.getByLabelText('Asignar técnico')).toBeInTheDocument();
+    });
+
+    it('TECNICO en orden sin técnico: solo "Asignarme", sin selector', () => {
+      state.orden = makeOrden({ tecnicoId: null });
+      renderPage();
+      expect(screen.getByRole('button', { name: 'Asignarme' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Asignar técnico')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Cambiar técnico')).not.toBeInTheDocument();
+    });
+
+    it('TECNICO en su orden asignada: sin selector ni botón y nombre desde tecnicoNombre', () => {
+      state.orden = makeOrden({ tecnicoId: 7, tecnicoNombre: 'Tec Uno' });
+      renderPage();
+      expect(screen.queryByLabelText('Cambiar técnico')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Asignarme' })).not.toBeInTheDocument();
+      expect(screen.getByText('Tec Uno')).toBeInTheDocument();
+    });
+
+    it('TECNICO en orden de otro técnico: nombre por tecnicoNombre, sin selector', () => {
+      state.orden = makeOrden({ tecnicoId: 9, tecnicoNombre: 'Otra Persona' });
+      renderPage();
+      expect(screen.getByText('Otra Persona')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Cambiar técnico')).not.toBeInTheDocument();
+    });
+
+    it('muestra en toast el 403 del backend al asignarme', async () => {
+      state.orden = makeOrden({ tecnicoId: null });
+      const msg = 'Solo puedes asignarte órdenes sin técnico';
+      vi.mocked(asignarTecnico).mockRejectedValueOnce(new Error(msg));
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Asignarme' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Asignarme' }));
+      await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(msg, 'error'));
+    });
+  });
+
+  describe('costos y ganancias', () => {
+    const ADMIN = { id: 1, nombre: 'Admin', username: 'admin', rol: 'ADMIN', activo: true, tecnicoId: 1 };
+    const conCostos = () =>
+      makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [
+          { id: 100, ordenId: 10, tipo: 'PANTALLA', descripcion: null, precio: 20, costoRepuesto: 50, precioRepuesto: 80, ganancia: 50, createdAt: '', repuestos: [] },
+        ],
+      });
+
+    it('ADMIN ve costo de materiales y ganancia estimada total', () => {
+      state.user = ADMIN;
+      state.orden = conCostos();
+      renderPage();
+      expect(screen.getByText('Costo de materiales (no cobrado)')).toBeInTheDocument();
+      expect(screen.getByText('Ganancia estimada total')).toBeInTheDocument();
+    });
+
+    it('TECNICO no ve costo ni ganancia, pero sí lo cobrado', () => {
+      state.orden = conCostos();
+      renderPage();
+      expect(screen.queryByText('Costo de materiales (no cobrado)')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ganancia estimada total')).not.toBeInTheDocument();
+      expect(screen.getByText('Total cobrado')).toBeInTheDocument();
+    });
+
+    it('TECNICO con campos de costo en null no rompe ni muestra NaN', () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [
+          { id: 100, ordenId: 10, tipo: 'PANTALLA', descripcion: null, precio: 20, costoRepuesto: null, precioRepuesto: 80, ganancia: null, createdAt: '',
+            repuestos: [{ id: 900, repuestoId: null, productoId: 1, nombre: 'Pantalla X', precioCosto: null, precioVenta: null, precioCobrado: null }] },
+        ],
+      });
+      renderPage();
+      expect(document.body.textContent).not.toContain('NaN');
+    });
+
+    it('el modal Aprobar y Reparar tolera repuestos sin precioCosto/precioVenta (sin NaN, sin costos)', async () => {
+      REPUESTOS.push({ id: 99, nombre: 'Oculto', precioCosto: null as never, precioVenta: null });
+      try {
+        renderPage();
+        fireEvent.click(within(screen.getByTitle('Aprobar y Reparar')).getByRole('button'));
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('checkbox', { name: /Oculto/ }));
+        expect(dialog.textContent).not.toContain('NaN');
+        expect(dialog.textContent).not.toMatch(/costo|ganancia/i);
+      } finally {
+        REPUESTOS.pop();
+      }
     });
   });
 });

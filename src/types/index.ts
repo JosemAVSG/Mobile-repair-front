@@ -221,7 +221,8 @@ export interface RepuestoSnapshot {
   /** `productos.id` del catálogo unificado. Es el ÚNICO id válido para PUT/matching; null = snapshot legado. */
   productoId?: number | null;
   nombre: string;
-  precioCosto: number;
+  /** Oculto (null/ausente) para TECNICO: el backend enmascara costos. */
+  precioCosto?: number | null;
   /** Precio de venta congelado al momento de usar el repuesto (si existía). */
   precioVenta?: number | null;
   /** Monto efectivamente cobrado por el repuesto (venta o costo como fallback). */
@@ -247,7 +248,8 @@ export interface Repuesto {
   nombre: string;
   descripcion: string | null;
   codigo: string;
-  precioCosto: number;
+  /** Oculto (null/ausente) para TECNICO: el backend enmascara costos. */
+  precioCosto?: number | null;
   /** Precio de venta al público. `null` = se cobra el costo como fallback. */
   precioVenta: number | null;
   marcaId: number | null;
@@ -425,7 +427,13 @@ export type ActionPermission =
   | 'orden:edit'
   | 'reparacion:manage'
   | 'entrega:manage'
-  | 'foto:manage';
+  | 'foto:manage'
+  /** Asignar/cambiar/quitar el técnico de cualquier orden (solo ADMIN). */
+  | 'orden:assign'
+  /** "Asignarme" en una orden sin técnico (solo TECNICO). */
+  | 'orden:self-assign'
+  /** Ver costos y ganancias (solo ADMIN). */
+  | 'costos:view';
 
 export interface CanResource {
   tecnicoId?: number | null;

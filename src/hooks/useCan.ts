@@ -17,6 +17,11 @@ export function useCan(
     return user.rol === permission;
   }
 
+  // Autoasignación: exclusiva del TECNICO y solo sobre una orden sin técnico.
+  if (permission === 'orden:self-assign') {
+    return user.rol === 'TECNICO' && resource != null && resource.tecnicoId == null;
+  }
+
   // ADMIN puede todo.
   if (user.rol === 'ADMIN') return true;
 
@@ -40,4 +45,9 @@ export function useCan(
   }
 
   return false;
+}
+
+/** Costos y ganancias (precioCosto, costoRepuesto, ganancia) solo para ADMIN. */
+export function usePuedeVerCostos(): boolean {
+  return useCan('costos:view');
 }

@@ -31,3 +31,11 @@ describe('formatCop', () => {
     expect(formatCurrency(60000)).toBe('$60,000');
   });
 });
+
+describe('formatCurrency null-safety', () => {
+  it('devuelve "—" para null, undefined y NaN (costos enmascarados)', () => {
+    expect(formatCurrency(null)).toBe('—');
+    expect(formatCurrency(undefined)).toBe('—');
+    expect(formatCurrency(Number.NaN)).toBe('—');
+  });
+});
