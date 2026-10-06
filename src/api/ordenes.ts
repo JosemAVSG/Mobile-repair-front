@@ -140,3 +140,15 @@ export const getPublicRepairStatus = async (
     `/api/ordenes/seguimiento/${encodeURIComponent(ref)}`,
   );
 };
+/** Reemplaza el conjunto completo de repuestos de una reparación existente
+ *  (PUT, `[]` la vacía). El backend deduplica y recalcula los totales. */
+export const updateReparacionRepuestos = async (
+  ordenId: number,
+  reparacionId: number,
+  repuestoIds: number[],
+): Promise<Reparacion> => {
+  return ApiClient.put<Reparacion>(
+    `/api/ordenes/${ordenId}/reparaciones/${reparacionId}/repuestos`,
+    repuestoIds,
+  );
+};

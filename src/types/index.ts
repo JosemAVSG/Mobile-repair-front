@@ -189,6 +189,8 @@ export interface OrdenTrabajo {
   codigoPublico?: string | null;
   clienteId: number;
   tecnicoId?: number | null;
+  /** Nombre del técnico asignado (el backend lo devuelve en OrdenResponse). */
+  tecnicoNombre?: string | null;
   marcaId?: number | null;
   modeloId?: number | null;
   tipo?: TipoDispositivo | null;
@@ -213,7 +215,7 @@ export interface OrdenTrabajo {
 export interface RepuestoSnapshot {
   id: number;
   repuestoId: number | null;
-  /** Producto del catálogo unificado (A4); puede venir en lugar de `repuestoId`. */
+  /** `productos.id` del catálogo unificado. Es el ÚNICO id válido para PUT/matching; null = snapshot legado. */
   productoId?: number | null;
   nombre: string;
   precioCosto: number;

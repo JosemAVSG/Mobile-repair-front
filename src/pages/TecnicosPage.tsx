@@ -5,6 +5,7 @@ import { Button } from '../components/atoms/Button';
 import { Badge } from '../components/atoms/Badge';
 import { Modal } from '../components/atoms/Modal';
 import { Input } from '../components/atoms/Input';
+import { Icon } from '../components/atoms/Icon';
 import { Select } from '../components/atoms/Select';
 import { FormField } from '../components/molecules/FormField';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
@@ -80,6 +81,7 @@ export function TecnicosPage() {
   const [telefono, setTelefono] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rol, setRol] = useState<RolUsuario | ''>('');
   const [activo, setActivo] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -116,6 +118,7 @@ export function TecnicosPage() {
     setTelefono('');
     setUsername('');
     setPassword('');
+    setShowPassword(false);
     setRol('TECNICO');
     setActivo(true);
     setFieldErrors({});
@@ -131,6 +134,7 @@ export function TecnicosPage() {
     setTelefono(tecnico.telefono ?? '');
     setUsername(tecnico.username);
     setPassword('');
+    setShowPassword(false);
     setRol(tecnico.rol);
     setActivo(tecnico.activo);
     setFieldErrors({});
@@ -147,6 +151,7 @@ export function TecnicosPage() {
     setTelefono('');
     setUsername('');
     setPassword('');
+    setShowPassword(false);
     setRol('');
     setActivo(true);
     setFieldErrors({});
@@ -441,7 +446,7 @@ export function TecnicosPage() {
               error={fieldErrors.password}
             >
               <Input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder={
                   editTarget
                     ? 'Nueva contraseña (dejar vacío para no cambiar)'
@@ -450,6 +455,16 @@ export function TecnicosPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="rounded-md p-2 text-slate-400 transition-colors hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <Icon name={showPassword ? 'eye-off' : 'eye'} size={18} />
+                  </button>
+                }
               />
             </FormField>
           </div>

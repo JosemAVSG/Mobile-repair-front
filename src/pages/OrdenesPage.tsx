@@ -212,7 +212,9 @@ export function OrdenesPage() {
         equipo: dispLabel,
         tecnico:
           orden.tecnicoId != null
-            ? (tecnicoMap.get(orden.tecnicoId) ?? `Técnico #${orden.tecnicoId}`)
+            ? (orden.tecnicoNombre?.trim() ||
+              tecnicoMap.get(orden.tecnicoId) ||
+              `Técnico #${orden.tecnicoId}`)
             : '—',
         estado: orden.estado,
         falloReportado: orden.falloReportado,

@@ -41,6 +41,7 @@ import {
   asignarTecnico,
   iniciarReparacion,
   updateEntrega,
+  updateReparacionRepuestos,
   updateOrdenEstado,
 } from '../api/ordenes';
 import { resolverPrecioTarifa } from '../api/tarifas';
@@ -53,7 +54,18 @@ import {
   buildMensajeEstado,
   copyTextToClipboard,
 } from '../utils/whatsapp';
-import { isOrdenAtrasada, formatNumeroOrden } from '../utils/ordenes';
+import {
+  isOrdenAtrasada,
+  formatNumeroOrden,
+  idsTrasCambio,
+  reparacionEditable,
+  repuestoIdsAdjuntos,
+  repuestoIdsCobrados,
+  repuestosBloqueados,
+  REVISION_INICIAL,
+  resolverTecnicoResponsable,
+  snapshotRepuestoId,
+} from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
 import { useToast } from '../context/ToastContext';
 import type { EtapaFoto, FotoOrden, ReparacionRequest, Repuesto } from '../types';
@@ -236,10 +248,12 @@ export function OrdenDetailPage() {
   const canManageEntrega = useCan('entrega:manage', orden ?? undefined);
   const canManageFotos = useCan('foto:manage', orden ?? undefined);
 
-  const tecnicoResponsable = useMemo(() => {
-    if (orden?.tecnicoId == null) return null;
-    return tecnicos?.find((t) => t.id === orden.tecnicoId) ?? null;
-  }, [orden?.tecnicoId, tecnicos]);
+  // GET /api/tecnicos es ADMIN-only: para un TECNICO la lista llega vacía, así que se
+  // resuelve también desde la sesión (ver resolverTecnicoResponsable).
+  const tecnicoResponsable = useMemo(
+    () => resolverTecnicoResponsable(orden?.tecnicoId, tecnicos, user, orden?.tecnicoNombre),
+    [orden?.tecnicoId, orden?.tecnicoNombre, tecnicos, user],
+  );
 
   // Técnico que verá el select del admin en el detalle
   const tecnicoOptions = useMemo(
@@ -318,6 +332,22 @@ export function OrdenDetailPage() {
       addReparacion(targetOrdenId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['historial'] });
+    },
+  });
+
+  const repuestosOrdenMutation = useMutation({
+    mutationFn: ({
+      targetOrdenId,
+      reparacionId,
+      repuestoIds,
+    }: {
+      targetOrdenId: number;
+      reparacionId: number;
+      repuestoIds: number[];
+    }) => updateReparacionRepuestos(targetOrdenId, reparacionId, repuestoIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
     },
   });
@@ -463,6 +493,63 @@ export function OrdenDetailPage() {
     }
   }, [fotoAEliminar, eliminarFotoMutation, showToast]);
 
+  // ───── Repuestos de la orden (agregar/quitar sobre una orden existente) ─────
+
+  const [repuestoAgregarSel, setRepuestoAgregarSel] = useState('');
+  const reparacionRepuestos = useMemo(
+    () => reparacionEditable(orden?.reparaciones),
+    [orden?.reparaciones],
+  );
+  const repuestosOrdenFilas = useMemo(
+    () =>
+      (orden?.reparaciones ?? []).flatMap((r) =>
+        (r.repuestos ?? []).map((snap) => ({ reparacion: r, snap })),
+      ),
+    [orden?.reparaciones],
+  );
+  const repuestosBloqueadosOrden = repuestosBloqueados(orden?.estado);
+  const repuestoAgregarOptions = useMemo(() => {
+    // Lo ya cobrado en CUALQUIER reparación de la orden no se ofrece de nuevo
+    // (con descuentoDiagnostico, la Revisión inicial no cobra sus repuestos).
+    const cobrados = repuestoIdsCobrados(orden?.reparaciones, orden?.descuentoDiagnostico);
+    return repuestos
+      .filter((r) => !cobrados.has(r.id))
+      .map((r) => ({
+        value: String(r.id),
+        label: `${r.nombre} (${formatCurrency(r.precioVenta ?? r.precioCosto)})`,
+      }));
+  }, [repuestos, orden?.reparaciones, orden?.descuentoDiagnostico]);
+
+  const cambiarRepuestosOrden = useCallback(
+    async (
+      reparacion: NonNullable<typeof reparacionRepuestos>,
+      cambio: { agregar?: number; quitar?: number },
+    ) => {
+      if (!orden) return;
+      try {
+        const actualizada = await repuestosOrdenMutation.mutateAsync({
+          targetOrdenId: orden.id,
+          reparacionId: reparacion.id,
+          repuestoIds: idsTrasCambio(reparacion, cambio),
+        });
+        if (cambio.agregar != null) {
+          setRepuestoAgregarSel('');
+          // El backend puede omitir el repuesto (p. ej. ya cobrado): nunca fallar en silencio.
+          const quedo = actualizada?.repuestos?.some(
+            (snap) => snapshotRepuestoId(snap) === cambio.agregar,
+          );
+          if (!quedo) {
+            showToast('El repuesto no se agregó a la orden (puede que ya esté cobrado)', 'warning');
+          }
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Error al actualizar repuestos';
+        showToast(msg, 'error');
+      }
+    },
+    [orden, repuestosOrdenMutation, showToast],
+  );
+
   // ───── Técnico responsable state ─────
 
   const [facturaOpen, setFacturaOpen] = useState(false);
@@ -518,6 +605,16 @@ export function OrdenDetailPage() {
   // (nunca se pisa).
   const autoPrecioRef = useRef<{ tipo: TipoReparacion; value: string } | null>(null);
 
+  // Precarga (una vez por apertura) los repuestos ya adjuntos, para que el modal los muestre
+  // marcados. El endpoint iniciar-reparación es ADITIVO: lo ya cobrado se omite en el backend,
+  // así que en el modal esos repuestos van deshabilitados y no se envían ni se suman al preview.
+  const repPrecargadosRef = useRef(false);
+  useEffect(() => {
+    if (!repuestosModalOpen || repuestosPending || !orden || repPrecargadosRef.current) return;
+    repPrecargadosRef.current = true;
+    setRepCompleteSelectedIds(new Set(repuestoIdsAdjuntos(orden.reparaciones, repuestos)));
+  }, [repuestosModalOpen, repuestosPending, orden, repuestos]);
+
   const executeTransition = useCallback(
     async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
       if (!orden) return;
@@ -540,6 +637,8 @@ export function OrdenDetailPage() {
       if (!orden) return;
       // Intercept DIAGNOSTICO → REPARACION to ask about discount + parts
       if (orden.estado === EstadoOrden.DIAGNOSTICO && target === EstadoOrden.REPARACION) {
+        // La selección se precarga (efecto) con los repuestos ya adjuntos a la orden.
+        repPrecargadosRef.current = false;
         setRepCompleteSelectedIds(new Set());
         setRepCompleteSearch('');
         setRepuestosModalOpen(true);
@@ -653,6 +752,13 @@ export function OrdenDetailPage() {
     cancelTransition();
   }, [repCompleteSubmitting, cancelTransition]);
 
+  // Ya cobrado en la orden: con descuentoDiagnostico los repuestos de la "Revisión inicial"
+  // no se cobran, por lo que sí cuentan para la nueva reparación.
+  const repCompleteCobrados = useMemo(
+    () => repuestoIdsCobrados(orden?.reparaciones, repCompleteDiscount),
+    [orden?.reparaciones, repCompleteDiscount],
+  );
+
   const confirmRepuestos = useCallback(async () => {
     if (!orden) return;
     if (!repCompleteTipo) {
@@ -670,7 +776,7 @@ export function OrdenDetailPage() {
         ordenId: orden.id,
         tipo: repCompleteTipo,
         precio,
-        repuestoIds: Array.from(repCompleteSelectedIds),
+        repuestoIds: Array.from(repCompleteSelectedIds).filter((id) => !repCompleteCobrados.has(id)),
         descuentoDiagnostico: repCompleteDiscount,
       });
       setRepuestosModalOpen(false);
@@ -687,7 +793,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repCompleteTipo, repPrecioReal, repCompleteSelectedIds, repCompleteDiscount, iniciarReparacionMutation, showToast]);
+  }, [orden, repCompleteTipo, repPrecioReal, repCompleteSelectedIds, repCompleteCobrados, repCompleteDiscount, iniciarReparacionMutation, showToast]);
 
   // ───── Reparacion modal ─────
 
@@ -755,8 +861,11 @@ export function OrdenDetailPage() {
   }, [repuestos, repCompleteSearch]);
 
   const repCompleteSelected = useMemo(
-    () => repuestos.filter((r) => repCompleteSelectedIds.has(r.id)),
-    [repuestos, repCompleteSelectedIds],
+    () =>
+      repuestos.filter(
+        (r) => repCompleteSelectedIds.has(r.id) && !repCompleteCobrados.has(r.id),
+      ),
+    [repuestos, repCompleteSelectedIds, repCompleteCobrados],
   );
 
   const repCompleteRepuestosPreview = useMemo(
@@ -1501,6 +1610,89 @@ export function OrdenDetailPage() {
         )}
       </Card>
 
+      {/* ── Repuestos de la orden ── */}
+      <Card title="Repuestos">
+        {repuestosOrdenFilas.length === 0 ? (
+          <p className="text-sm text-slate-500">Sin repuestos adjuntos</p>
+        ) : (
+          <ul className="divide-y divide-slate-100" aria-label="Repuestos adjuntos">
+            {repuestosOrdenFilas.map(({ reparacion, snap }) => {
+              const productoId = snapshotRepuestoId(snap);
+              const legado = productoId == null;
+              const noCobrado =
+                !!orden?.descuentoDiagnostico && reparacion.descripcion === REVISION_INICIAL;
+              const nombreReparacion =
+                reparacion.descripcion ??
+                TIPO_REPARACION_LABELS[reparacion.tipo] ??
+                reparacion.tipo;
+              return (
+                <li
+                  key={`${reparacion.id}-${snap.id}`}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <span className="flex-1 text-slate-700">
+                    {snap.nombre}
+                    <span className="block text-xs text-slate-500">
+                      {nombreReparacion}
+                      {legado && ' · legado'}
+                    </span>
+                  </span>
+                  {noCobrado ? (
+                    <span className="text-xs text-slate-500">no cobrado</span>
+                  ) : (
+                    <span className="text-slate-600">
+                      {formatCurrency(snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto)}
+                    </span>
+                  )}
+                  {canEditOrden && !legado && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Quitar ${snap.nombre}`}
+                      disabled={repuestosOrdenMutation.isPending || repuestosBloqueadosOrden}
+                      onClick={() => void cambiarRepuestosOrden(reparacion, { quitar: productoId })}
+                    >
+                      Quitar
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {canEditOrden && repuestosBloqueadosOrden && (
+          <p className="mt-3 text-xs text-slate-500">
+            No se pueden modificar los repuestos de una orden pagada o entregada.
+          </p>
+        )}
+        {canEditOrden && reparacionRepuestos && !repuestosBloqueadosOrden && (
+          <div className="mt-3 flex items-end gap-2">
+            <div className="flex-1">
+              <Select
+                label="Agregar repuesto"
+                options={repuestoAgregarOptions}
+                placeholder="Seleccionar..."
+                value={repuestoAgregarSel}
+                onChange={(e) => setRepuestoAgregarSel(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={repuestoAgregarSel === ''}
+              loading={repuestosOrdenMutation.isPending}
+              onClick={() =>
+                void cambiarRepuestosOrden(reparacionRepuestos, {
+                  agregar: Number(repuestoAgregarSel),
+                })
+              }
+            >
+              Agregar
+            </Button>
+          </div>
+        )}
+      </Card>
+
       {/* ── Fotos del equipo ── */}
       <Card title="Fotos del equipo">
         {fotosLoading ? (
@@ -1733,7 +1925,8 @@ export function OrdenDetailPage() {
             <div className="space-y-1">
               {repCompleteFiltered.map((repuesto) => {
                 const inputId = `rep-complete-${repuesto.id}`;
-                const checked = repCompleteSelectedIds.has(repuesto.id);
+                const yaCobrado = repCompleteCobrados.has(repuesto.id);
+                const checked = yaCobrado || repCompleteSelectedIds.has(repuesto.id);
                 return (
                   <label
                     key={repuesto.id}
@@ -1745,13 +1938,16 @@ export function OrdenDetailPage() {
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       checked={checked}
+                      disabled={yaCobrado}
                       onChange={() => toggleRepComplete(repuesto.id)}
                     />
                     <span className="flex-1 text-sm text-slate-700">
                       {repuesto.nombre}
                     </span>
                     <span className="text-xs text-slate-500">
-                      {formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
+                      {yaCobrado
+                        ? 'ya cobrado'
+                        : formatCurrency(repuesto.precioVenta ?? repuesto.precioCosto)}
                     </span>
                   </label>
                 );
