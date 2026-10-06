@@ -37,14 +37,6 @@ const navGroups: NavGroup[] = [
       { path: '/clientes', label: 'Clientes', icon: 'users' },
     ],
   },
-  {
-    label: 'Precios',
-    icon: 'dollar-sign',
-    items: [
-      { path: '/repuestos', label: 'Repuestos', icon: 'package' },
-      { path: '/tarifas', label: 'Tarifas', icon: 'dollar-sign' },
-    ],
-  },
 ];
 
 // Acciones del área inferior (solo admin): Configuración + Técnicos

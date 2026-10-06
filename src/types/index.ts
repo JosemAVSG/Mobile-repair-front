@@ -46,6 +46,8 @@ export interface AuthUser {
   estado?: EstadoSuscripcion | null;
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
+  /** El plan del taller incluye ventas e inventario. Ausente (backend viejo) = habilitado. */
+  inventarioHabilitado?: boolean | null;
 }
 
 export interface LoginResponse {
@@ -58,6 +60,7 @@ export interface LoginResponse {
   estado?: EstadoSuscripcion | null;
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
+  inventarioHabilitado?: boolean | null;
 }
 
 /** Cuerpo de POST /api/auth/register-taller. */
@@ -461,6 +464,8 @@ export interface ProductoInventario {
   variante?: string | null;
   proveedor?: string | null;
   controlaStock?: boolean;
+  marcaId?: number | null;
+  tipoReparacion?: TipoReparacion | null;
   modelosCompatibles?: number[];
   /** Ids de modelos compatibles. Ausente en backends viejos. */
   modeloIds?: number[];
@@ -482,15 +487,22 @@ export interface ProductoInventarioRequest {
   codigo: string;
   nombre: string;
   descripcion?: string;
-  stock: number;
-  stockMinimo: number;
+  /** En edición se omite si está oculto/sin cambios: el backend deja intacto lo ausente. */
+  stock?: number;
+  stockMinimo?: number;
   costoUnitario: number;
-  /** Obligatorio cuando `uso` es VENTA o AMBOS (regla del backend). */
-  precioVenta: number;
+  /** Obligatorio cuando `uso` es VENTA o AMBOS (regla del backend); opcional en REPUESTO. */
+  precioVenta?: number;
   uso?: UsoProducto;
+  marcaId?: number;
+  tipoReparacion?: TipoReparacion;
+  /** PUT: '' limpia el campo; ausente lo deja intacto. */
   categoria?: string;
   variante?: string;
   proveedor?: string;
+  /** PUT: true deja marcaId / tipoReparacion en null (ausente = intacto). */
+  limpiarMarca?: boolean;
+  limpiarTipoReparacion?: boolean;
   controlaStock?: boolean;
   modeloIds?: number[];
 }

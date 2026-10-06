@@ -25,6 +25,7 @@ import { formatNumeroOrden } from '../utils/ordenes';
 import type { OrdenTrabajo, Cliente, EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
 import { useConfig } from '../context/ConfigContext';
+import { useAuth } from '../hooks/useAuth';
 
 // ──────────────────────────────────────────────
 // Types
@@ -89,6 +90,7 @@ function inicioPeriodo(p: Periodo): number | null {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { config } = useConfig();
+  const { isAdmin } = useAuth();
   const [periodo, setPeriodo] = useState<Periodo>('todo');
 
   const ordenesReq = useOrdenes();
@@ -442,12 +444,14 @@ export function DashboardPage() {
             <Button onClick={() => navigate('/reparaciones')}>
               Nueva Reparación
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/repuestos')}
-            >
-              Ver Repuestos
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/inventario')}
+              >
+                Ver Inventario
+              </Button>
+            )}
             <Button
               variant="secondary"
               onClick={() => navigate('/clientes')}

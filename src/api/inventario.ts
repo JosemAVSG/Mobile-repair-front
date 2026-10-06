@@ -5,10 +5,16 @@ import type {
   MovimientoRequest,
   ProductoInventario,
   ProductoInventarioRequest,
+  UsoProducto,
 } from '../types';
 
-export const getProductosInventario = async (): Promise<ProductoInventario[]> => {
-  return ApiClient.get<ProductoInventario[]>('/api/inventario/productos');
+export const getProductosInventario = async (
+  uso?: UsoProducto,
+): Promise<ProductoInventario[]> => {
+  const endpoint = uso
+    ? `/api/inventario/productos?uso=${uso}`
+    : '/api/inventario/productos';
+  return ApiClient.get<ProductoInventario[]>(endpoint);
 };
 
 export const createProductoInventario = async (

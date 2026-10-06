@@ -16,14 +16,14 @@ import type { MovimientoRequest, ProductoInventarioRequest } from '../types';
 
 const QUERY_KEY = ['inventario'] as const;
 
+/**
+ * Lista el inventario. El filtro por `uso` se aplica del lado del cliente: así funciona igual con
+ * el backend nuevo (devuelve todo) y con el viejo (oculta REPUESTO), sin refetch al cambiar chip.
+ */
 export function useProductosInventario() {
   return useQuery({
     queryKey: [...QUERY_KEY, 'productos'],
-    // Resiliencia: el backend ya excluye REPUESTO puros; si llega `uso`, filtramos igual.
-    queryFn: async () => {
-      const productos = await getProductosInventario();
-      return productos.filter((p) => p.uso == null || p.uso === 'VENTA' || p.uso === 'AMBOS');
-    },
+    queryFn: () => getProductosInventario(),
   });
 }
 
@@ -35,10 +35,11 @@ export function useMovimientosInventario(productoId?: number) {
   });
 }
 
-export function useInventoryKpis() {
+export function useInventoryKpis(enabled = true) {
   return useQuery({
     queryKey: [...QUERY_KEY, 'kpis'],
     queryFn: () => getInventoryKpis(),
+    enabled,
   });
 }
 

@@ -58,6 +58,15 @@ function normalizeUser(u: AuthUser): AuthUser {
   return { ...u, tecnicoId: u.tecnicoId ?? u.id };
 }
 
+/** Primer valor realmente booleano; null/undefined/otros tipos se saltean.
+ *  Sin ningún booleano el flag es `true`: un valor desconocido nunca bloquea el inventario. */
+function resolveInventarioHabilitado(...candidates: unknown[]): boolean {
+  for (const c of candidates) {
+    if (typeof c === 'boolean') return c;
+  }
+  return true;
+}
+
 function parseStoredAuth(raw: string | null): StoredAuth | null {
   if (!raw) return null;
   try {
@@ -135,6 +144,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             user: normalizeUser({
               ...me,
               tallerId: me.tallerId ?? latest.user.tallerId,
+              inventarioHabilitado: resolveInventarioHabilitado(
+                me.inventarioHabilitado,
+                latest.user.inventarioHabilitado,
+              ),
             }),
           };
           saveToStorage(next);
@@ -195,6 +208,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           user: normalizeUser({
             ...me,
             tallerId: me.tallerId ?? latest.user.tallerId,
+            inventarioHabilitado: resolveInventarioHabilitado(
+              me.inventarioHabilitado,
+              latest.user.inventarioHabilitado,
+            ),
           }),
         };
         saveToStorage(next);
@@ -242,6 +259,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           estado: response.user.estado ?? response.estado,
           trialEndsAt: response.user.trialEndsAt ?? response.trialEndsAt,
           currentPeriodEnd: response.user.currentPeriodEnd ?? response.currentPeriodEnd,
+          // Sin valor previo: una sesión anterior podría ser de otro taller.
+          inventarioHabilitado: resolveInventarioHabilitado(
+            response.user.inventarioHabilitado,
+            response.inventarioHabilitado,
+          ),
         }),
       };
       setBillingBlock(null);
@@ -261,7 +283,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = useCallback(
     async (req: RegisterTallerRequest): Promise<AuthUser> => {
       const response: LoginResponse = await registerTaller(req);
-      return startSession(response);
+      const started = startSession(response);
+      // RegistroPage navega sin llamar /me: se refresca acá (best-effort) para tomar el estado real.
+      const revisionAtStart = sessionRevision.current;
+      Promise.resolve()
+        .then(() => getMe())
+        .then((me) => {
+          if (sessionRevision.current !== revisionAtStart) return;
+          const latest = loadFromStorage();
+          if (!latest || latest.token !== response.token) return;
+          const next: StoredAuth = {
+            token: latest.token,
+            user: normalizeUser({
+              ...me,
+              tallerId: me.tallerId ?? latest.user.tallerId,
+              inventarioHabilitado: resolveInventarioHabilitado(
+                me.inventarioHabilitado,
+                latest.user.inventarioHabilitado,
+              ),
+            }),
+          };
+          saveToStorage(next);
+          setUser(next.user);
+        })
+        .catch(() => {
+          // Best-effort: la sesión de registro ya es válida.
+        });
+      return started;
     },
     [startSession],
   );

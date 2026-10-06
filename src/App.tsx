@@ -12,8 +12,6 @@ import { ClienteDetailPage } from './pages/ClienteDetailPage';
 import { OrdenesPage } from './pages/OrdenesPage';
 import { OrdenDetailPage } from './pages/OrdenDetailPage';
 import { PublicRepairStatusPage } from './pages/PublicRepairStatusPage';
-import { RepuestosPage } from './pages/RepuestosPage';
-import { TarifasPage } from './pages/TarifasPage';
 import { ConfiguracionPage } from './pages/ConfiguracionPage';
 import { TecnicosPage } from './pages/TecnicosPage';
 import { InventarioPage } from './pages/InventarioPage';
@@ -119,22 +117,10 @@ export default function App() {
         <Route path="reparaciones" element={<OrdenesPage />} />
         <Route path="ordenes" element={<RedirectToReparaciones />} />
         <Route path="ordenes/:id" element={<RedirectToReparaciones />} />
-        <Route
-          path="repuestos"
-          element={
-            <RequireRole roles={['ADMIN']}>
-              <RepuestosPage />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="tarifas"
-          element={
-            <RequireRole roles={['ADMIN']}>
-              <TarifasPage />
-            </RequireRole>
-          }
-        />
+        {/* Repuestos y Tarifas ya no tienen entrada de menú: todo se gestiona desde Inventario.
+            Las páginas siguen en el repo (sin ruta) para poder reactivarlas. */}
+        <Route path="repuestos" element={<Navigate to="/inventario" replace />} />
+        <Route path="tarifas" element={<Navigate to="/inventario" replace />} />
         <Route
           path="inventario"
           element={

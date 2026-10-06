@@ -409,3 +409,133 @@ describe('AuthContext: billing (R-BU1/R-BU5)', () => {
     expect(result.current.billingBlocked).toBe(false);
   });
 });
+
+describe('AuthContext: inventarioHabilitado', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(getMe).mockReset();
+    vi.mocked(login).mockReset();
+    vi.mocked(registerTaller).mockReset();
+  });
+  afterEach(() => localStorage.clear());
+
+  const loginWith = async (extra: Record<string, unknown>, userExtra: Record<string, unknown> = {}) => {
+    localStorage.clear();
+    const base = response(7);
+    vi.mocked(login).mockResolvedValue({
+      ...base,
+      ...extra,
+      user: { ...base.user, ...userExtra },
+    } as never);
+    const hook = setup();
+    await act(async () => {
+      await hook.result.current.login('admin', 'secret');
+    });
+    return hook.result.current.user?.inventarioHabilitado;
+  };
+
+  it('login: user false gana sobre root true', async () => {
+    expect(await loginWith({ inventarioHabilitado: true }, { inventarioHabilitado: false })).toBe(false);
+  });
+
+  it('login: user null cae al root (false)', async () => {
+    expect(await loginWith({ inventarioHabilitado: false }, { inventarioHabilitado: null })).toBe(false);
+  });
+
+  it('login: root true con user ausente', async () => {
+    expect(await loginWith({ inventarioHabilitado: true })).toBe(true);
+  });
+
+  it('login: null/ausente en ambos = habilitado', async () => {
+    expect(await loginWith({ inventarioHabilitado: null }, { inventarioHabilitado: null })).toBe(true);
+    expect(await loginWith({})).toBe(true);
+  });
+
+  it('/me: boolean manda; null conserva el valor previo; sin previo = habilitado', async () => {
+    localStorage.setItem(
+      'auth',
+      JSON.stringify({
+        token: 'jwt-7',
+        user: { ...response(7).user, tallerId: 7, inventarioHabilitado: false },
+      }),
+    );
+    vi.mocked(getMe).mockResolvedValue({
+      ...response(7).user,
+      tallerId: 7,
+      inventarioHabilitado: null,
+    } as never);
+    const { result } = setup();
+    await waitFor(() => expect(result.current.validating).toBe(false));
+    expect(result.current.user?.inventarioHabilitado).toBe(false);
+  });
+
+  it('/me true pisa un false previo', async () => {
+    localStorage.setItem(
+      'auth',
+      JSON.stringify({
+        token: 'jwt-7',
+        user: { ...response(7).user, tallerId: 7, inventarioHabilitado: false },
+      }),
+    );
+    vi.mocked(getMe).mockResolvedValue({
+      ...response(7).user,
+      tallerId: 7,
+      inventarioHabilitado: true,
+    } as never);
+    const { result } = setup();
+    await waitFor(() => expect(result.current.user?.inventarioHabilitado).toBe(true));
+  });
+
+  it('/me sin campo ni previo = habilitado', async () => {
+    localStorage.setItem('auth', storedAuth(7));
+    vi.mocked(getMe).mockResolvedValue({ ...response(7).user, tallerId: 7 } as never);
+    const { result } = setup();
+    await waitFor(() => expect(result.current.validating).toBe(false));
+    expect(result.current.user?.inventarioHabilitado).toBe(true);
+  });
+
+  it('register: un taller TRIAL nuevo no queda restringido (null) y refresca /me', async () => {
+    vi.mocked(registerTaller).mockResolvedValue({
+      ...response(9),
+      inventarioHabilitado: null,
+    } as never);
+    vi.mocked(getMe).mockResolvedValue({
+      ...response(9).user,
+      tallerId: 9,
+      inventarioHabilitado: true,
+    } as never);
+    const { result } = setup();
+    await act(async () => {
+      const u = await result.current.register({
+        nombreTaller: 'Nuevo',
+        adminNombre: 'Ana',
+        username: 'ana',
+        password: 'password1',
+        correo: 'ana@x.com',
+        website: '',
+      });
+      expect(u.inventarioHabilitado).toBe(true);
+    });
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    expect(result.current.user?.inventarioHabilitado).toBe(true);
+  });
+
+  it('register: si /me falla se mantiene la sesión habilitada', async () => {
+    vi.mocked(registerTaller).mockResolvedValue(response(9) as never);
+    vi.mocked(getMe).mockRejectedValue(new Error('net'));
+    const { result } = setup();
+    await act(async () => {
+      await result.current.register({
+        nombreTaller: 'Nuevo',
+        adminNombre: 'Ana',
+        username: 'ana',
+        password: 'password1',
+        correo: 'ana@x.com',
+        website: '',
+      });
+    });
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user?.inventarioHabilitado).toBe(true);
+  });
+});

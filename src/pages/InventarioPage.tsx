@@ -19,7 +19,9 @@ import {
   useEliminarProductoInventario,
   useCrearMovimientoInventario,
 } from '../hooks/useInventory';
+import { useInventarioHabilitado } from '../hooks/useInventarioHabilitado';
 import { useToast } from '../context/ToastContext';
+import { ApiError } from '../api/ApiClient';
 import {
   ESTADO_STOCK_LABELS,
   ESTADO_STOCK_VARIANTS,
@@ -30,6 +32,7 @@ import type {
   ProductoInventario,
   ProductoInventarioRequest,
   MovimientoRequest,
+  UsoProducto,
 } from '../types';
 
 // ──────────────────────────────────────────────
@@ -43,7 +46,22 @@ const ESTADO_FILTER_OPTIONS = [
   { value: 'SIN_STOCK', label: 'Sin stock' },
 ];
 
+const USO_FILTER_OPTIONS: { value: '' | UsoProducto; label: string }[] = [
+  { value: '', label: 'Todos' },
+  { value: 'VENTA', label: 'Venta' },
+  { value: 'REPUESTO', label: 'Repuesto' },
+  { value: 'AMBOS', label: 'Ambos' },
+];
+
+const USO_LABELS: Record<UsoProducto, string> = {
+  VENTA: 'Venta',
+  REPUESTO: 'Repuesto',
+  AMBOS: 'Ambos',
+};
+
 interface ProductoRow {
+  uso: UsoProducto;
+  controlaStock: boolean;
   id: number;
   codigo: string;
   nombre: string;
@@ -61,10 +79,12 @@ interface ProductoRow {
 
 export function InventarioPage() {
   const { showToast } = useToast();
+  const inventarioHabilitado = useInventarioHabilitado();
 
   // ───── Filter state ─────
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [usoFiltro, setUsoFiltro] = useState<'' | UsoProducto>('');
 
   // ───── Data fetching ─────
   const {
@@ -79,7 +99,7 @@ export function InventarioPage() {
     data: kpis,
     isPending: kpisPending,
     error: kpisError,
-  } = useInventoryKpis();
+  } = useInventoryKpis(inventarioHabilitado);
 
   const productosLoading = productosPending || productosFetching;
   const errorMessage = useMemo(() => {
@@ -107,11 +127,15 @@ export function InventarioPage() {
   // ───── Filtering ─────
   const productosFiltrados = useMemo(() => {
     let data = productos ?? [];
+    if (usoFiltro) {
+      data = data.filter((p) => (p.uso ?? 'VENTA') === usoFiltro);
+    }
     if (estadoFiltro) {
-      data = data.filter((p) => p.estadoStock === estadoFiltro);
+      // Sin control de stock no hay estado: no matchean ningún filtro de estado.
+      data = data.filter((p) => p.controlaStock !== false && p.estadoStock === estadoFiltro);
     }
     return data;
-  }, [productos, estadoFiltro]);
+  }, [productos, estadoFiltro, usoFiltro]);
 
   // ───── Handlers ─────
   const openCreateProducto = useCallback(() => {
@@ -131,13 +155,22 @@ export function InventarioPage() {
 
   const handleSubmitProducto = useCallback(
     async (body: ProductoInventarioRequest) => {
-      if (productoEditando) {
-        await actualizarProducto.mutateAsync({ id: productoEditando.id, body });
-      } else {
-        await crearProducto.mutateAsync(body);
+      try {
+        if (productoEditando) {
+          await actualizarProducto.mutateAsync({ id: productoEditando.id, body });
+        } else {
+          await crearProducto.mutateAsync(body);
+        }
+      } catch (err: unknown) {
+        // 403 PLAN_REQUERIDO: el plan no permite este tipo de producto. Se avisa y se relanza
+        // para que el modal siga abierto mostrando el error.
+        if (err instanceof ApiError && err.status === 403 && err.codigo === 'PLAN_REQUERIDO') {
+          showToast(err.message, 'error');
+        }
+        throw err;
       }
     },
-    [productoEditando, actualizarProducto, crearProducto],
+    [productoEditando, actualizarProducto, crearProducto, showToast],
   );
 
   const openMovimientoModal = useCallback((producto: ProductoInventario) => {
@@ -176,23 +209,40 @@ export function InventarioPage() {
     { key: 'codigo', label: 'Código', sortable: true },
     { key: 'nombre', label: 'Nombre', sortable: true },
     {
+      key: 'uso',
+      label: 'Uso',
+      sortable: true,
+      render: (row) => <Badge variant="info">{USO_LABELS[row.uso]}</Badge>,
+    },
+    {
       key: 'stock',
       label: 'Stock',
       sortable: true,
-      render: (row) => (
-        <span className={row.stock === 0 ? 'font-semibold text-red-600' : ''}>{row.stock}</span>
-      ),
+      render: (row) =>
+        row.controlaStock ? (
+          <span className={row.stock === 0 ? 'font-semibold text-red-600' : ''}>{row.stock}</span>
+        ) : (
+          '—'
+        ),
     },
-    { key: 'stockMinimo', label: 'Mínimo', sortable: true },
+    {
+      key: 'stockMinimo',
+      label: 'Mínimo',
+      sortable: true,
+      render: (row) => (row.controlaStock ? row.stockMinimo : '—'),
+    },
     {
       key: 'estado',
       label: 'Estado',
       sortable: true,
-      render: (row) => (
-        <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
-          {ESTADO_STOCK_LABELS[row.estado]}
-        </Badge>
-      ),
+      render: (row) =>
+        row.controlaStock ? (
+          <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
+            {ESTADO_STOCK_LABELS[row.estado]}
+          </Badge>
+        ) : (
+          '—'
+        ),
     },
     {
       key: 'costoUnitario',
@@ -225,16 +275,18 @@ export function InventarioPage() {
             >
               Editar
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                openMovimientoModal(producto);
-              }}
-            >
-              Movimiento
-            </Button>
+            {inventarioHabilitado && producto.controlaStock !== false && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  openMovimientoModal(producto);
+                }}
+              >
+                Movimiento
+              </Button>
+            )}
             <Button
               variant="danger"
               size="sm"
@@ -257,6 +309,8 @@ export function InventarioPage() {
       codigo: p.codigo,
       nombre: p.nombre,
       descripcion: p.descripcion ?? null,
+      uso: p.uso ?? 'VENTA',
+      controlaStock: p.controlaStock !== false,
       stock: p.stock,
       stockMinimo: p.stockMinimo,
       estado: p.estadoStock,
@@ -273,17 +327,26 @@ export function InventarioPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Inventario</h2>
           <p className="text-sm text-slate-500">
-            Gestión de productos, stock y movimientos
+            Gestión de productos (venta y repuestos), stock y movimientos
           </p>
         </div>
         <Button onClick={openCreateProducto}>Nuevo Producto</Button>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs (requieren plan con inventario) */}
+      {!inventarioHabilitado && (
+        <Card>
+          <p className="text-sm text-slate-600">
+            El control de stock, las alertas y los movimientos requieren el plan con ventas e
+            inventario. Con tu plan actual podés gestionar repuestos.
+          </p>
+        </Card>
+      )}
+      {inventarioHabilitado && (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon="package"
-          label="Total productos"
+          label="Productos vendibles"
           value={kpisPending ? '—' : (kpis?.totalProductos ?? 0)}
         />
         <MetricCard
@@ -304,9 +367,10 @@ export function InventarioPage() {
           value={kpisPending ? '—' : formatCurrency(kpis?.valorTotalStock ?? 0)}
         />
       </div>
+      )}
 
       {/* Alert banner */}
-      <InventoryAlertBanner productos={productos ?? []} />
+      {inventarioHabilitado && <InventoryAlertBanner productos={productos ?? []} />}
 
       {/* Error state */}
       {errorMessage && (
@@ -330,6 +394,28 @@ export function InventarioPage() {
               onChange={setBusqueda}
             />
           </div>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Filtrar por uso"
+          >
+            {USO_FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value || 'todos'}
+                type="button"
+                aria-pressed={usoFiltro === opt.value}
+                onClick={() => setUsoFiltro(opt.value)}
+                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                  usoFiltro === opt.value
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {inventarioHabilitado && (
           <div className="w-full sm:w-auto">
             <Select
               options={ESTADO_FILTER_OPTIONS}
@@ -338,6 +424,7 @@ export function InventarioPage() {
               className="w-full sm:w-56"
             />
           </div>
+          )}
         </div>
       )}
 
@@ -364,23 +451,32 @@ export function InventarioPage() {
                       {row.codigo}
                     </p>
                   </div>
-                  <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
-                    {ESTADO_STOCK_LABELS[row.estado]}
-                  </Badge>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge variant="info">{USO_LABELS[row.uso]}</Badge>
+                    {row.controlaStock && (
+                      <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
+                        {ESTADO_STOCK_LABELS[row.estado]}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-sm">
-                  <span
-                    className={
-                      row.stock === 0
-                        ? 'font-semibold text-red-600'
-                        : 'font-medium text-slate-700'
-                    }
-                  >
-                    Stock: {row.stock}{' '}
-                    <span className="font-normal text-slate-400">
-                      (mín. {row.stockMinimo})
+                  {row.controlaStock ? (
+                    <span
+                      className={
+                        row.stock === 0
+                          ? 'font-semibold text-red-600'
+                          : 'font-medium text-slate-700'
+                      }
+                    >
+                      Stock: {row.stock}{' '}
+                      <span className="font-normal text-slate-400">
+                        (mín. {row.stockMinimo})
+                      </span>
                     </span>
-                  </span>
+                  ) : (
+                    <span className="text-slate-400">Sin control de stock</span>
+                  )}
                   <span className="shrink-0 text-right text-slate-600">
                     <span className="block text-xs text-slate-400">
                       Costo: {formatCurrency(row.costoUnitario)}
@@ -402,6 +498,7 @@ export function InventarioPage() {
                     >
                       Editar
                     </Button>
+                    {inventarioHabilitado && producto.controlaStock !== false && (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -412,6 +509,7 @@ export function InventarioPage() {
                     >
                       Movimiento
                     </Button>
+                    )}
                     <Button
                       variant="danger"
                       size="sm"
@@ -435,6 +533,7 @@ export function InventarioPage() {
         isOpen={productoModalOpen}
         onClose={closeProductoModal}
         producto={productoEditando}
+        inventarioHabilitado={inventarioHabilitado}
         onSubmit={handleSubmitProducto}
         loading={
           crearProducto.isPending || actualizarProducto.isPending

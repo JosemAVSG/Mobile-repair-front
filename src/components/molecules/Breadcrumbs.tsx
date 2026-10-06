@@ -63,7 +63,7 @@ function useCrumbs(
   } else if (segments[0] === 'reparaciones' || segments[0] === 'ordenes') {
     crumbs.push({ label: 'Reparaciones', to: '/reparaciones' });
     if (id) crumbs.push({ label: `Reparación #${id}` });
-  } else if (segments[0] === 'repuestos') crumbs.push({ label: 'Repuestos' });
+  } else if (segments[0] === 'inventario') crumbs.push({ label: 'Inventario' });
   else if (segments[0] === 'tecnicos') crumbs.push({ label: 'Técnicos' });
   else if (segments[0] === 'configuracion') crumbs.push({ label: 'Configuración' });
 
