@@ -84,7 +84,7 @@ export function RepuestosSelector({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <div className={`mt-2 ${maxHeightClass} overflow-y-auto rounded-lg border border-slate-200 p-2`}>
+      <div className={`mt-2 ${maxHeightClass} overflow-y-auto overflow-x-hidden rounded-lg border border-slate-200 p-2`}>
         {loading ? (
           <div className="flex items-center justify-center py-4">
             <Spinner size="sm" />
@@ -99,8 +99,8 @@ export function RepuestosSelector({
               const inputId = `${idPrefix}-${repuesto.id}`;
               const cantidad = seleccion[repuesto.id];
               return (
-                <div key={repuesto.id} className="flex items-center gap-2 rounded-lg p-1 hover:bg-slate-50">
-                  <label htmlFor={inputId} className="flex flex-1 cursor-pointer items-center gap-2">
+                <div key={repuesto.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg p-1 hover:bg-slate-50">
+                  <label htmlFor={inputId} className="flex min-w-0 flex-1 basis-48 cursor-pointer items-center gap-2">
                     <input
                       id={inputId}
                       type="checkbox"
@@ -108,8 +108,8 @@ export function RepuestosSelector({
                       checked={cantidad != null}
                       onChange={() => onToggle(repuesto.id)}
                     />
-                    <span className="flex-1 text-sm text-slate-700">{repuesto.nombre}</span>
-                    <span className="text-xs text-slate-500">
+                    <span className="min-w-0 flex-1 break-words text-sm text-slate-700">{repuesto.nombre}</span>
+                    <span className="shrink-0 text-xs text-slate-500">
                       {formatCurrency(precioCobradoRepuesto(repuesto))}
                       {repuesto.stock != null && ` · Stock: ${repuesto.stock}`}
                     </span>
@@ -120,7 +120,7 @@ export function RepuestosSelector({
                       min={1}
                       step={1}
                       aria-label={`Cantidad de ${repuesto.nombre}`}
-                      className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                      className="w-16 shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-sm"
                       value={cantidad}
                       onChange={(e) => onCantidadChange(repuesto.id, Number(e.target.value))}
                     />

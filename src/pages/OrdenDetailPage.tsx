@@ -1685,8 +1685,8 @@ export function OrdenDetailPage() {
           </p>
         )}
         {canEditOrden && reparacionRepuestos && !repuestosBloqueadosOrden && (
-          <div className="mt-3 flex items-end gap-2">
-            <div className="flex-1">
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 basis-48">
               <Select
                 label="Agregar repuesto"
                 options={repuestoAgregarOptions}
@@ -1695,7 +1695,7 @@ export function OrdenDetailPage() {
                 onChange={(e) => setRepuestoAgregarSel(e.target.value)}
               />
             </div>
-            <div className="w-20">
+            <div className="w-20 shrink-0">
               <Input
                 label="Cantidad"
                 id="agregar-repuesto-cantidad"

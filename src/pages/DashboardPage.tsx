@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   PieChart,
   Pie,
@@ -15,17 +15,23 @@ import { StatusBadge, estadoConfig } from '../components/molecules/StatusBadge';
 import {
   ACTIVE_STATES,
   REPAIR_STATES,
-  REVENUE_STATES,
   TERMINAL_STATES,
 } from '../utils/estados';
 import { type Column } from '../components/organisms/DataTable';
 import { EntityList } from '../components/organisms/EntityList';
-import { formatDate, formatCurrency } from '../utils/formatters';
+import {
+  cantidadConSigno,
+  etiquetaMovimiento,
+  formatDate,
+  formatCurrency,
+} from '../utils/formatters';
 import { formatNumeroOrden } from '../utils/ordenes';
 import type { OrdenTrabajo, Cliente, EstadoOrden } from '../types';
 import { useOrdenes, useClientes } from '../hooks/useQueries';
 import { useConfig } from '../context/ConfigContext';
 import { useAuth } from '../hooks/useAuth';
+import { useDashboardResumen } from '../hooks/useDashboard';
+import { useMovimientosInventario, useProductosInventario } from '../hooks/useInventory';
 
 // ──────────────────────────────────────────────
 // Types
@@ -83,6 +89,21 @@ function inicioPeriodo(p: Periodo): number | null {
   }
 }
 
+/** yyyy-MM-dd en hora local (no UTC, para que "hoy" sea el día del taller). */
+function aFechaLocal(ms: number): string {
+  const d = new Date(ms);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** Rango desde/hasta (inclusive) para el backend; `todo` = sin parámetros. */
+function rangoPeriodo(p: Periodo): { desde?: string; hasta?: string } {
+  const inicio = inicioPeriodo(p);
+  if (inicio == null) return {};
+  return { desde: aFechaLocal(inicio), hasta: aFechaLocal(Date.now()) };
+}
+
 // ──────────────────────────────────────────────
 // Dashboard Page
 // ──────────────────────────────────────────────
@@ -95,6 +116,22 @@ export function DashboardPage() {
 
   const ordenesReq = useOrdenes();
   const clientesReq = useClientes();
+
+  // Bloques ADMIN: no bloquean el skeleton y jamás se consultan para otros roles (403).
+  // `hoy` se refresca solo cuando cambia el día, para que `hasta` no quede viejo.
+  const [hoy, setHoy] = useState(() => aFechaLocal(Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const actual = aFechaLocal(Date.now());
+      setHoy((prev) => (prev === actual ? prev : actual));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rango = useMemo(() => rangoPeriodo(periodo), [periodo, hoy]);
+  const resumenReq = useDashboardResumen(rango.desde, rango.hasta, isAdmin);
+  const productosReq = useProductosInventario(false, isAdmin);
+  const movimientosReq = useMovimientosInventario({ limit: 10 }, isAdmin);
 
   // Wait for all requests
   const loading =
@@ -133,12 +170,6 @@ export function DashboardPage() {
         (o) => REPAIR_STATES.has(o.estado),
       ).length;
       const totalClientes = clientes.length;
-      const ingresos = ordenesPeriodo
-        .filter(
-          (o) => REVENUE_STATES.has(o.estado) && o.precioTotal != null,
-        )
-        .reduce((sum, o) => sum + (o.precioTotal ?? 0), 0);
-
       // Entregados (terminal) en el período
       const entregados = ordenesPeriodo.filter((o) =>
         TERMINAL_STATES.has(o.estado),
@@ -198,13 +229,26 @@ export function DashboardPage() {
         .sort((a, b) => b.count - a.count);
 
       return {
-        metricas: { activas, enReparacion, totalClientes, ingresos, entregados },
+        metricas: { activas, enReparacion, totalClientes, entregados },
         rows,
         proximasEntregas,
         clienteMap,
         chartData,
       };
     }, [ordenesReq.data, clientesReq.data, periodo]);
+
+  const porReponer = useMemo(
+    () =>
+      (productosReq.data ?? [])
+        .filter((p) => !p.archivado && (p.estadoStock === 'BAJO' || p.estadoStock === 'SIN_STOCK'))
+        .slice(0, 5),
+    [productosReq.data],
+  );
+  const nombresProducto = useMemo(
+    () => new Map((productosReq.data ?? []).map((p) => [p.id, p.nombre])),
+    [productosReq.data],
+  );
+  const movimientosRecientes = (movimientosReq.data ?? []).slice(0, 10);
 
   // ───── Error ─────
 
@@ -365,7 +409,9 @@ export function DashboardPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div
+        className={`grid grid-cols-2 gap-4 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+      >
         <MetricCard
           icon="clipboard"
           label="Reparaciones Activas"
@@ -379,26 +425,147 @@ export function DashboardPage() {
         <MetricCard
           icon="check-circle"
           label={esTodo ? 'Entregados' : `Entregados (${periodoLabel})`}
-          value={metricas.entregados}
+          value={
+            isAdmin && resumenReq.data != null
+              ? resumenReq.data.ordenes
+              : metricas.entregados
+          }
         />
         <MetricCard
           icon="users"
           label="Clientes"
           value={metricas.totalClientes}
         />
-        {/* En mobile ocupa las dos columnas; en desktop vuelve a 1/5 */}
-        <div className="col-span-2 lg:col-span-1">
-          <MetricCard
-            icon="dollar-sign"
-            label={esTodo ? 'Ingresos Totales' : `Ingresos (${periodoLabel})`}
-            value={
-              metricas.ingresos > 0
-                ? formatCurrency(metricas.ingresos)
-                : '$0'
-            }
-          />
-        </div>
+        {isAdmin && (
+          /* En mobile ocupa las dos columnas; en desktop vuelve a 1/5 */
+          <div className="col-span-2 lg:col-span-1">
+            <MetricCard
+              icon="dollar-sign"
+              label={
+                esTodo
+                  ? 'Ingresos (por fecha de entrega)'
+                  : `Ingresos por entrega (${periodoLabel})`
+              }
+              value={
+                resumenReq.data == null
+                  ? '—'
+                  : formatCurrency(resumenReq.data.ingresos)
+              }
+            />
+          </div>
+        )}
       </div>
+
+      {/* Repuestos y stock (solo ADMIN) */}
+      {isAdmin && (
+        <>
+          {resumenReq.error && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700"
+            >
+              <span>No se pudieron cargar los ingresos y métricas.</span>
+              <Button variant="secondary" size="sm" onClick={() => void resumenReq.refetch()}>
+                Reintentar
+              </Button>
+            </div>
+          )}
+          {resumenReq.data?.metricasAvanzadas === false ? (
+            <Card>
+              <p className="text-sm text-slate-600">
+                Métricas avanzadas incluidas en el plan Pro
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <MetricCard
+                icon="package"
+                label="Costo de repuestos"
+                value={
+                  resumenReq.data?.costoRepuestos == null
+                    ? '—'
+                    : formatCurrency(resumenReq.data.costoRepuestos)
+                }
+              />
+              <MetricCard
+                icon="dollar-sign"
+                label="Ganancia"
+                value={
+                  resumenReq.data?.ganancia == null
+                    ? '—'
+                    : formatCurrency(resumenReq.data.ganancia)
+                }
+              />
+              <Card title="Repuestos más usados">
+                {(resumenReq.data?.repuestosMasUsados ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-500">Sin repuestos usados en el período</p>
+                ) : (
+                  <ol className="space-y-1" aria-label="Repuestos más usados">
+                    {(resumenReq.data?.repuestosMasUsados ?? []).slice(0, 5).map((r) => (
+                      <li key={r.productoId} className="flex justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate text-slate-700">{r.nombre}</span>
+                        <span className="shrink-0 font-medium text-slate-800">{r.unidades} u.</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </Card>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card title="Repuestos por reponer" subtitle="Bajo stock o sin stock">
+              {porReponer.length === 0 ? (
+                <p className="text-sm text-slate-500">Todo en orden</p>
+              ) : (
+                <ul className="space-y-1" aria-label="Repuestos por reponer">
+                  {porReponer.map((p) => (
+                    <li key={p.id} className="flex justify-between gap-2 text-sm">
+                      <span className="min-w-0 truncate text-slate-700">{p.nombre}</span>
+                      <span
+                        className={`shrink-0 font-medium ${p.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}
+                      >
+                        {p.stock} / mín. {p.stockMinimo}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3">
+                <Link to="/inventario" className="text-sm font-medium text-blue-600 hover:underline">
+                  Ir a Inventario
+                </Link>
+              </div>
+            </Card>
+
+            <Card title="Movimientos recientes" subtitle="Últimos 10 movimientos de stock">
+              {movimientosRecientes.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin movimientos</p>
+              ) : (
+                <ul className="space-y-1" aria-label="Movimientos recientes">
+                  {movimientosRecientes.map((m) => {
+                    const cant = cantidadConSigno(m);
+                    return (
+                      <li key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate text-slate-700">
+                          {etiquetaMovimiento(m)} ·{' '}
+                          {m.productoNombre ?? nombresProducto.get(m.productoId) ?? `#${m.productoId}`}
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className={cant < 0 ? 'font-semibold text-red-600' : 'font-semibold text-green-700'}>
+                            {cant > 0 ? `+${cant}` : cant}
+                          </span>
+                          <span className="ml-2 text-xs text-slate-500">{formatDate(m.createdAt)}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Próximas Entregas + Acciones Rápidas (2-column grid) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -468,7 +635,9 @@ export function DashboardPage() {
         <Card
           title="Órdenes por Estado"
           subtitle={
-            esTodo ? 'Distribución actual' : `Distribución (${periodoLabel})`
+            esTodo
+              ? 'Distribución actual'
+              : `Distribución (${periodoLabel}, por fecha de ingreso)`
           }
         >
           {chartData.length === 0 ? (

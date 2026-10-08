@@ -498,6 +498,8 @@ export interface ProductoInventario {
 export interface MovimientoInventario {
   id: number;
   productoId: number;
+  /** Nombre del producto (también si está archivado). */
+  productoNombre?: string | null;
   tipo: TipoMovimiento;
   cantidad: number;
   stockResultante: number;
@@ -562,12 +564,30 @@ export interface CompraRequest {
 }
 
 export interface MovimientosFiltro {
+  /** 1..100; el backend devuelve los más recientes primero. */
+  limit?: number;
   productoId?: number;
   tipo?: TipoMovimiento;
   /** yyyy-MM-dd */
   desde?: string;
   /** yyyy-MM-dd */
   hasta?: string;
+}
+
+export interface RepuestoMasUsado {
+  productoId: number;
+  nombre: string;
+  unidades: number;
+}
+
+/** GET /api/dashboard/resumen. Los tres campos nullable vienen null si `metricasAvanzadas` es false. */
+export interface DashboardResumen {
+  ingresos: number;
+  ordenes: number;
+  metricasAvanzadas: boolean;
+  costoRepuestos: number | null;
+  ganancia: number | null;
+  repuestosMasUsados: RepuestoMasUsado[] | null;
 }
 
 export interface InventoryKpis {

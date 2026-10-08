@@ -33,11 +33,11 @@ export function useProductosInventario(archivados = false, enabled = true) {
   });
 }
 
-export function useMovimientosInventario(filtro: MovimientosFiltro = {}) {
+export function useMovimientosInventario(filtro: MovimientosFiltro = {}, enabled = true) {
   return useQuery({
     queryKey: [...QUERY_KEY, 'movimientos', filtro],
     queryFn: () => getMovimientosInventario(filtro),
-    enabled: filtro.productoId == null || Number.isFinite(filtro.productoId),
+    enabled: enabled && (filtro.productoId == null || Number.isFinite(filtro.productoId)),
   });
 }
 

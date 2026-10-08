@@ -8,6 +8,7 @@ import {
   CategoriaMarca,
   type RolUsuario,
   type EstadoStock,
+  type MovimientoInventario,
   type TipoMovimiento,
 } from '../types';
 
@@ -107,6 +108,30 @@ export const ESTADO_STOCK_VARIANTS: Record<EstadoStock, 'success' | 'warning' | 
   BAJO: 'warning',
   SIN_STOCK: 'danger',
 };
+
+/**
+ * ¿El movimiento resta stock? El sentido manda también en USO_REPARACION (SALIDA = uso,
+ * ENTRADA = reposición al quitar el repuesto o cancelar). Sin sentido (filas legadas):
+ * USO_REPARACION resta, COMPRA y AJUSTE suman.
+ */
+export function movimientoResta(m: Pick<MovimientoInventario, 'tipo' | 'sentido'>): boolean {
+  if (m.sentido) return m.sentido === 'SALIDA';
+  return m.tipo === 'USO_REPARACION';
+}
+
+/** Cantidad con signo según el sentido del movimiento. */
+export function cantidadConSigno(
+  m: Pick<MovimientoInventario, 'tipo' | 'sentido' | 'cantidad'>,
+): number {
+  const abs = Math.abs(m.cantidad);
+  return movimientoResta(m) ? -abs : abs;
+}
+
+/** Etiqueta del movimiento: una USO_REPARACION de ENTRADA es una reposición. */
+export function etiquetaMovimiento(m: Pick<MovimientoInventario, 'tipo' | 'sentido'>): string {
+  if (m.tipo === 'USO_REPARACION' && m.sentido === 'ENTRADA') return 'Reposición de reparación';
+  return TIPO_MOVIMIENTO_LABELS[m.tipo];
+}
 
 export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
   COMPRA: 'Compra',

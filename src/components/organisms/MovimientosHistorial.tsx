@@ -9,6 +9,8 @@ import { DataTable, type Column } from './DataTable';
 import { useMovimientosInventario } from '../../hooks/useInventory';
 import {
   TIPO_MOVIMIENTO_LABELS,
+  cantidadConSigno,
+  etiquetaMovimiento,
   formatCurrency,
   formatDateTime,
 } from '../../utils/formatters';
@@ -36,6 +38,7 @@ interface MovimientoRow {
   fecha: string;
   producto: string;
   tipo: TipoMovimiento;
+  etiqueta: string;
   cantidad: number;
   costo: number | null;
   usuario: string;
@@ -43,10 +46,10 @@ interface MovimientoRow {
   notas: string;
 }
 
-/** Cantidad con signo: USO_REPARACION y AJUSTE/SALIDA restan, el resto suma. */
-function cantidadConSigno(m: MovimientoInventario): number {
-  const resta = m.tipo === 'USO_REPARACION' || (m.tipo === 'AJUSTE' && m.sentido === 'SALIDA');
-  return resta ? -Math.abs(m.cantidad) : Math.abs(m.cantidad);
+/** productoNombre del backend (sirve con archivados) > lista de productos > #id. */
+function nombreProducto(m: MovimientoInventario, lookup: Map<number, string>): string {
+  if (m.productoNombre) return m.productoNombre;
+  return lookup.get(m.productoId) ?? `#${m.productoId}`;
 }
 
 export function MovimientosHistorial({ productos, filtro, onFiltroChange }: MovimientosHistorialProps) {
@@ -56,8 +59,9 @@ export function MovimientosHistorial({ productos, filtro, onFiltroChange }: Movi
   const rows: MovimientoRow[] = (data ?? []).map((m) => ({
     id: m.id,
     fecha: m.createdAt,
-    producto: nombres.get(m.productoId) ?? `#${m.productoId}`,
+    producto: nombreProducto(m, nombres),
     tipo: m.tipo,
+    etiqueta: etiquetaMovimiento(m),
     cantidad: cantidadConSigno(m),
     costo: m.costoUnitario ?? null,
     usuario: m.usuario ?? '—',
@@ -72,7 +76,7 @@ export function MovimientosHistorial({ productos, filtro, onFiltroChange }: Movi
       key: 'tipo',
       label: 'Tipo',
       sortable: true,
-      render: (r) => <Badge variant={TIPO_VARIANT[r.tipo]}>{TIPO_MOVIMIENTO_LABELS[r.tipo]}</Badge>,
+      render: (r) => <Badge variant={TIPO_VARIANT[r.tipo]}>{r.etiqueta}</Badge>,
     },
     {
       key: 'cantidad',

@@ -46,4 +46,22 @@ describe('RepuestosSelector', () => {
     fireEvent.change(screen.getByLabelText('Cantidad de Pantalla'), { target: { value: '5' } });
     expect(onCantidadChange).toHaveBeenCalledWith(1, 5);
   });
+
+  it('las filas hacen wrap y los hijos pueden encogerse (sin scroll horizontal)', () => {
+    const { container } = render(
+      <RepuestosSelector
+        repuestos={repuestos}
+        seleccion={{ 1: 2 }}
+        onToggle={vi.fn()}
+        onCantidadChange={vi.fn()}
+        idPrefix="w"
+      />,
+    );
+    const scroller = container.querySelector('.overflow-y-auto') as HTMLElement;
+    expect(scroller.className).toContain('overflow-x-hidden');
+    const fila = screen.getByLabelText('Cantidad de Pantalla').parentElement as HTMLElement;
+    expect(fila.className).toContain('flex-wrap');
+    expect(fila.querySelector('label')?.className).toContain('min-w-0');
+    expect(screen.getByLabelText('Cantidad de Pantalla').className).toContain('shrink-0');
+  });
 });

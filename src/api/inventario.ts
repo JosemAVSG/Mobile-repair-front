@@ -50,6 +50,7 @@ export const getMovimientosInventario = async (
   if (filtro.tipo) params.set('tipo', filtro.tipo);
   if (filtro.desde) params.set('desde', filtro.desde);
   if (filtro.hasta) params.set('hasta', filtro.hasta);
+  if (filtro.limit != null) params.set('limit', String(filtro.limit));
   const qs = params.toString();
   return ApiClient.get<MovimientoInventario[]>(
     qs ? `/api/inventario/movimientos?${qs}` : '/api/inventario/movimientos',
