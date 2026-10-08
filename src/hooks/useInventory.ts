@@ -4,6 +4,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  archivarProductoInventario,
+  restaurarProductoInventario,
+  createCompraInventario,
   createMovimientoInventario,
   createProductoInventario,
   deleteProductoInventario,
@@ -12,26 +15,29 @@ import {
   getProductosInventario,
   updateProductoInventario,
 } from '../api/inventario';
-import type { MovimientoRequest, ProductoInventarioRequest } from '../types';
+import type {
+  CompraRequest,
+  MovimientoRequest,
+  MovimientosFiltro,
+  ProductoInventarioRequest,
+} from '../types';
 
 const QUERY_KEY = ['inventario'] as const;
 
-/**
- * Lista el inventario. El filtro por `uso` se aplica del lado del cliente: así funciona igual con
- * el backend nuevo (devuelve todo) y con el viejo (oculta REPUESTO), sin refetch al cambiar chip.
- */
-export function useProductosInventario() {
+/** Lista todos los productos del inventario (todo producto es un repuesto y controla stock). */
+export function useProductosInventario(archivados = false, enabled = true) {
   return useQuery({
-    queryKey: [...QUERY_KEY, 'productos'],
-    queryFn: () => getProductosInventario(),
+    enabled,
+    queryKey: [...QUERY_KEY, 'productos', archivados ? 'archivados' : 'activos'],
+    queryFn: () => getProductosInventario(archivados),
   });
 }
 
-export function useMovimientosInventario(productoId?: number) {
+export function useMovimientosInventario(filtro: MovimientosFiltro = {}) {
   return useQuery({
-    queryKey: [...QUERY_KEY, 'movimientos', productoId ?? 'todos'],
-    queryFn: () => getMovimientosInventario(productoId),
-    enabled: productoId == null || Number.isFinite(productoId),
+    queryKey: [...QUERY_KEY, 'movimientos', filtro],
+    queryFn: () => getMovimientosInventario(filtro),
+    enabled: filtro.productoId == null || Number.isFinite(filtro.productoId),
   });
 }
 
@@ -86,21 +92,42 @@ export function useEliminarProductoInventario() {
   });
 }
 
+export function useArchivarProductoInventario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => archivarProductoInventario(id),
+    onSuccess: () => invalidateStock(queryClient),
+  });
+}
+
+export function useRestaurarProductoInventario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => restaurarProductoInventario(id),
+    onSuccess: () => invalidateStock(queryClient),
+  });
+}
+
+function invalidateStock(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
+  queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'movimientos'] });
+  queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
+}
+
 export function useCrearMovimientoInventario() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (body: MovimientoRequest) => createMovimientoInventario(body),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEY, 'movimientos'],
-      });
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
-      // Invalida también el detalle del producto afectado si existe.
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEY, 'movimientos', variables.productoId],
-      });
-    },
+    onSuccess: () => invalidateStock(queryClient),
+  });
+}
+
+export function useCrearCompraInventario() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: CompraRequest) => createCompraInventario(body),
+    onSuccess: () => invalidateStock(queryClient),
   });
 }

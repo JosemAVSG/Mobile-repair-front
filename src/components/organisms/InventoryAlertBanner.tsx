@@ -30,9 +30,7 @@ export function InventoryAlertBanner({ productos }: InventoryAlertBannerProps) {
   }, []);
 
   const alertas = productos.filter(
-    (p) =>
-      p.controlaStock !== false &&
-      (p.estadoStock === 'BAJO' || p.estadoStock === 'SIN_STOCK'),
+    (p) => p.estadoStock === 'BAJO' || p.estadoStock === 'SIN_STOCK',
   );
 
   if (alertas.length === 0 || dismissed) return null;

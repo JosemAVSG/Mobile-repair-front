@@ -22,7 +22,7 @@ vi.mock('../hooks/useQueries', () => ({
         descripcion: null,
         codigo: 'BAT-1',
         precioCosto: 10,
-        precioVenta: null,
+        precioVenta: 25,
         marcaId: 1,
         modeloId: 10,
         tipoReparacion: 'BATERIA',
@@ -91,6 +91,23 @@ describe('RepuestosPage modelos compatibles', () => {
     });
     expect(body.modeloIds).toEqual([11]);
     expect(body.modeloId).toBe(11);
+  });
+
+  it('sends limpiarPrecioVenta (and no precioVenta) when the price is emptied on edit', async () => {
+    const [, body] = await edit(() => {
+      const price = Array.from(screen.getByRole('dialog').querySelectorAll('input')).find(
+        (i) => (i as HTMLInputElement).value === '25',
+      ) as HTMLElement;
+      fireEvent.change(price, { target: { value: '' } });
+    });
+    expect(body.limpiarPrecioVenta).toBe(true);
+    expect('precioVenta' in body).toBe(false);
+  });
+
+  it('keeps the price untouched (sends the number) when not emptied', async () => {
+    const [, body] = await edit();
+    expect(body.precioVenta).toBe(25);
+    expect('limpiarPrecioVenta' in body).toBe(false);
   });
 
   it('sends the chosen models on create and never sends uso', async () => {

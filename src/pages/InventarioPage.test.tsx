@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { InventarioPage } from './InventarioPage';
-
-const state = vi.hoisted(() => ({ habilitado: true }));
+import { ApiError } from '../api/ApiClient';
 
 const base = {
   descripcion: null,
@@ -11,95 +11,141 @@ const base = {
   estadoStock: 'OK',
   costoUnitario: 10,
   precioVenta: 20,
-  controlaStock: true,
   createdAt: '',
 };
 
-vi.mock('../hooks/useInventarioHabilitado', () => ({
-  useInventarioHabilitado: () => state.habilitado,
-}));
 vi.mock('../context/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+const dialogProps = vi.hoisted(() => ({ last: null as null | { productos: { id: number }[] } }));
 vi.mock('../components/organisms/MovimientoInventarioModal', () => ({
-  MovimientoInventarioModal: () => null,
+  MovimientoInventarioModal: (props: { productos: { id: number }[] }) => {
+    dialogProps.last = props;
+    return null;
+  },
 }));
 vi.mock('../hooks/useQueries', () => ({
   useMarcas: () => ({ data: [] }),
   useModelos: () => ({ data: [] }),
 }));
 const mutation = { mutateAsync: vi.fn(), isPending: false };
+const archivar = { mutateAsync: vi.fn(), isPending: false };
+const restaurar = { mutateAsync: vi.fn(), isPending: false };
+const eliminar = { mutateAsync: vi.fn(), isPending: false };
+const movimientosSpy = vi.hoisted(() => vi.fn());
 vi.mock('../hooks/useInventory', () => ({
-  useProductosInventario: () => ({
-    data: [
-      { ...base, id: 1, codigo: 'V-1', nombre: 'Funda', uso: 'VENTA' },
-      { ...base, id: 2, codigo: 'R-1', nombre: 'Pantalla', uso: 'REPUESTO' },
-      { ...base, id: 3, codigo: 'A-1', nombre: 'Cable', uso: 'AMBOS' },
-      {
-        ...base,
-        id: 4,
-        codigo: 'N-1',
-        nombre: 'Sinctrl',
-        uso: 'REPUESTO',
-        controlaStock: false,
-        stock: 0,
-        estadoStock: 'SIN_STOCK',
-      },
-    ],
+  useProductosInventario: (archivados = false) => ({
+    data: archivados
+      ? [{ ...base, id: 9, codigo: 'X-9', nombre: 'Viejo', archivado: true }]
+      : [
+          { ...base, id: 1, codigo: 'R-1', nombre: 'Pantalla' },
+          { ...base, id: 2, codigo: 'R-2', nombre: 'Batería', stock: 0, estadoStock: 'SIN_STOCK' },
+        ],
     isPending: false,
     isFetching: false,
     error: null,
     refetch: vi.fn(),
   }),
   useInventoryKpis: () => ({ data: undefined, isPending: false, error: null }),
+  useMovimientosInventario: (f: unknown) => {
+    movimientosSpy(f);
+    return { data: [], isPending: false, error: null, refetch: vi.fn() };
+  },
   useCrearProductoInventario: () => mutation,
   useActualizarProductoInventario: () => mutation,
-  useEliminarProductoInventario: () => mutation,
+  useEliminarProductoInventario: () => eliminar,
+  useArchivarProductoInventario: () => archivar,
+  useRestaurarProductoInventario: () => restaurar,
   useCrearMovimientoInventario: () => mutation,
+  useCrearCompraInventario: () => mutation,
 }));
+
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <InventarioPage />
+    </MemoryRouter>,
+  );
 
 describe('InventarioPage', () => {
   beforeEach(() => {
-    state.habilitado = true;
+    movimientosSpy.mockClear();
+    archivar.mutateAsync.mockReset().mockResolvedValue({});
+    restaurar.mutateAsync.mockReset().mockResolvedValue({});
+    eliminar.mutateAsync.mockReset().mockResolvedValue({});
     localStorage.setItem('vista-inventario', 'cards');
   });
 
-  const nombres = () => ['Funda', 'Pantalla', 'Cable', 'Sinctrl'].filter((n) => screen.queryAllByText(n).length);
-
-  it('lists every uso and filters with the chips', () => {
-    render(<InventarioPage />);
-    expect(nombres()).toEqual(['Funda', 'Pantalla', 'Cable', 'Sinctrl']);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Repuesto' }));
-    expect(nombres()).toEqual(['Pantalla', 'Sinctrl']);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Venta' }));
-    expect(nombres()).toEqual(['Funda']);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ambos' }));
-    expect(nombres()).toEqual(['Cable']);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Todos' }));
-    expect(nombres()).toHaveLength(4);
+  it('lista todos los productos sin chips de uso', () => {
+    renderPage();
+    expect(screen.getAllByText('Pantalla').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Batería').length).toBeGreaterThan(0);
+    for (const name of ['Venta', 'Repuesto', 'Ambos']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
   });
 
-  it('shows KPIs with the inventory plan', () => {
-    render(<InventarioPage />);
-    expect(screen.getByText('Productos vendibles')).toBeInTheDocument();
-  });
-
-  it('hides KPIs and shows an upgrade hint without the plan', () => {
-    state.habilitado = false;
-    render(<InventarioPage />);
+  it('muestra los KPIs como Total de productos, sin gate de plan', () => {
+    renderPage();
+    expect(screen.getByText('Total de productos')).toBeInTheDocument();
     expect(screen.queryByText('Productos vendibles')).toBeNull();
-    expect(screen.getByText(/requieren el plan con ventas e inventario/)).toBeInTheDocument();
+    expect(screen.queryByText(/requieren el plan/)).toBeNull();
   });
 
-  it('H2: el filtro Sin stock y el banner ignoran productos sin control de stock', () => {
-    render(<InventarioPage />);
-    // El banner no alerta por el producto sin control de stock.
-    expect(screen.queryByText('Alertas de stock')).toBeNull();
+  it('el filtro Sin stock deja solo los productos sin stock', () => {
+    renderPage();
+    fireEvent.change(screen.getByDisplayValue('Seleccionar...'), { target: { value: 'SIN_STOCK' } });
+    expect(screen.queryAllByText('Pantalla')).toHaveLength(0);
+    expect(screen.getAllByText('Batería').length).toBeGreaterThan(0);
+  });
 
-    const select = screen.getByDisplayValue('Seleccionar...');
-    fireEvent.change(select, { target: { value: 'SIN_STOCK' } });
-    expect(nombres()).toEqual([]);
+  it('la acción Historial de un producto abre la pestaña Movimientos filtrada', () => {
+    renderPage();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Historial' })[1]);
+    expect(screen.getByRole('tab', { name: 'Movimientos', selected: true })).toBeInTheDocument();
+    expect(movimientosSpy).toHaveBeenLastCalledWith({ productoId: 2 });
+  });
+
+  it('las pestañas alternan entre Productos y Movimientos', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Movimientos' }));
+    expect(movimientosSpy).toHaveBeenLastCalledWith({});
+    fireEvent.click(screen.getByRole('tab', { name: 'Productos' }));
+    expect(screen.getAllByText('Pantalla').length).toBeGreaterThan(0);
+  });
+
+  it('Archivar llama al endpoint desde el icono de la fila', async () => {
+    renderPage();
+    expect(screen.getAllByRole('button', { name: 'Eliminar' }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Archivar' })[0]);
+    await waitFor(() => expect(archivar.mutateAsync).toHaveBeenCalledWith(1));
+  });
+
+  it('Ver archivados lista los archivados, atenuados, con Restaurar y sin Movimiento', async () => {
+    renderPage();
+    fireEvent.click(screen.getByLabelText('Ver archivados'));
+    expect(screen.getAllByText('Viejo').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Pantalla')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Movimiento' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Archivar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Eliminar' })).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Restaurar' })[0]);
+    await waitFor(() => expect(restaurar.mutateAsync).toHaveBeenCalledWith(9));
+  });
+
+  it('el diálogo de movimientos nunca recibe productos archivados', () => {
+    renderPage();
+    fireEvent.click(screen.getByLabelText('Ver archivados'));
+    expect(dialogProps.last?.productos.map((p) => p.id)).toEqual([1, 2]);
+  });
+
+  it('Eliminar con 409 muestra el mensaje del backend y ofrece archivar', async () => {
+    const msg = 'Este producto tiene historial; archívalo para ocultarlo';
+    eliminar.mutateAsync.mockRejectedValue(new ApiError(msg, 409, { meta: { message: msg } }));
+    renderPage();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[0]);
+    // El confirm del diálogo se renderiza al final del DOM.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' }).slice(-1)[0]);
+    expect(await screen.findByText(new RegExp(msg))).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Archivar' }).slice(-1)[0]);
+    await waitFor(() => expect(archivar.mutateAsync).toHaveBeenCalledWith(1));
   });
 });

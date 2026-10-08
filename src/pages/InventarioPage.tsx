@@ -12,6 +12,7 @@ import { EntityList } from '../components/organisms/EntityList';
 import { InventoryAlertBanner } from '../components/organisms/InventoryAlertBanner';
 import { ProductoInventarioModal } from '../components/organisms/ProductoInventarioModal';
 import { MovimientoInventarioModal } from '../components/organisms/MovimientoInventarioModal';
+import { MovimientosHistorial } from '../components/organisms/MovimientosHistorial';
 import {
   useProductosInventario,
   useInventoryKpis,
@@ -19,8 +20,10 @@ import {
   useActualizarProductoInventario,
   useEliminarProductoInventario,
   useCrearMovimientoInventario,
+  useCrearCompraInventario,
+  useArchivarProductoInventario,
+  useRestaurarProductoInventario,
 } from '../hooks/useInventory';
-import { useInventarioHabilitado } from '../hooks/useInventarioHabilitado';
 import { useToast } from '../context/ToastContext';
 import { ApiError } from '../api/ApiClient';
 import {
@@ -33,7 +36,8 @@ import type {
   ProductoInventario,
   ProductoInventarioRequest,
   MovimientoRequest,
-  UsoProducto,
+  CompraRequest,
+  MovimientosFiltro,
 } from '../types';
 
 // ──────────────────────────────────────────────
@@ -47,22 +51,9 @@ const ESTADO_FILTER_OPTIONS = [
   { value: 'SIN_STOCK', label: 'Sin stock' },
 ];
 
-const USO_FILTER_OPTIONS: { value: '' | UsoProducto; label: string }[] = [
-  { value: '', label: 'Todos' },
-  { value: 'VENTA', label: 'Venta' },
-  { value: 'REPUESTO', label: 'Repuesto' },
-  { value: 'AMBOS', label: 'Ambos' },
-];
-
-const USO_LABELS: Record<UsoProducto, string> = {
-  VENTA: 'Venta',
-  REPUESTO: 'Repuesto',
-  AMBOS: 'Ambos',
-};
+type Vista = 'productos' | 'movimientos';
 
 interface ProductoRow {
-  uso: UsoProducto;
-  controlaStock: boolean;
   id: number;
   codigo: string;
   nombre: string;
@@ -72,6 +63,7 @@ interface ProductoRow {
   estado: EstadoStock;
   costoUnitario: number;
   precioVenta: number | null;
+  archivado: boolean;
 }
 
 // ──────────────────────────────────────────────
@@ -80,12 +72,13 @@ interface ProductoRow {
 
 export function InventarioPage() {
   const { showToast } = useToast();
-  const inventarioHabilitado = useInventarioHabilitado();
 
   // ───── Filter state ─────
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
-  const [usoFiltro, setUsoFiltro] = useState<'' | UsoProducto>('');
+  const [verArchivados, setVerArchivados] = useState(false);
+  const [vista, setVista] = useState<Vista>('productos');
+  const [movFiltro, setMovFiltro] = useState<MovimientosFiltro>({});
 
   // ───── Data fetching ─────
   const {
@@ -94,13 +87,28 @@ export function InventarioPage() {
     isFetching: productosFetching,
     error: productosError,
     refetch: refetchProductos,
-  } = useProductosInventario();
+  } = useProductosInventario(verArchivados);
+  // Los pickers de movimientos usan siempre los activos (un archivado no admite movimientos).
+  const { data: productosActivos } = useProductosInventario(false, verArchivados);
+  const { data: productosArchivados } = useProductosInventario(true, vista === 'movimientos');
 
   const {
     data: kpis,
     isPending: kpisPending,
     error: kpisError,
-  } = useInventoryKpis(inventarioHabilitado);
+  } = useInventoryKpis();
+
+  const listaActivos = useMemo(
+    () => (verArchivados ? (productosActivos ?? []) : (productos ?? [])).filter((p) => !p.archivado),
+    [verArchivados, productosActivos, productos],
+  );
+  const listaHistorial = useMemo(() => {
+    const byId = new Map<number, ProductoInventario>();
+    for (const p of [...listaActivos, ...(productosArchivados ?? []), ...(verArchivados ? (productos ?? []) : [])]) {
+      byId.set(p.id, p);
+    }
+    return [...byId.values()];
+  }, [listaActivos, productosArchivados, productos, verArchivados]);
 
   const productosLoading = productosPending || productosFetching;
   const errorMessage = useMemo(() => {
@@ -114,6 +122,9 @@ export function InventarioPage() {
   const actualizarProducto = useActualizarProductoInventario();
   const eliminarProducto = useEliminarProductoInventario();
   const crearMovimiento = useCrearMovimientoInventario();
+  const crearCompra = useCrearCompraInventario();
+  const archivarProducto = useArchivarProductoInventario();
+  const restaurarProducto = useRestaurarProductoInventario();
 
   // ───── Modal state ─────
   const [productoModalOpen, setProductoModalOpen] = useState(false);
@@ -124,19 +135,20 @@ export function InventarioPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<ProductoInventario | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Tras un 409 al eliminar (el producto tiene historial) se ofrece archivarlo.
+  const [archiveOffer, setArchiveOffer] = useState<{
+    producto: ProductoInventario;
+    message: string;
+  } | null>(null);
 
   // ───── Filtering ─────
   const productosFiltrados = useMemo(() => {
     let data = productos ?? [];
-    if (usoFiltro) {
-      data = data.filter((p) => (p.uso ?? 'VENTA') === usoFiltro);
-    }
     if (estadoFiltro) {
-      // Sin control de stock no hay estado: no matchean ningún filtro de estado.
-      data = data.filter((p) => p.controlaStock !== false && p.estadoStock === estadoFiltro);
+      data = data.filter((p) => p.estadoStock === estadoFiltro);
     }
     return data;
-  }, [productos, estadoFiltro, usoFiltro]);
+  }, [productos, estadoFiltro]);
 
   // ───── Handlers ─────
   const openCreateProducto = useCallback(() => {
@@ -174,9 +186,14 @@ export function InventarioPage() {
     [productoEditando, actualizarProducto, crearProducto, showToast],
   );
 
-  const openMovimientoModal = useCallback((producto: ProductoInventario) => {
+  const openMovimientoModal = useCallback((producto: ProductoInventario | null) => {
     setProductoMovimiento(producto);
     setMovimientoModalOpen(true);
+  }, []);
+
+  const openHistorial = useCallback((producto: ProductoInventario) => {
+    setMovFiltro({ productoId: producto.id });
+    setVista('movimientos');
   }, []);
 
   const closeMovimientoModal = useCallback(() => {
@@ -184,11 +201,18 @@ export function InventarioPage() {
     setProductoMovimiento(null);
   }, []);
 
-  const handleSubmitMovimiento = useCallback(
+  const handleSubmitAjuste = useCallback(
     async (body: MovimientoRequest) => {
       await crearMovimiento.mutateAsync(body);
     },
     [crearMovimiento],
+  );
+
+  const handleSubmitCompra = useCallback(
+    async (body: CompraRequest) => {
+      await crearCompra.mutateAsync(body);
+    },
+    [crearCompra],
   );
 
   const handleDelete = useCallback(async () => {
@@ -198,52 +222,104 @@ export function InventarioPage() {
       await eliminarProducto.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al eliminar el producto';
-      showToast(msg, 'error');
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.data as { meta?: { message?: string } } | null;
+        setArchiveOffer({
+          producto: deleteTarget,
+          message: body?.meta?.message ?? err.message,
+        });
+        setDeleteTarget(null);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Error al eliminar el producto';
+        showToast(msg, 'error');
+      }
     } finally {
       setDeleting(false);
     }
   }, [deleteTarget, eliminarProducto, showToast]);
 
+  const handleArchivar = useCallback(
+    async (producto: ProductoInventario) => {
+      try {
+        await archivarProducto.mutateAsync(producto.id);
+        showToast(`"${producto.nombre}" archivado`, 'success');
+      } catch (err: unknown) {
+        showToast(err instanceof Error ? err.message : 'Error al archivar el producto', 'error');
+      } finally {
+        setArchiveOffer(null);
+      }
+    },
+    [archivarProducto, showToast],
+  );
+
+  const handleRestaurar = useCallback(
+    async (producto: ProductoInventario) => {
+      try {
+        await restaurarProducto.mutateAsync(producto.id);
+        showToast(`"${producto.nombre}" restaurado`, 'success');
+      } catch (err: unknown) {
+        showToast(err instanceof Error ? err.message : 'Error al restaurar el producto', 'error');
+      }
+    },
+    [restaurarProducto, showToast],
+  );
+
+  const renderAcciones = (producto: ProductoInventario, size?: 'lg') => {
+    const stop =
+      (fn: () => void) =>
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        fn();
+      };
+    return (
+      <>
+        <IconActionButton icon="edit" label="Editar" size={size} onClick={stop(() => openEditProducto(producto))} />
+        {!producto.archivado && (
+          <IconActionButton icon="repeat" label="Movimiento" size={size} onClick={stop(() => openMovimientoModal(producto))} />
+        )}
+        <IconActionButton icon="clipboard" label="Historial" size={size} onClick={stop(() => openHistorial(producto))} />
+        {producto.archivado ? (
+          <IconActionButton icon="rotate-ccw" label="Restaurar" size={size} onClick={stop(() => void handleRestaurar(producto))} />
+        ) : (
+          <IconActionButton icon="archive" label="Archivar" size={size} onClick={stop(() => void handleArchivar(producto))} />
+        )}
+        {!producto.archivado && (
+          <IconActionButton icon="trash" label="Eliminar" variant="danger" size={size} onClick={stop(() => setDeleteTarget(producto))} />
+        )}
+      </>
+    );
+  };
+
   // ───── Columns ─────
   const columns: Column<ProductoRow>[] = [
     { key: 'codigo', label: 'Código', sortable: true },
-    { key: 'nombre', label: 'Nombre', sortable: true },
     {
-      key: 'uso',
-      label: 'Uso',
+      key: 'nombre',
+      label: 'Nombre',
       sortable: true,
-      render: (row) => <Badge variant="info">{USO_LABELS[row.uso]}</Badge>,
+      render: (row) => (
+        <span className={row.archivado ? 'text-slate-400' : ''}>
+          {row.nombre}
+          {row.archivado && <Badge variant="default">Archivado</Badge>}
+        </span>
+      ),
     },
     {
       key: 'stock',
       label: 'Stock',
       sortable: true,
-      render: (row) =>
-        row.controlaStock ? (
-          <span className={row.stock === 0 ? 'font-semibold text-red-600' : ''}>{row.stock}</span>
-        ) : (
-          '—'
-        ),
+      render: (row) => (
+        <span className={row.stock === 0 ? 'font-semibold text-red-600' : ''}>{row.stock}</span>
+      ),
     },
-    {
-      key: 'stockMinimo',
-      label: 'Mínimo',
-      sortable: true,
-      render: (row) => (row.controlaStock ? row.stockMinimo : '—'),
-    },
+    { key: 'stockMinimo', label: 'Mínimo', sortable: true },
     {
       key: 'estado',
       label: 'Estado',
       sortable: true,
-      render: (row) =>
-        row.controlaStock ? (
-          <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
-            {ESTADO_STOCK_LABELS[row.estado]}
-          </Badge>
-        ) : (
-          '—'
-        ),
+      render: (row) => (
+        <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>{ESTADO_STOCK_LABELS[row.estado]}</Badge>
+      ),
     },
     {
       key: 'costoUnitario',
@@ -253,7 +329,7 @@ export function InventarioPage() {
     },
     {
       key: 'precioVenta',
-      label: 'Precio venta',
+      label: 'Precio sugerido',
       sortable: true,
       render: (row) =>
         row.precioVenta == null ? '—' : formatCurrency(row.precioVenta),
@@ -265,35 +341,7 @@ export function InventarioPage() {
         const producto = (productos ?? []).find((p) => p.id === row.id);
         if (!producto) return null;
         return (
-          <div className="flex flex-wrap items-center gap-2">
-            <IconActionButton
- icon="edit"
- label="Editar"
- onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                openEditProducto(producto);
-              }}
-/>
-            {inventarioHabilitado && producto.controlaStock !== false && (
-              <IconActionButton
- icon="repeat"
- label="Movimiento"
- onClick={(e: React.MouseEvent) => {
-                  e.stopPropagation();
-                  openMovimientoModal(producto);
-                }}
-/>
-            )}
-            <IconActionButton
- icon="trash"
- label="Eliminar"
- variant="danger"
- onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                setDeleteTarget(producto);
-              }}
-/>
-          </div>
+          <div className="flex flex-wrap items-center gap-2">{renderAcciones(producto)}          </div>
         );
       },
     },
@@ -305,13 +353,12 @@ export function InventarioPage() {
       codigo: p.codigo,
       nombre: p.nombre,
       descripcion: p.descripcion ?? null,
-      uso: p.uso ?? 'VENTA',
-      controlaStock: p.controlaStock !== false,
       stock: p.stock,
       stockMinimo: p.stockMinimo,
       estado: p.estadoStock,
       costoUnitario: p.costoUnitario,
       precioVenta: p.precioVenta ?? null,
+      archivado: p.archivado === true,
     }));
   }, [productosFiltrados]);
 
@@ -323,26 +370,22 @@ export function InventarioPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Inventario</h2>
           <p className="text-sm text-slate-500">
-            Gestión de productos (venta y repuestos), stock y movimientos
+            Repuestos e insumos, stock y movimientos
           </p>
         </div>
-        <Button onClick={openCreateProducto}>Nuevo Producto</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => openMovimientoModal(null)}>
+            Registrar movimiento
+          </Button>
+          <Button onClick={openCreateProducto}>Nuevo Producto</Button>
+        </div>
       </div>
 
-      {/* KPIs (requieren plan con inventario) */}
-      {!inventarioHabilitado && (
-        <Card>
-          <p className="text-sm text-slate-600">
-            El control de stock, las alertas y los movimientos requieren el plan con ventas e
-            inventario. Con tu plan actual podés gestionar repuestos.
-          </p>
-        </Card>
-      )}
-      {inventarioHabilitado && (
+      {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon="package"
-          label="Productos vendibles"
+          label="Total de productos"
           value={kpisPending ? '—' : (kpis?.totalProductos ?? 0)}
         />
         <MetricCard
@@ -363,10 +406,42 @@ export function InventarioPage() {
           value={kpisPending ? '—' : formatCurrency(kpis?.valorTotalStock ?? 0)}
         />
       </div>
-      )}
 
       {/* Alert banner */}
-      {inventarioHabilitado && <InventoryAlertBanner productos={productos ?? []} />}
+      <InventoryAlertBanner productos={listaActivos} />
+
+      {/* Tabs */}
+      <div role="tablist" aria-label="Vista de inventario" className="flex gap-2 border-b border-slate-200">
+        {(
+          [
+            ['productos', 'Productos'],
+            ['movimientos', 'Movimientos'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={vista === key}
+            onClick={() => setVista(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              vista === key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {vista === 'movimientos' && (
+        <MovimientosHistorial
+          productos={listaHistorial}
+          filtro={movFiltro}
+          onFiltroChange={setMovFiltro}
+        />
+      )}
 
       {/* Error state */}
       {errorMessage && (
@@ -381,7 +456,7 @@ export function InventarioPage() {
       )}
 
       {/* Filters */}
-      {!errorMessage && (
+      {vista === 'productos' && !errorMessage && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="w-full sm:max-w-xs">
             <SearchField
@@ -390,28 +465,14 @@ export function InventarioPage() {
               onChange={setBusqueda}
             />
           </div>
-          <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label="Filtrar por uso"
-          >
-            {USO_FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value || 'todos'}
-                type="button"
-                aria-pressed={usoFiltro === opt.value}
-                onClick={() => setUsoFiltro(opt.value)}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                  usoFiltro === opt.value
-                    ? 'bg-primary text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {inventarioHabilitado && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={verArchivados}
+              onChange={(e) => setVerArchivados(e.target.checked)}
+            />
+            Ver archivados
+          </label>
           <div className="w-full sm:w-auto">
             <Select
               options={ESTADO_FILTER_OPTIONS}
@@ -420,27 +481,31 @@ export function InventarioPage() {
               className="w-full sm:w-56"
             />
           </div>
-          )}
         </div>
       )}
 
       {/* Lista: cards en mobile, toggle Lista/Grilla en desktop */}
-      {!errorMessage && (
+      {vista === 'productos' && !errorMessage && (
         <EntityList<ProductoRow>
           columns={columns}
           data={rows}
           loading={productosLoading}
-          emptyMessage="No hay productos registrados"
+          emptyMessage={verArchivados ? 'No hay productos archivados' : 'No hay productos registrados'}
+          getRowClassName={(row) => (row.archivado ? 'opacity-60 bg-slate-50' : '')}
           searchFilter={busqueda}
           keyExtractor={(row) => row.id}
           storageKey="vista-inventario"
           renderCard={(row) => {
             const producto = (productos ?? []).find((p) => p.id === row.id);
             return (
-              <>
+              <div className={row.archivado ? 'opacity-60' : ''}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-slate-900">
+                    <p
+                      className={`truncate text-base font-semibold ${
+                        row.archivado ? 'text-slate-400' : 'text-slate-900'
+                      }`}
+                    >
                       {row.nombre}
                     </p>
                     <p className="text-xs font-medium text-slate-500">
@@ -448,75 +513,36 @@ export function InventarioPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge variant="info">{USO_LABELS[row.uso]}</Badge>
-                    {row.controlaStock && (
-                      <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
-                        {ESTADO_STOCK_LABELS[row.estado]}
-                      </Badge>
-                    )}
+                    {row.archivado && <Badge variant="default">Archivado</Badge>}
+                    <Badge variant={ESTADO_STOCK_VARIANTS[row.estado]}>
+                      {ESTADO_STOCK_LABELS[row.estado]}
+                    </Badge>
                   </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-sm">
-                  {row.controlaStock ? (
-                    <span
-                      className={
-                        row.stock === 0
-                          ? 'font-semibold text-red-600'
-                          : 'font-medium text-slate-700'
-                      }
-                    >
-                      Stock: {row.stock}{' '}
-                      <span className="font-normal text-slate-400">
-                        (mín. {row.stockMinimo})
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">Sin control de stock</span>
-                  )}
+                  <span
+                    className={
+                      row.stock === 0 ? 'font-semibold text-red-600' : 'font-medium text-slate-700'
+                    }
+                  >
+                    Stock: {row.stock}{' '}
+                    <span className="font-normal text-slate-400">(mín. {row.stockMinimo})</span>
+                  </span>
                   <span className="shrink-0 text-right text-slate-600">
                     <span className="block text-xs text-slate-400">
                       Costo: {formatCurrency(row.costoUnitario)}
                     </span>
                     <span className="block font-medium text-slate-700">
-                      Venta: {row.precioVenta == null ? '—' : formatCurrency(row.precioVenta)}
+                      Sugerido: {row.precioVenta == null ? '—' : formatCurrency(row.precioVenta)}
                     </span>
                   </span>
                 </div>
                 {producto && (
                   <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2.5">
-                    <IconActionButton
- icon="edit"
- label="Editar"
- size="lg"
- onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        openEditProducto(producto);
-                      }}
-/>
-                    {inventarioHabilitado && producto.controlaStock !== false && (
-                    <IconActionButton
- icon="repeat"
- label="Movimiento"
- size="lg"
- onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        openMovimientoModal(producto);
-                      }}
-/>
-                    )}
-                    <IconActionButton
- icon="trash"
- label="Eliminar"
- variant="danger"
- size="lg"
- onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        setDeleteTarget(producto);
-                      }}
-/>
+                    {renderAcciones(producto, 'lg')}
                   </div>
                 )}
-              </>
+              </div>
             );
           }}
         />
@@ -527,7 +553,6 @@ export function InventarioPage() {
         isOpen={productoModalOpen}
         onClose={closeProductoModal}
         producto={productoEditando}
-        inventarioHabilitado={inventarioHabilitado}
         onSubmit={handleSubmitProducto}
         loading={
           crearProducto.isPending || actualizarProducto.isPending
@@ -539,8 +564,10 @@ export function InventarioPage() {
         isOpen={movimientoModalOpen}
         onClose={closeMovimientoModal}
         producto={productoMovimiento}
-        onSubmit={handleSubmitMovimiento}
-        loading={crearMovimiento.isPending}
+        productos={listaActivos}
+        onSubmitCompra={handleSubmitCompra}
+        onSubmitAjuste={handleSubmitAjuste}
+        loading={crearMovimiento.isPending || crearCompra.isPending}
       />
 
       {/* ───── Delete Confirm ───── */}
@@ -554,6 +581,19 @@ export function InventarioPage() {
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* ───── Archive offer (409 al eliminar) ───── */}
+      <ConfirmDialog
+        isOpen={archiveOffer !== null}
+        title="No se puede eliminar"
+        message={`${archiveOffer?.message ?? ''} ¿Querés archivarlo?`}
+        confirmLabel="Archivar"
+        cancelLabel="Cancelar"
+        variant="warning"
+        loading={archivarProducto.isPending}
+        onConfirm={() => archiveOffer && void handleArchivar(archiveOffer.producto)}
+        onCancel={() => setArchiveOffer(null)}
       />
     </div>
   );

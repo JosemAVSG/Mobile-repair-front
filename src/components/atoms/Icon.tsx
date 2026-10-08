@@ -29,7 +29,9 @@ export type IconName =
   | 'lock'
   | 'user'
   | 'wrench'
-  | 'repeat';
+  | 'repeat'
+  | 'archive'
+  | 'rotate-ccw';
 
 interface IconProps {
   name: IconName;
@@ -222,6 +224,19 @@ const iconMap: Record<IconName, React.ReactNode> = {
       <path d="M3 11V9a4 4 0 0 1 4-4h14" />
       <polyline points="7 23 3 19 7 15" />
       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </>
+  ),
+  archive: (
+    <>
+      <rect x="2" y="3" width="20" height="5" rx="1" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
+    </>
+  ),
+  'rotate-ccw': (
+    <>
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
     </>
   ),
 };

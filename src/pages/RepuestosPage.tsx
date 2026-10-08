@@ -154,10 +154,16 @@ export function RepuestosPage() {
         descripcion: editDescripcion.trim() || undefined,
         codigo: editCodigo.trim(),
         precioCosto: Number(editPrecioCosto),
-        precioVenta: editPrecioVenta.trim() === '' ? null : Number(editPrecioVenta),
         marcaId: editMarcaId ? Number(editMarcaId) : undefined,
         tipoReparacion: editTipo as TipoReparacion,
       };
+
+      // Precio vacío: al editar se pide limpiarlo (si había uno); el backend deja intacto lo ausente.
+      if (editPrecioVenta.trim() !== '') {
+        body.precioVenta = Number(editPrecioVenta);
+      } else if (editingRepuesto?.precioVenta != null) {
+        body.limpiarPrecioVenta = true;
+      }
 
       // Siempre se envía al crear; al editar solo si el usuario cambió la selección.
       const modelosChanged =

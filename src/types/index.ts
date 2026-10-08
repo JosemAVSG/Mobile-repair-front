@@ -46,7 +46,7 @@ export interface AuthUser {
   estado?: EstadoSuscripcion | null;
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
-  /** El plan del taller incluye ventas e inventario. Ausente (backend viejo) = habilitado. */
+  /** Legacy: el inventario está en todos los planes. Ya no se usa para bloquear nada. */
   inventarioHabilitado?: boolean | null;
 }
 
@@ -347,6 +347,8 @@ export interface RepuestoRequest {
   precioCosto: number;
   /** Opcional. `null`/ausente = se cobra el costo como fallback. */
   precioVenta?: number | null;
+  /** PUT: true borra el precio de venta (ausente/null lo deja intacto). */
+  limpiarPrecioVenta?: boolean;
   marcaId?: number;
   modeloId?: number;
   /** En PUT reemplaza la lista completa (`[]` la vacía). */
@@ -451,10 +453,9 @@ export interface RequireRoleProps {
 
 export type EstadoStock = 'OK' | 'BAJO' | 'SIN_STOCK';
 
-export type TipoMovimiento = 'COMPRA' | 'CONSUMO';
+export type TipoMovimiento = 'COMPRA' | 'USO_REPARACION' | 'AJUSTE';
 
-/** Destino del producto: repuesto de reparación, venta directa o ambos. */
-export type UsoProducto = 'REPUESTO' | 'VENTA' | 'AMBOS';
+export type SentidoMovimiento = 'ENTRADA' | 'SALIDA';
 
 export interface ProductoInventario {
   id: number;
@@ -465,18 +466,18 @@ export interface ProductoInventario {
   stockMinimo: number;
   estadoStock: EstadoStock;
   costoUnitario: number;
-  uso?: UsoProducto;
-  /** Precio de venta al público. `null` = no aplica / no definido. */
+  /** Precio sugerido a cobrar en la orden. `null` = no definido. */
   precioVenta: number | null;
   categoria?: string | null;
   variante?: string | null;
   proveedor?: string | null;
-  controlaStock?: boolean;
   marcaId?: number | null;
   tipoReparacion?: TipoReparacion | null;
   modelosCompatibles?: number[];
   /** Ids de modelos compatibles. Ausente en backends viejos. */
   modeloIds?: number[];
+  /** Oculto del listado por defecto; no admite movimientos. Ausente = false. */
+  archivado?: boolean;
   createdAt: string;
 }
 
@@ -488,6 +489,12 @@ export interface MovimientoInventario {
   stockResultante: number;
   ordenId?: number | null;
   notas?: string | null;
+  costoUnitario?: number | null;
+  /** Solo USO_REPARACION. */
+  precioCobrado?: number | null;
+  /** ENTRADA / SALIDA (el signo del movimiento). */
+  sentido?: SentidoMovimiento | null;
+  usuario?: string | null;
   createdAt: string;
 }
 
@@ -495,13 +502,14 @@ export interface ProductoInventarioRequest {
   codigo: string;
   nombre: string;
   descripcion?: string;
-  /** En edición se omite si está oculto/sin cambios: el backend deja intacto lo ausente. */
+  /** Stock inicial: solo al crear. El PUT no lo acepta (el stock cambia por movimientos). */
   stock?: number;
   stockMinimo?: number;
   costoUnitario: number;
-  /** Obligatorio cuando `uso` es VENTA o AMBOS (regla del backend); opcional en REPUESTO. */
+  /** Precio sugerido a cobrar en la orden (opcional). */
   precioVenta?: number;
-  uso?: UsoProducto;
+  /** PUT: true borra el precio sugerido (ausente lo deja intacto). */
+  limpiarPrecioVenta?: boolean;
   marcaId?: number;
   tipoReparacion?: TipoReparacion;
   /** PUT: '' limpia el campo; ausente lo deja intacto. */
@@ -511,16 +519,41 @@ export interface ProductoInventarioRequest {
   /** PUT: true deja marcaId / tipoReparacion en null (ausente = intacto). */
   limpiarMarca?: boolean;
   limpiarTipoReparacion?: boolean;
-  controlaStock?: boolean;
   modeloIds?: number[];
 }
 
+/** POST /api/inventario/movimientos. USO_REPARACION no se crea desde acá. */
 export interface MovimientoRequest {
   productoId: number;
-  tipo: TipoMovimiento;
+  tipo: 'COMPRA' | 'AJUSTE';
   cantidad: number;
-  ordenId?: number;
+  /** Obligatorio en COMPRA. */
+  costoUnitario?: number;
+  /** Obligatorio en AJUSTE. */
+  sentido?: SentidoMovimiento;
+  /** Obligatorio en AJUSTE. */
   notas?: string;
+}
+
+export interface CompraLinea {
+  productoId: number;
+  cantidad: number;
+  costoUnitario: number;
+}
+
+/** POST /api/inventario/compras (atómico). */
+export interface CompraRequest {
+  notas?: string;
+  lineas: CompraLinea[];
+}
+
+export interface MovimientosFiltro {
+  productoId?: number;
+  tipo?: TipoMovimiento;
+  /** yyyy-MM-dd */
+  desde?: string;
+  /** yyyy-MM-dd */
+  hasta?: string;
 }
 
 export interface InventoryKpis {
@@ -548,7 +581,7 @@ export interface Suscripcion {
   precioCop?: number | null;
   /** Amount to be charged on the next charge date (COP, human units). */
   montoProximoCobroCop?: number | null;
-  /** Textos ya legibles del catálogo (p.ej. "Técnicos hasta 2"). */
+  /** Textos ya legibles del catálogo (p.ej. "Hasta 3 técnicos (incluido el administrador)"). */
   features?: string[];
   metodoPago?: { brand: string; last4: string } | null;
   ultimoCobro?: Cobro | null;

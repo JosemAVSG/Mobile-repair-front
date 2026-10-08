@@ -110,7 +110,8 @@ export const ESTADO_STOCK_VARIANTS: Record<EstadoStock, 'success' | 'warning' | 
 
 export const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
   COMPRA: 'Compra',
-  CONSUMO: 'Consumo',
+  USO_REPARACION: 'Uso en reparación',
+  AJUSTE: 'Ajuste',
 };
 
 // ──────────────────────────────────────────────

@@ -10,7 +10,10 @@ export const PLANES_FALLBACK: PlanCatalogo[] = [
     nombre: 'Básico',
     descripcion: 'Para el taller que arranca a ordenarse.',
     precioCop: 49900,
-    features: ['Técnicos hasta 2'],
+    features: [
+      'Hasta 3 técnicos (incluido el administrador)',
+      'Inventario, costo y ganancia por orden',
+    ],
     destacado: false,
   },
   {
@@ -18,7 +21,11 @@ export const PLANES_FALLBACK: PlanCatalogo[] = [
     nombre: 'Pro',
     descripcion: 'Para el taller con equipo y stock propio.',
     precioCop: 99900,
-    features: ['Técnicos ilimitados', 'Inventario y alertas de stock', 'Métricas avanzadas'],
+    features: [
+      'Hasta 8 técnicos (incluido el administrador)',
+      'Inventario, costo y ganancia por orden',
+      'Métricas avanzadas',
+    ],
     destacado: true,
   },
 ];
