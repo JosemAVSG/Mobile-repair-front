@@ -55,10 +55,7 @@ export function useCrearProductoInventario() {
   return useMutation({
     mutationFn: (body: ProductoInventarioRequest) =>
       createProductoInventario(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
-    },
+    onSuccess: () => invalidateStock(queryClient),
   });
 }
 
@@ -73,10 +70,7 @@ export function useActualizarProductoInventario() {
       id: number;
       body: ProductoInventarioRequest;
     }) => updateProductoInventario(id, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
-    },
+    onSuccess: () => invalidateStock(queryClient),
   });
 }
 
@@ -85,10 +79,7 @@ export function useEliminarProductoInventario() {
 
   return useMutation({
     mutationFn: (id: number) => deleteProductoInventario(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
-    },
+    onSuccess: () => invalidateStock(queryClient),
   });
 }
 
@@ -112,6 +103,8 @@ function invalidateStock(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productos'] });
   queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'movimientos'] });
   queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'kpis'] });
+  // El selector de repuestos de las órdenes (useRepuestos) muestra el stock.
+  queryClient.invalidateQueries({ queryKey: ['repuestos'] });
 }
 
 export function useCrearMovimientoInventario() {

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatNumeroOrden,
-  idsTrasCambio,
-  repuestoIdsAdjuntos,
-  repuestoIdsCobrados,
+  cantidadesDeReparacion,
+  cantidadesTrasCambio,
   repuestosBloqueados,
+  repuestosPayload,
+  totalCobradoSnapshot,
   resolverTecnicoResponsable,
 } from './ordenes';
 import { EstadoOrden } from '../types';
@@ -25,45 +26,55 @@ describe('formatNumeroOrden', () => {
   });
 });
 
-describe('repuestos adjuntos', () => {
-  const catalogo = [{ id: 1 }, { id: 2 }, { id: 3 }];
+describe('repuestos con cantidad', () => {
   const snap = (over: Record<string, unknown>) =>
     ({ id: 1, repuestoId: null, nombre: 'x', precioCosto: 1, ...over }) as never;
 
-  it('precarga solo por productoId (nunca repuestoId), sin duplicados ni ids ajenos', () => {
-    const reparaciones = [
-      { repuestos: [snap({ productoId: 1 }), snap({ repuestoId: 2 })] },
-      { repuestos: [snap({ productoId: 1 }), snap({ productoId: 99 })] },
-    ];
-    expect(repuestoIdsAdjuntos(reparaciones, catalogo)).toEqual([1]);
+  it('cantidadesDeReparacion mapea productoId -> cantidad (ausente = 1), suma repetidos e ignora legados', () => {
+    const rep = {
+      repuestos: [
+        snap({ productoId: 1, cantidad: 2 }),
+        snap({ productoId: 2 }),
+        snap({ productoId: 2, cantidad: 3 }),
+        snap({ repuestoId: 9 }),
+      ],
+    };
+    expect(Array.from(cantidadesDeReparacion(rep).entries())).toEqual([
+      [1, 2],
+      [2, 4],
+    ]);
   });
 
-  it('idsTrasCambio no envía snapshots legados (sin productoId)', () => {
-    const rep = { repuestos: [snap({ repuestoId: 2 }), snap({ productoId: 1 })] };
-    expect(idsTrasCambio(rep, { agregar: 3 })).toEqual([1, 3]);
-    expect(idsTrasCambio(rep, {})).toEqual([1]);
+  it('cantidadesTrasCambio: agregar suma, fijar reemplaza, quitar elimina; los legados no viajan', () => {
+    const rep = { repuestos: [snap({ productoId: 1, cantidad: 2 }), snap({ repuestoId: 5 })] };
+    expect(repuestosPayload(cantidadesTrasCambio(rep, {}))).toEqual([{ productoId: 1, cantidad: 2 }]);
+    expect(repuestosPayload(cantidadesTrasCambio(rep, { agregar: { productoId: 1, cantidad: 3 } }))).toEqual([
+      { productoId: 1, cantidad: 5 },
+    ]);
+    expect(repuestosPayload(cantidadesTrasCambio(rep, { agregar: { productoId: 7, cantidad: 1 } }))).toEqual([
+      { productoId: 1, cantidad: 2 },
+      { productoId: 7, cantidad: 1 },
+    ]);
+    expect(repuestosPayload(cantidadesTrasCambio(rep, { fijar: { productoId: 1, cantidad: 1 } }))).toEqual([
+      { productoId: 1, cantidad: 1 },
+    ]);
+    expect(repuestosPayload(cantidadesTrasCambio(rep, { fijar: { productoId: 1, cantidad: 0 } }))).toEqual([
+      { productoId: 1, cantidad: 1 },
+    ]);
+    expect(repuestosPayload(cantidadesTrasCambio(rep, { quitar: 1 }))).toEqual([]);
   });
 
-  it('repuestoIdsCobrados excluye la Revisión inicial solo con descuentoDiagnostico', () => {
-    const reparaciones = [
-      { descripcion: 'Revisión inicial', repuestos: [snap({ productoId: 1 })] },
-      { descripcion: null, repuestos: [snap({ productoId: 2 }), snap({ repuestoId: 3 })] },
-    ];
-    expect(Array.from(repuestoIdsCobrados(reparaciones, false))).toEqual([1, 2]);
-    expect(Array.from(repuestoIdsCobrados(reparaciones, true))).toEqual([2]);
+  it('totalCobradoSnapshot usa totalCobrado o unitario × cantidad', () => {
+    expect(totalCobradoSnapshot(snap({ totalCobrado: 50, precioCobrado: 20, cantidad: 2 }))).toBe(50);
+    expect(totalCobradoSnapshot(snap({ precioCobrado: 20, cantidad: 3 }))).toBe(60);
+    expect(totalCobradoSnapshot(snap({ precioCobrado: 20 }))).toBe(20);
+    expect(totalCobradoSnapshot(snap({ precioCosto: null, precioVenta: null, precioCobrado: null }))).toBeNull();
   });
 
   it('repuestosBloqueados solo en PAGADO y ENTREGADO', () => {
     expect(repuestosBloqueados(EstadoOrden.PAGADO)).toBe(true);
     expect(repuestosBloqueados(EstadoOrden.ENTREGADO)).toBe(true);
     expect(repuestosBloqueados(EstadoOrden.REPARACION)).toBe(false);
-  });
-
-  it('idsTrasCambio devuelve el conjunto final sin duplicados', () => {
-    const rep = { repuestos: [snap({ productoId: 1 }), snap({ productoId: 2 })] };
-    expect(idsTrasCambio(rep, { agregar: 2 })).toEqual([1, 2]);
-    expect(idsTrasCambio(rep, { agregar: 3 })).toEqual([1, 2, 3]);
-    expect(idsTrasCambio(rep, { quitar: 1 })).toEqual([2]);
   });
 });
 

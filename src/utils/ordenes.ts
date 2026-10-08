@@ -3,7 +3,7 @@ import type {
   AuthUser,
   OrdenTrabajo,
   Reparacion,
-  Repuesto,
+  RepuestoCantidad,
   RepuestoSnapshot,
   Tecnico,
 } from '../types';
@@ -46,43 +46,64 @@ export function snapshotRepuestoId(snapshot: RepuestoSnapshot): number | null {
   return snapshot.productoId ?? null;
 }
 
-/**
- * Ids de producto (sin duplicados, en orden) ya adjuntos a las reparaciones de
- * la orden que existen en el listado de repuestos. Los snapshots legados (sin
- * productoId) se ignoran.
- */
-export function repuestoIdsAdjuntos(
-  reparaciones: Pick<Reparacion, 'repuestos'>[] | undefined,
-  repuestos: Pick<Repuesto, 'id'>[],
-): number[] {
-  const validos = new Set(repuestos.map((r) => r.id));
-  const ids = new Set<number>();
-  for (const reparacion of reparaciones ?? []) {
-    for (const snapshot of reparacion.repuestos ?? []) {
-      const id = snapshotRepuestoId(snapshot);
-      if (id != null && validos.has(id)) ids.add(id);
-    }
+/** Mapa productoId -> unidades de los snapshots de UNA reparación. Ausente `cantidad` = 1;
+ *  los snapshots legados (sin productoId) se ignoran: el backend los deja intactos. */
+export function cantidadesDeReparacion(
+  reparacion: Pick<Reparacion, 'repuestos'>,
+): Map<number, number> {
+  const mapa = new Map<number, number>();
+  for (const snapshot of reparacion.repuestos ?? []) {
+    const id = snapshotRepuestoId(snapshot);
+    if (id == null) continue;
+    mapa.set(id, (mapa.get(id) ?? 0) + (snapshot.cantidad ?? 1));
   }
-  return Array.from(ids);
+  return mapa;
 }
 
-/**
- * Ids de producto que la orden ya cobra. Con `descuentoDiagnostico` los
- * repuestos de la "Revisión inicial" no se cobran, así que no cuentan.
- */
-export function repuestoIdsCobrados(
-  reparaciones: Pick<Reparacion, 'descripcion' | 'repuestos'>[] | undefined,
-  descuentoDiagnostico: boolean | undefined,
-): Set<number> {
-  const ids = new Set<number>();
-  for (const reparacion of reparaciones ?? []) {
-    if (descuentoDiagnostico && reparacion.descripcion === REVISION_INICIAL) continue;
-    for (const snapshot of reparacion.repuestos ?? []) {
-      const id = snapshotRepuestoId(snapshot);
-      if (id != null) ids.add(id);
-    }
+/** Línea de repuestos lista para el body: orden estable, cantidades >= 1. */
+export function repuestosPayload(cantidades: Map<number, number>): RepuestoCantidad[] {
+  return Array.from(cantidades.entries())
+    .filter(([, cantidad]) => cantidad >= 1)
+    .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+}
+
+/** Mapa final (PUT, reemplazo completo) de una reparación tras un cambio:
+ *  `agregar` SUMA unidades, `fijar` pone la cantidad exacta, `quitar` elimina el producto. */
+export function cantidadesTrasCambio(
+  reparacion: Pick<Reparacion, 'repuestos'>,
+  cambio: {
+    agregar?: RepuestoCantidad;
+    fijar?: RepuestoCantidad;
+    quitar?: number;
+  },
+): Map<number, number> {
+  const mapa = cantidadesDeReparacion(reparacion);
+  if (cambio.quitar != null) mapa.delete(cambio.quitar);
+  if (cambio.fijar) mapa.set(cambio.fijar.productoId, Math.max(1, cambio.fijar.cantidad));
+  if (cambio.agregar) {
+    mapa.set(
+      cambio.agregar.productoId,
+      (mapa.get(cambio.agregar.productoId) ?? 0) + Math.max(1, cambio.agregar.cantidad),
+    );
   }
-  return ids;
+  return mapa;
+}
+
+/** Unidades de un snapshot (ausente = 1). */
+export function cantidadSnapshot(snapshot: Pick<RepuestoSnapshot, 'cantidad'>): number {
+  return snapshot.cantidad ?? 1;
+}
+
+/** Precio unitario cobrado de un snapshot (venta, con fallback al costo). */
+export function precioUnitarioSnapshot(snapshot: RepuestoSnapshot): number | null {
+  return snapshot.precioCobrado ?? snapshot.precioVenta ?? snapshot.precioCosto ?? null;
+}
+
+/** Total de la línea: `totalCobrado` del backend o, si falta, unitario × cantidad. */
+export function totalCobradoSnapshot(snapshot: RepuestoSnapshot): number | null {
+  if (snapshot.totalCobrado != null) return snapshot.totalCobrado;
+  const unit = precioUnitarioSnapshot(snapshot);
+  return unit == null ? null : unit * cantidadSnapshot(snapshot);
 }
 
 /** Reparación sobre la que se editan los repuestos de una orden existente:
@@ -94,22 +115,6 @@ export function reparacionEditable(
     (r) => r.descripcion !== REVISION_INICIAL,
   );
   return candidatas.length > 0 ? candidatas[candidatas.length - 1] : null;
-}
-
-/** Conjunto final (PUT) de productoIds de una reparación tras agregar/quitar uno.
- *  Los snapshots legados (sin productoId) nunca se envían: el backend los deja intactos. */
-export function idsTrasCambio(
-  reparacion: Pick<Reparacion, 'repuestos'>,
-  cambio: { agregar?: number; quitar?: number },
-): number[] {
-  const ids = new Set<number>();
-  for (const snapshot of reparacion.repuestos ?? []) {
-    const id = snapshotRepuestoId(snapshot);
-    if (id != null) ids.add(id);
-  }
-  if (cambio.quitar != null) ids.delete(cambio.quitar);
-  if (cambio.agregar != null) ids.add(cambio.agregar);
-  return Array.from(ids);
 }
 
 export interface TecnicoResponsable {

@@ -213,8 +213,9 @@ export function MovimientoInventarioModal({
             {lineas.map((l, i) => (
               <div
                 key={l.key}
-                className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end"
+                className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-3"
               >
+                <div className="col-span-2 min-w-0">
                 <FormField label={`Producto (línea ${i + 1})`} required>
                   <Select
                     aria-label={`Producto línea ${i + 1}`}
@@ -225,6 +226,8 @@ export function MovimientoInventarioModal({
                     disabled={loading}
                   />
                 </FormField>
+                </div>
+                <div className="min-w-0">
                 <FormField label="Cantidad" required>
                   <Input
                     aria-label={`Cantidad línea ${i + 1}`}
@@ -237,6 +240,8 @@ export function MovimientoInventarioModal({
                     disabled={loading}
                   />
                 </FormField>
+                </div>
+                <div className="min-w-0">
                 <FormField label="Costo unitario" required>
                   <Input
                     aria-label={`Costo unitario línea ${i + 1}`}
@@ -251,13 +256,16 @@ export function MovimientoInventarioModal({
                     disabled={loading}
                   />
                 </FormField>
+                </div>
                 {lineas.length > 1 && (
+                  <div className="col-span-2 flex justify-end">
                   <IconActionButton
                     icon="trash"
                     label="Quitar línea"
                     variant="danger"
                     onClick={() => setLineas((prev) => prev.filter((x) => x.key !== l.key))}
                   />
+                  </div>
                 )}
               </div>
             ))}

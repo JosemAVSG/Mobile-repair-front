@@ -9,6 +9,7 @@ import type {
   PublicRepairStatus,
   Reparacion,
   ReparacionRequest,
+  RepuestoCantidad,
   TipoReparacion,
 } from '../types';
 
@@ -64,7 +65,7 @@ export const iniciarReparacion = async (
   body: {
     tipo: TipoReparacion;
     precio: number;
-    repuestoIds: number[];
+    repuestos: RepuestoCantidad[];
     descuentoDiagnostico: boolean;
   },
 ): Promise<OrdenTrabajo> => {
@@ -141,15 +142,15 @@ export const getPublicRepairStatus = async (
     `/api/ordenes/seguimiento/${encodeURIComponent(ref)}`,
   );
 };
-/** Reemplaza el conjunto completo de repuestos de una reparación existente
- *  (PUT, `[]` la vacía). El backend deduplica y recalcula los totales. */
+/** Reemplaza el conjunto completo de repuestos (producto + cantidad) de una reparación
+ *  existente (PUT, `[]` la vacía). El backend ajusta el stock por diferencia. */
 export const updateReparacionRepuestos = async (
   ordenId: number,
   reparacionId: number,
-  repuestoIds: number[],
+  repuestos: RepuestoCantidad[],
 ): Promise<Reparacion> => {
   return ApiClient.put<Reparacion>(
     `/api/ordenes/${ordenId}/reparaciones/${reparacionId}/repuestos`,
-    repuestoIds,
+    repuestos,
   );
 };

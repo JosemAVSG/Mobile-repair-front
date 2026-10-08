@@ -225,8 +225,20 @@ export interface RepuestoSnapshot {
   precioCosto?: number | null;
   /** Precio de venta congelado al momento de usar el repuesto (si existía). */
   precioVenta?: number | null;
-  /** Monto efectivamente cobrado por el repuesto (venta o costo como fallback). */
+  /** Monto efectivamente cobrado por unidad (venta o costo como fallback). */
   precioCobrado?: number | null;
+  /** Unidades usadas. Ausente (backend viejo) = 1. */
+  cantidad?: number;
+  /** cantidad × precioCobrado. Oculto para TECNICO si el backend lo enmascara. */
+  totalCobrado?: number | null;
+  /** cantidad × precioCosto. Oculto (null/ausente) para TECNICO. */
+  totalCosto?: number | null;
+}
+
+/** Línea de repuesto en los requests: producto + unidades (>= 1). */
+export interface RepuestoCantidad {
+  productoId: number;
+  cantidad: number;
 }
 
 export interface Reparacion {
@@ -252,6 +264,8 @@ export interface Repuesto {
   precioCosto?: number | null;
   /** Precio de venta al público. `null` = se cobra el costo como fallback. */
   precioVenta: number | null;
+  /** Stock disponible, solo si el backend lo envía. No se inventa. */
+  stock?: number | null;
   marcaId: number | null;
   modeloId: number | null;
   /** Todos los modelos compatibles (`modeloId` es el menor). Ausente en backends viejos. */
@@ -326,7 +340,7 @@ export interface ReparacionRequest {
   tipo: TipoReparacion;
   descripcion?: string;
   precio: number;
-  repuestoIds?: number[];
+  repuestos?: RepuestoCantidad[];
 }
 
 export interface TecnicoRequest {

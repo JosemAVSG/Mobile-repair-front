@@ -314,6 +314,9 @@ export function ProductoInventarioModal({
             onChange={(e) => handlePrecioVentaChange(e.target.value)}
             disabled={loading}
           />
+          <p className="text-xs text-slate-500">
+            Si lo dejás vacío, el repuesto se cobra a su costo.
+          </p>
         </FormField>
 
         {isEditing && producto && (

@@ -58,18 +58,26 @@ import {
 import {
   isOrdenAtrasada,
   formatNumeroOrden,
-  idsTrasCambio,
+  cantidadSnapshot,
+  cantidadesTrasCambio,
   reparacionEditable,
-  repuestoIdsAdjuntos,
-  repuestoIdsCobrados,
+  repuestosPayload,
   repuestosBloqueados,
   REVISION_INICIAL,
   resolverTecnicoResponsable,
+  precioUnitarioSnapshot,
   snapshotRepuestoId,
+  totalCobradoSnapshot,
 } from '../utils/ordenes';
 import { useConfig } from '../context/ConfigContext';
 import { useToast } from '../context/ToastContext';
-import type { EtapaFoto, FotoOrden, ReparacionRequest, Repuesto } from '../types';
+import type { EtapaFoto, FotoOrden, ReparacionRequest, RepuestoCantidad } from '../types';
+import {
+  RepuestosSelector,
+  precioCobradoRepuesto,
+  totalesSeleccion,
+  useSeleccionRepuestos,
+} from '../components/organisms/RepuestosSelector';
 import { EstadoOrden, TipoReparacion } from '../types';
 import {
   useOrden,
@@ -182,14 +190,6 @@ function toDatetimeLocal(iso: string | null | undefined): string {
 /** datetime-local (YYYY-MM-DDTHH:mm) → ISO con segundos (YYYY-MM-DDTHH:mm:ss) */
 function normalizeEntrega(value: string): string {
   return value.length === 16 ? `${value}:00` : value;
-}
-
-/**
- * Precio a cobrar por un repuesto: su precio de venta si existe, con
- * fallback al costo. Espeja `precioCobrado` del backend.
- */
-function precioCobradoRepuesto(repuesto: Repuesto): number | null {
-  return repuesto.precioVenta ?? repuesto.precioCosto ?? null;
 }
 
 // ──────────────────────────────────────────────
@@ -337,7 +337,10 @@ export function OrdenDetailPage() {
     mutationFn: ({ id: targetId, target, descuentoDiagnostico }: { id: number; target: EstadoOrden; descuentoDiagnostico?: boolean }) =>
       updateOrdenEstado(targetId, target, descuentoDiagnostico),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      // Presupuesto rechazado libera los repuestos: se refrescan órdenes e inventario.
+      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventario'] });
+      queryClient.invalidateQueries({ queryKey: ['repuestos'] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
     },
   });
@@ -347,6 +350,8 @@ export function OrdenDetailPage() {
       addReparacion(targetOrdenId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['inventario'] });
+      queryClient.invalidateQueries({ queryKey: ['repuestos'] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
     },
   });
@@ -355,16 +360,21 @@ export function OrdenDetailPage() {
     mutationFn: ({
       targetOrdenId,
       reparacionId,
-      repuestoIds,
+      repuestos: lineas,
     }: {
       targetOrdenId: number;
       reparacionId: number;
-      repuestoIds: number[];
-    }) => updateReparacionRepuestos(targetOrdenId, reparacionId, repuestoIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
-      queryClient.invalidateQueries({ queryKey: ['historial'] });
-    },
+      repuestos: RepuestoCantidad[];
+    }) => updateReparacionRepuestos(targetOrdenId, reparacionId, lineas),
+    // Se espera el refetch: la mutación sigue "pendiente" (y el stepper deshabilitado) hasta que
+    // la orden y el stock estén actualizados.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ordenes'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventario'] }),
+        queryClient.invalidateQueries({ queryKey: ['repuestos'] }),
+        queryClient.invalidateQueries({ queryKey: ['historial'] }),
+      ]),
   });
 
   const entregaMutation = useMutation({
@@ -511,6 +521,7 @@ export function OrdenDetailPage() {
   // ───── Repuestos de la orden (agregar/quitar sobre una orden existente) ─────
 
   const [repuestoAgregarSel, setRepuestoAgregarSel] = useState('');
+  const [repuestoAgregarCantidad, setRepuestoAgregarCantidad] = useState('1');
   const [repuestoQuitar, setRepuestoQuitar] = useState<{
     reparacion: NonNullable<ReturnType<typeof reparacionEditable>>;
     productoId: number;
@@ -529,41 +540,43 @@ export function OrdenDetailPage() {
     [orden?.reparaciones],
   );
   const repuestosBloqueadosOrden = repuestosBloqueados(orden?.estado);
-  const repuestoAgregarOptions = useMemo(() => {
-    // Lo ya cobrado en CUALQUIER reparación de la orden no se ofrece de nuevo
-    // (con descuentoDiagnostico, la Revisión inicial no cobra sus repuestos).
-    const cobrados = repuestoIdsCobrados(orden?.reparaciones, orden?.descuentoDiagnostico);
-    return repuestos
-      .filter((r) => !cobrados.has(r.id))
-      .map((r) => ({
+  // El mismo producto puede repetirse en varias reparaciones: se ofrece todo el catálogo.
+  const repuestoAgregarOptions = useMemo(
+    () =>
+      repuestos.map((r) => ({
         value: String(r.id),
-        label: `${r.nombre} (${formatCurrency(precioCobradoRepuesto(r))})`,
-      }));
-  }, [repuestos, orden?.reparaciones, orden?.descuentoDiagnostico]);
+        label: `${r.nombre} (${formatCurrency(precioCobradoRepuesto(r))})${
+          r.stock != null ? ` · Stock: ${r.stock}` : ''
+        }`,
+      })),
+    [repuestos],
+  );
 
   const cambiarRepuestosOrden = useCallback(
     async (
       reparacion: NonNullable<typeof reparacionRepuestos>,
-      cambio: { agregar?: number; quitar?: number },
+      cambio: { agregar?: RepuestoCantidad; fijar?: RepuestoCantidad; quitar?: number },
     ) => {
       if (!orden) return;
       try {
         const actualizada = await repuestosOrdenMutation.mutateAsync({
           targetOrdenId: orden.id,
           reparacionId: reparacion.id,
-          repuestoIds: idsTrasCambio(reparacion, cambio),
+          repuestos: repuestosPayload(cantidadesTrasCambio(reparacion, cambio)),
         });
-        if (cambio.agregar != null) {
+        if (cambio.agregar) {
           setRepuestoAgregarSel('');
-          // El backend puede omitir el repuesto (p. ej. ya cobrado): nunca fallar en silencio.
+          setRepuestoAgregarCantidad('1');
+          // El backend puede omitir el repuesto: nunca fallar en silencio.
           const quedo = actualizada?.repuestos?.some(
-            (snap) => snapshotRepuestoId(snap) === cambio.agregar,
+            (snap) => snapshotRepuestoId(snap) === cambio.agregar?.productoId,
           );
           if (!quedo) {
-            showToast('El repuesto no se agregó a la orden (puede que ya esté cobrado)', 'warning');
+            showToast('El repuesto no se agregó a la orden', 'warning');
           }
         }
       } catch (err: unknown) {
+        // Incluye el 400 "Stock insuficiente de <nombre>. Disponible: N" del backend.
         const msg = err instanceof Error ? err.message : 'Error al actualizar repuestos';
         showToast(msg, 'error');
       }
@@ -615,8 +628,7 @@ export function OrdenDetailPage() {
     useState<EstadoOrden | null>(null);
   // ───── Repuestos al avanzar Diagnóstico → Reparación ─────
   const [repuestosModalOpen, setRepuestosModalOpen] = useState(false);
-  const [repCompleteSearch, setRepCompleteSearch] = useState('');
-  const [repCompleteSelectedIds, setRepCompleteSelectedIds] = useState<Set<number>>(new Set());
+  const repComplete = useSeleccionRepuestos();
   const [repCompleteSubmitting, setRepCompleteSubmitting] = useState(false);
   const [repCompleteDiscount, setRepCompleteDiscount] = useState(false);
   const [repPrecioReal, setRepPrecioReal] = useState('');
@@ -625,16 +637,6 @@ export function OrdenDetailPage() {
   // puso la tarifa" (se puede re-resolver al cambiar de tipo) de "precio editado a mano"
   // (nunca se pisa).
   const autoPrecioRef = useRef<{ tipo: TipoReparacion; value: string } | null>(null);
-
-  // Precarga (una vez por apertura) los repuestos ya adjuntos, para que el modal los muestre
-  // marcados. El endpoint iniciar-reparación es ADITIVO: lo ya cobrado se omite en el backend,
-  // así que en el modal esos repuestos van deshabilitados y no se envían ni se suman al preview.
-  const repPrecargadosRef = useRef(false);
-  useEffect(() => {
-    if (!repuestosModalOpen || repuestosPending || !orden || repPrecargadosRef.current) return;
-    repPrecargadosRef.current = true;
-    setRepCompleteSelectedIds(new Set(repuestoIdsAdjuntos(orden.reparaciones, repuestos)));
-  }, [repuestosModalOpen, repuestosPending, orden, repuestos]);
 
   const executeTransition = useCallback(
     async (target: EstadoOrden, descuentoDiagnostico?: boolean) => {
@@ -658,10 +660,7 @@ export function OrdenDetailPage() {
       if (!orden) return;
       // Intercept DIAGNOSTICO → REPARACION to ask about discount + parts
       if (orden.estado === EstadoOrden.DIAGNOSTICO && target === EstadoOrden.REPARACION) {
-        // La selección se precarga (efecto) con los repuestos ya adjuntos a la orden.
-        repPrecargadosRef.current = false;
-        setRepCompleteSelectedIds(new Set());
-        setRepCompleteSearch('');
+        repComplete.reset();
         setRepuestosModalOpen(true);
         return;
       }
@@ -672,7 +671,7 @@ export function OrdenDetailPage() {
       }
       await executeTransition(target);
     },
-    [orden, executeTransition],
+    [orden, executeTransition, repComplete],
   );
 
   // El pago se registra desde la factura, tras confirmar la impresión.
@@ -700,30 +699,31 @@ export function OrdenDetailPage() {
       ordenId: oId,
       tipo,
       precio,
-      repuestoIds,
+      repuestos: lineas,
       descuentoDiagnostico,
     }: {
       ordenId: number;
       tipo: TipoReparacion;
       precio: number;
-      repuestoIds: number[];
+      repuestos: RepuestoCantidad[];
       descuentoDiagnostico: boolean;
-    }) => iniciarReparacion(oId, { tipo, precio, repuestoIds, descuentoDiagnostico }),
+    }) => iniciarReparacion(oId, { tipo, precio, repuestos: lineas, descuentoDiagnostico }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordenes', ordenId] });
+      queryClient.invalidateQueries({ queryKey: ['inventario'] });
+      queryClient.invalidateQueries({ queryKey: ['repuestos'] });
       queryClient.invalidateQueries({ queryKey: ['historial'] });
     },
   });
 
   const cancelTransition = useCallback(() => {
     setRepuestosModalOpen(false);
-    setRepCompleteSelectedIds(new Set());
-    setRepCompleteSearch('');
+    repComplete.reset();
     setRepCompleteDiscount(false);
     setRepPrecioReal('');
     setRepCompleteTipo('');
     autoPrecioRef.current = null;
-  }, []);
+  }, [repComplete]);
 
   // Al elegir el tipo de reparación, resuelve la tarifa aplicable (modelo >
   // marca > genérico) y autocompleta el precio. Reglas:
@@ -773,13 +773,6 @@ export function OrdenDetailPage() {
     cancelTransition();
   }, [repCompleteSubmitting, cancelTransition]);
 
-  // Ya cobrado en la orden: con descuentoDiagnostico los repuestos de la "Revisión inicial"
-  // no se cobran, por lo que sí cuentan para la nueva reparación.
-  const repCompleteCobrados = useMemo(
-    () => repuestoIdsCobrados(orden?.reparaciones, repCompleteDiscount),
-    [orden?.reparaciones, repCompleteDiscount],
-  );
-
   const confirmRepuestos = useCallback(async () => {
     if (!orden) return;
     if (!repCompleteTipo) {
@@ -797,12 +790,11 @@ export function OrdenDetailPage() {
         ordenId: orden.id,
         tipo: repCompleteTipo,
         precio,
-        repuestoIds: Array.from(repCompleteSelectedIds).filter((id) => !repCompleteCobrados.has(id)),
+        repuestos: repComplete.payload,
         descuentoDiagnostico: repCompleteDiscount,
       });
       setRepuestosModalOpen(false);
-      setRepCompleteSelectedIds(new Set());
-      setRepCompleteSearch('');
+      repComplete.reset();
       setRepCompleteDiscount(false);
       setRepPrecioReal('');
       setRepCompleteTipo('');
@@ -814,7 +806,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepCompleteSubmitting(false);
     }
-  }, [orden, repCompleteTipo, repPrecioReal, repCompleteSelectedIds, repCompleteCobrados, repCompleteDiscount, iniciarReparacionMutation, showToast]);
+  }, [orden, repCompleteTipo, repPrecioReal, repComplete, repCompleteDiscount, iniciarReparacionMutation, showToast]);
 
   // ───── Reparacion modal ─────
 
@@ -828,28 +820,11 @@ export function OrdenDetailPage() {
     tipo?: string;
     precio?: string;
   }>({});
-  const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<Set<number>>(new Set());
-  const [repuestoSearch, setRepuestoSearch] = useState('');
+  const repAdd = useSeleccionRepuestos();
 
-  const filteredRepuestos = useMemo(() => {
-    const term = repuestoSearch.trim().toLowerCase();
-    if (!term) return repuestos;
-    return repuestos.filter((r) => r.nombre.toLowerCase().includes(term));
-  }, [repuestos, repuestoSearch]);
-
-  const selectedRepuestos = useMemo(
-    () => repuestos.filter((r) => selectedRepuestoIds.has(r.id)),
-    [repuestos, selectedRepuestoIds],
-  );
-
-  const costoRepuestosPreview = useMemo(
-    () => selectedRepuestos.reduce((sum, r) => sum + (r.precioCosto ?? 0), 0),
-    [selectedRepuestos],
-  );
-
-  const repuestosACobrarPreview = useMemo(
-    () => selectedRepuestos.reduce((sum, r) => sum + (precioCobradoRepuesto(r) ?? 0), 0),
-    [selectedRepuestos],
+  const { costo: costoRepuestosPreview, cobrar: repuestosACobrarPreview } = useMemo(
+    () => totalesSeleccion(repuestos, repAdd.seleccion),
+    [repuestos, repAdd.seleccion],
   );
 
   const precioFinalPreview = useMemo(() => {
@@ -865,48 +840,17 @@ export function OrdenDetailPage() {
     return precioFinalPreview + repuestosACobrarPreview - costoRepuestosPreview;
   }, [puedeVerCostos, precioFinalPreview, repuestosACobrarPreview, costoRepuestosPreview]);
 
-  const toggleRepuesto = useCallback((id: number) => {
-    setSelectedRepuestoIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  // Repuestos-complete modal: filtered list + preview
-  const repCompleteFiltered = useMemo(() => {
-    const term = repCompleteSearch.trim().toLowerCase();
-    if (!term) return repuestos;
-    return repuestos.filter((r) => r.nombre.toLowerCase().includes(term));
-  }, [repuestos, repCompleteSearch]);
-
-  const repCompleteSelected = useMemo(
-    () =>
-      repuestos.filter(
-        (r) => repCompleteSelectedIds.has(r.id) && !repCompleteCobrados.has(r.id),
-      ),
-    [repuestos, repCompleteSelectedIds, repCompleteCobrados],
-  );
-
+  // Repuestos-complete modal: preview multiplicado por cantidad
   const repCompleteRepuestosPreview = useMemo(
-    () => repCompleteSelected.reduce((sum, r) => sum + (precioCobradoRepuesto(r) ?? 0), 0),
-    [repCompleteSelected],
+    () => totalesSeleccion(repuestos, repComplete.seleccion).cobrar,
+    [repuestos, repComplete.seleccion],
   );
-
-  const toggleRepComplete = useCallback((id: number) => {
-    setRepCompleteSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const closeRepModal = useCallback(() => {
     setRepModalOpen(false);
     setRepErrors({});
-  }, []);
+    repAdd.reset();
+  }, [repAdd]);
 
   const handleAddReparacion = useCallback(async () => {
     const errors: { tipo?: string; precio?: string } = {};
@@ -931,7 +875,7 @@ export function OrdenDetailPage() {
         tipo: repTipo as TipoReparacion,
         descripcion: repDescripcion.trim() || undefined,
         precio: precioFinal as number,
-        repuestoIds: Array.from(selectedRepuestoIds),
+        repuestos: repAdd.payload,
       };
       await addReparacionMutation.mutateAsync({ ordenId: orden.id, body });
       closeRepModal();
@@ -944,7 +888,7 @@ export function OrdenDetailPage() {
     } finally {
       setRepSubmitting(false);
     }
-  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, addReparacionMutation, selectedRepuestoIds]);
+  }, [repTipo, repDescripcion, repPrecio, orden, closeRepModal, addReparacionMutation, repAdd.payload]);
 
   // ───── Cita de entrega modal ─────
 
@@ -1644,45 +1588,86 @@ export function OrdenDetailPage() {
             {repuestosOrdenFilas.map(({ reparacion, snap }) => {
               const productoId = snapshotRepuestoId(snap);
               const legado = productoId == null;
+              const cantidad = cantidadSnapshot(snap);
               const noCobrado =
                 !!orden?.descuentoDiagnostico && reparacion.descripcion === REVISION_INICIAL;
               const nombreReparacion =
                 reparacion.descripcion ??
                 TIPO_REPARACION_LABELS[reparacion.tipo] ??
                 reparacion.tipo;
+              const puedeEditarFila = canEditOrden && !legado;
+              const ocupado = repuestosOrdenMutation.isPending || repuestosBloqueadosOrden;
               return (
                 <li
                   key={`${reparacion.id}-${snap.id}`}
-                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
                 >
-                  <span className="flex-1 text-slate-700">
+                  <span className="min-w-0 flex-1 text-slate-700">
                     {snap.nombre}
                     <span className="block text-xs text-slate-500">
                       {nombreReparacion}
                       {legado && ' · legado'}
                     </span>
                   </span>
+                  {puedeEditarFila ? (
+                    <span className="flex items-center gap-1" role="group" aria-label={`Cantidad de ${snap.nombre}`}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Disminuir cantidad de ${snap.nombre}`}
+                        disabled={ocupado || cantidad <= 1}
+                        onClick={() =>
+                          void cambiarRepuestosOrden(reparacion, {
+                            fijar: { productoId, cantidad: cantidad - 1 },
+                          })
+                        }
+                      >
+                        −
+                      </Button>
+                      <span className="w-6 text-center font-medium" data-testid={`cantidad-${snap.id}`}>
+                        {cantidad}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Aumentar cantidad de ${snap.nombre}`}
+                        disabled={ocupado}
+                        onClick={() =>
+                          void cambiarRepuestosOrden(reparacion, {
+                            fijar: { productoId, cantidad: cantidad + 1 },
+                          })
+                        }
+                      >
+                        +
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">x{cantidad}</span>
+                  )}
                   {noCobrado ? (
                     <span className="text-xs text-slate-500">no cobrado</span>
                   ) : (
-                    <span className="text-slate-600">
-                      {formatCurrency(snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto ?? null)}
+                    <span className="text-right text-slate-600">
+                      {formatCurrency(totalCobradoSnapshot(snap))}
+                      {cantidad > 1 && (
+                        <span className="block text-xs text-slate-500">
+                          {formatCurrency(precioUnitarioSnapshot(snap))} c/u
+                        </span>
+                      )}
                     </span>
                   )}
-                  {canEditOrden && !legado && (
+                  {puedeEditarFila && (
                     <Button
                       variant="ghost"
                       size="sm"
                       aria-label={`Quitar ${snap.nombre}`}
-                      disabled={repuestosOrdenMutation.isPending || repuestosBloqueadosOrden}
+                      disabled={ocupado}
                       onClick={() =>
                         setRepuestoQuitar({
                           reparacion,
                           productoId,
                           nombre: snap.nombre,
-                          precio: noCobrado
-                            ? null
-                            : (snap.precioCobrado ?? snap.precioVenta ?? snap.precioCosto ?? null),
+                          precio: noCobrado ? null : totalCobradoSnapshot(snap),
                         })
                       }
                     >
@@ -1710,6 +1695,18 @@ export function OrdenDetailPage() {
                 onChange={(e) => setRepuestoAgregarSel(e.target.value)}
               />
             </div>
+            <div className="w-20">
+              <Input
+                label="Cantidad"
+                id="agregar-repuesto-cantidad"
+                type="number"
+                min={1}
+                step={1}
+                aria-label="Cantidad a agregar"
+                value={repuestoAgregarCantidad}
+                onChange={(e) => setRepuestoAgregarCantidad(e.target.value)}
+              />
+            </div>
             <Button
               variant="secondary"
               size="md"
@@ -1717,7 +1714,10 @@ export function OrdenDetailPage() {
               loading={repuestosOrdenMutation.isPending}
               onClick={() =>
                 void cambiarRepuestosOrden(reparacionRepuestos, {
-                  agregar: Number(repuestoAgregarSel),
+                  agregar: {
+                    productoId: Number(repuestoAgregarSel),
+                    cantidad: Math.max(1, Math.floor(Number(repuestoAgregarCantidad)) || 1),
+                  },
                 })
               }
             >
@@ -1938,57 +1938,14 @@ export function OrdenDetailPage() {
         <p className="text-sm text-slate-600 mb-2">
           Seleccione los repuestos que necesita para esta reparación:
         </p>
-        <Input
-          type="text"
-          placeholder="Buscar repuesto..."
-          value={repCompleteSearch}
-          onChange={(e) => setRepCompleteSearch(e.target.value)}
+        <RepuestosSelector
+          repuestos={repuestos}
+          loading={repuestosPending}
+          seleccion={repComplete.seleccion}
+          onToggle={repComplete.toggle}
+          onCantidadChange={repComplete.setCantidad}
+          idPrefix="rep-complete"
         />
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 p-2">
-          {repuestosPending ? (
-            <div className="flex items-center justify-center py-4">
-              <Spinner size="sm" />
-            </div>
-          ) : repCompleteFiltered.length === 0 ? (
-            <p className="py-2 text-center text-sm text-slate-500">
-              {repCompleteSearch.trim()
-                ? 'No se encontraron repuestos'
-                : 'No hay repuestos disponibles'}
-            </p>
-          ) : (
-            <div className="space-y-1">
-              {repCompleteFiltered.map((repuesto) => {
-                const inputId = `rep-complete-${repuesto.id}`;
-                const yaCobrado = repCompleteCobrados.has(repuesto.id);
-                const checked = yaCobrado || repCompleteSelectedIds.has(repuesto.id);
-                return (
-                  <label
-                    key={repuesto.id}
-                    htmlFor={inputId}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-slate-50"
-                  >
-                    <input
-                      id={inputId}
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      checked={checked}
-                      disabled={yaCobrado}
-                      onChange={() => toggleRepComplete(repuesto.id)}
-                    />
-                    <span className="flex-1 text-sm text-slate-700">
-                      {repuesto.nombre}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {yaCobrado
-                        ? 'ya cobrado'
-                        : formatCurrency(precioCobradoRepuesto(repuesto))}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </div>
         <div className="mt-3 flex items-center justify-between text-sm">
           <span className="text-slate-600">Repuestos (a cobrar):</span>
           <span className="font-medium text-slate-800">
@@ -2063,53 +2020,15 @@ export function OrdenDetailPage() {
           </FormField>
 
           <FormField label="Repuestos utilizados">
-            <Input
-              type="text"
-              placeholder="Buscar repuesto..."
-              value={repuestoSearch}
-              onChange={(e) => setRepuestoSearch(e.target.value)}
+            <RepuestosSelector
+              repuestos={repuestos}
+              loading={repuestosPending}
+              seleccion={repAdd.seleccion}
+              onToggle={repAdd.toggle}
+              onCantidadChange={repAdd.setCantidad}
+              idPrefix="repuesto"
+              maxHeightClass="max-h-40"
             />
-            <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2">
-              {repuestosPending ? (
-                <div className="flex items-center justify-center py-4">
-                  <Spinner size="sm" />
-                </div>
-              ) : filteredRepuestos.length === 0 ? (
-                <p className="py-2 text-sm text-slate-500">
-                  {repuestoSearch.trim()
-                    ? 'No se encontraron repuestos'
-                    : 'No hay repuestos disponibles'}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {filteredRepuestos.map((repuesto) => {
-                    const inputId = `repuesto-${repuesto.id}`;
-                    const checked = selectedRepuestoIds.has(repuesto.id);
-                    return (
-                      <label
-                        key={repuesto.id}
-                        htmlFor={inputId}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-slate-50"
-                      >
-                        <input
-                          id={inputId}
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          checked={checked}
-                          onChange={() => toggleRepuesto(repuesto.id)}
-                        />
-                        <span className="flex-1 text-sm text-slate-700">
-                          {repuesto.nombre}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {formatCurrency(precioCobradoRepuesto(repuesto))}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
             <div className="mt-2 flex flex-col gap-1 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-slate-600">Repuestos (a cobrar):</span>

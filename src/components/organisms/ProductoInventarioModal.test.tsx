@@ -124,6 +124,9 @@ describe('ProductoInventarioModal sin uso ni controlaStock', () => {
   it('precio sugerido es opcional y no se envía si está vacío; no hay uso/controlaStock', async () => {
     const onSubmit = renderNew();
     expect(screen.getByText('Precio sugerido a cobrar')).toBeInTheDocument();
+    expect(
+      screen.getByText('Si lo dejás vacío, el repuesto se cobra a su costo.'),
+    ).toBeInTheDocument();
     fill();
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());

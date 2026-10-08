@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { OrdenDetailPage } from './OrdenDetailPage';
-import { asignarTecnico, iniciarReparacion, updateReparacionRepuestos } from '../api/ordenes';
+import { asignarTecnico, iniciarReparacion, updateOrdenEstado, updateReparacionRepuestos } from '../api/ordenes';
 import { EstadoOrden } from '../types';
 
 const state = vi.hoisted(() => ({
@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   tecnicos: undefined as unknown,
   orden: null as unknown,
   showToast: vi.fn(),
+  invalidate: vi.fn(),
 }));
 
 vi.mock('../api/ordenes', () => ({
@@ -30,9 +31,15 @@ vi.mock('../hooks/useAuth', () => ({ useAuth: () => ({ user: state.user }) }));
 vi.mock('../context/ConfigContext', () => ({ useConfig: () => ({ config: { nombreTaller: 'Fixtra' } }) }));
 vi.mock('../context/ToastContext', () => ({ useToast: () => ({ showToast: state.showToast }) }));
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-  useMutation: (opts: { mutationFn: (v: never) => Promise<unknown> }) => ({
-    mutateAsync: (v: never) => opts.mutationFn(v),
+  useQueryClient: () => ({ invalidateQueries: (...a: unknown[]) => state.invalidate(...a) }),
+  useMutation: (opts: { mutationFn: (v: never) => Promise<unknown>; onSuccess?: () => unknown }) => ({
+    // Espeja a react-query: mutateAsync resuelve recién cuando onSuccess (que puede esperar
+    // el refetch) termina.
+    mutateAsync: async (v: never) => {
+      const result = await opts.mutationFn(v);
+      await opts.onSuccess?.();
+      return result;
+    },
     isPending: false,
   }),
 }));
@@ -100,6 +107,7 @@ describe('OrdenDetailPage', () => {
     state.tecnicos = undefined; // GET /api/tecnicos es ADMIN-only: el TECNICO no recibe lista
     state.orden = makeOrden();
     state.showToast = vi.fn();
+    state.invalidate = vi.fn();
   });
 
   describe('técnico responsable', () => {
@@ -118,22 +126,63 @@ describe('OrdenDetailPage', () => {
   });
 
   describe('modal Diagnóstico → Reparación', () => {
-    it('precarga los repuestos ya adjuntos como marcados y envía solo los nuevos (aditivo)', async () => {
+    const abrir = async () => {
       renderPage();
       fireEvent.click(within(screen.getByTitle('Aprobar y Reparar')).getByRole('button'));
-      const dialog = await screen.findByRole('dialog');
+      return screen.findByRole('dialog');
+    };
+    const iniciar = (dialog: HTMLElement) => {
+      fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'PANTALLA' } });
+      fireEvent.change(within(dialog).getByPlaceholderText('Ej: 150'), { target: { value: '100' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Iniciar Reparación' }));
+    };
 
-      const pantalla = within(dialog).getByRole('checkbox', { name: /Pantalla X/ });
-      expect(pantalla).toBeChecked();
-      expect(within(dialog).getByRole('checkbox', { name: /Batería Y/ })).not.toBeChecked();
+    it('arranca sin selección y envía repuestos con su cantidad', async () => {
+      const dialog = await abrir();
+      expect(within(dialog).getByRole('checkbox', { name: /Pantalla X/ })).not.toBeChecked();
+      expect(within(dialog).queryByText('ya cobrado')).toBeNull();
 
       fireEvent.click(within(dialog).getByRole('checkbox', { name: /Cable Z/ }));
-      fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'PANTALLA' } });
-      fireEvent.change(within(dialog).getByPlaceholderText('Ej: 150'), { target: { value: '120' } });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Iniciar Reparación' }));
+      fireEvent.change(within(dialog).getByLabelText('Cantidad de Cable Z'), { target: { value: '3' } });
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: /Pantalla X/ }));
+      iniciar(dialog);
 
       await waitFor(() => expect(iniciarReparacion).toHaveBeenCalled());
-      expect(vi.mocked(iniciarReparacion).mock.calls[0][1].repuestoIds).toEqual([3]);
+      const body = vi.mocked(iniciarReparacion).mock.calls[0][1];
+      expect(body.repuestos).toEqual(
+        expect.arrayContaining([
+          { productoId: 3, cantidad: 3 },
+          { productoId: 1, cantidad: 1 },
+        ]),
+      );
+      expect(body.repuestos).toHaveLength(2);
+      expect('repuestoIds' in body).toBe(false);
+    });
+
+    it('el preview de repuestos y el total se multiplican por la cantidad', async () => {
+      const dialog = await abrir();
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: /Cable Z/ })); // precio 9
+      fireEvent.change(within(dialog).getByLabelText('Cantidad de Cable Z'), { target: { value: '4' } });
+      fireEvent.change(within(dialog).getByPlaceholderText('Ej: 150'), { target: { value: '100' } });
+      expect(within(dialog).getByText('Repuestos (a cobrar):').nextSibling?.textContent).toMatch(/36/);
+      expect(within(dialog).getByText('Total a cobrar:').nextSibling?.textContent).toMatch(/136/);
+    });
+
+    it('la cantidad no baja de 1', async () => {
+      const dialog = await abrir();
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: /Cable Z/ }));
+      fireEvent.change(within(dialog).getByLabelText('Cantidad de Cable Z'), { target: { value: '0' } });
+      expect(within(dialog).getByLabelText('Cantidad de Cable Z')).toHaveValue(1);
+    });
+
+    it('un 400 de stock insuficiente se muestra y el diálogo sigue abierto', async () => {
+      const msg = 'Stock insuficiente de Cable Z. Disponible: 1';
+      vi.mocked(iniciarReparacion).mockRejectedValueOnce(new Error(msg));
+      const dialog = await abrir();
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: /Cable Z/ }));
+      iniciar(dialog);
+      await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(msg, 'error'));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
   });
 
@@ -163,11 +212,26 @@ describe('OrdenDetailPage', () => {
       expect(within(lista).getByText('Batería Y')).toBeInTheDocument();
     });
 
-    it('agrega un repuesto reenviando el conjunto completo de la reparación', async () => {
+    it('agrega un repuesto con cantidad reenviando el conjunto completo de la reparación', async () => {
       renderPage();
       fireEvent.change(screen.getByLabelText('Agregar repuesto'), { target: { value: '3' } });
+      fireEvent.change(screen.getByLabelText('Cantidad a agregar'), { target: { value: '2' } });
       fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
-      await waitFor(() => expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, [2, 3]));
+      await waitFor(() =>
+        expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, [
+          { productoId: 2, cantidad: 1 },
+          { productoId: 3, cantidad: 2 },
+        ]),
+      );
+    });
+
+    it('agregar un producto ya presente suma unidades', async () => {
+      renderPage();
+      fireEvent.change(screen.getByLabelText('Agregar repuesto'), { target: { value: '2' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
+      await waitFor(() =>
+        expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, [{ productoId: 2, cantidad: 2 }]),
+      );
     });
 
     it('quita un repuesto enviando el resto', async () => {
@@ -203,44 +267,6 @@ describe('OrdenDetailPage', () => {
       renderPage();
       expect(screen.getByText('Nombre Backend')).toBeInTheDocument();
       expect(screen.queryByText('Tec Uno')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('modal: repuestos ya cobrados (item 3)', () => {
-    const abrir = async () => {
-      renderPage();
-      fireEvent.click(within(screen.getByTitle('Aprobar y Reparar')).getByRole('button'));
-      return screen.findByRole('dialog');
-    };
-
-    it('sin descuento: el repuesto adjunto va marcado, deshabilitado, "ya cobrado" y no se envía ni suma', async () => {
-      const dialog = await abrir();
-      const pantalla = within(dialog).getByRole('checkbox', { name: /Pantalla X/ });
-      expect(pantalla).toBeChecked();
-      expect(pantalla).toBeDisabled();
-      expect(within(dialog).getByText('ya cobrado')).toBeInTheDocument();
-
-      fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'PANTALLA' } });
-      fireEvent.change(within(dialog).getByPlaceholderText('Ej: 150'), { target: { value: '100' } });
-      // Repuestos (a cobrar) y total solo con lo no cobrado
-      expect(within(dialog).getByText('Total a cobrar:').nextSibling?.textContent).toMatch(/100/);
-      fireEvent.click(within(dialog).getByRole('checkbox', { name: /Cable Z/ }));
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Iniciar Reparación' }));
-      await waitFor(() => expect(iniciarReparacion).toHaveBeenCalled());
-      expect(vi.mocked(iniciarReparacion).mock.calls[0][1].repuestoIds).toEqual([3]);
-    });
-
-    it('con descuentoDiagnostico: los de la Revisión inicial cuentan para la nueva reparación', async () => {
-      const dialog = await abrir();
-      fireEvent.click(within(dialog).getByRole('checkbox', { name: /descontar diagnóstico/ }));
-      const pantalla = within(dialog).getByRole('checkbox', { name: /Pantalla X/ });
-      expect(pantalla).toBeChecked();
-      expect(pantalla).not.toBeDisabled();
-      fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'PANTALLA' } });
-      fireEvent.change(within(dialog).getByPlaceholderText('Ej: 150'), { target: { value: '100' } });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Iniciar Reparación' }));
-      await waitFor(() => expect(iniciarReparacion).toHaveBeenCalled());
-      expect(vi.mocked(iniciarReparacion).mock.calls[0][1].repuestoIds).toEqual([1]);
     });
   });
 
@@ -283,34 +309,115 @@ describe('OrdenDetailPage', () => {
       await waitFor(() => expect(updateReparacionRepuestos).toHaveBeenCalledWith(10, 101, []));
     });
 
-    it('Agregar excluye lo ya cobrado en cualquier reparación', () => {
+    it('Agregar ofrece todo el catálogo: el mismo producto puede estar en varias reparaciones', () => {
       state.orden = makeOrden({
         estado: EstadoOrden.REPARACION,
-        reparaciones: [rev(), rep2([snapP(2, 2, 'Batería Y')])],
-      });
-      renderPage();
-      const select = screen.getByLabelText('Agregar repuesto');
-      const values = within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value);
-      expect(values).toContain('3');
-      expect(values).not.toContain('1');
-      expect(values).not.toContain('2');
-    });
-
-    it('con descuentoDiagnostico un repuesto de la Revisión sí se ofrece y la fila dice "no cobrado"', () => {
-      state.orden = makeOrden({
-        estado: EstadoOrden.REPARACION,
-        descuentoDiagnostico: true,
         reparaciones: [rev(), rep2([snapP(2, 2, 'Batería Y')])],
       });
       renderPage();
       const values = within(screen.getByLabelText('Agregar repuesto'))
         .getAllByRole('option')
         .map((o) => (o as HTMLOptionElement).value);
-      expect(values).toContain('1');
+      expect(values).toEqual(expect.arrayContaining(['1', '2', '3']));
+    });
+
+    it('con descuentoDiagnostico la fila de la Revisión dice "no cobrado"', () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        descuentoDiagnostico: true,
+        reparaciones: [rev(), rep2([snapP(2, 2, 'Batería Y')])],
+      });
+      renderPage();
       const lista = screen.getByRole('list', { name: 'Repuestos adjuntos' });
       expect(within(lista).getByText('no cobrado')).toBeInTheDocument();
       expect(within(lista).getByText('Revisión inicial')).toBeInTheDocument();
       expect(within(lista).getByText('Cambio de pantalla')).toBeInTheDocument();
+    });
+
+    it('muestra x2, precio unitario y total de la línea, y el stepper reenvía la cantidad', async () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [
+          rev({ repuestos: [] }),
+          rep2([{ ...snapP(5, 3, 'Cable Z'), cantidad: 2, precioCobrado: 20, totalCobrado: 40 }]),
+        ],
+      });
+      renderPage();
+      const lista = screen.getByRole('list', { name: 'Repuestos adjuntos' });
+      expect(within(lista).getByTestId('cantidad-5')).toHaveTextContent('2');
+      expect(within(lista).getByText(/40/)).toBeInTheDocument();
+      expect(within(lista).getByText(/20.*c\/u/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Aumentar cantidad de Cable Z' }));
+      await waitFor(() =>
+        expect(updateReparacionRepuestos).toHaveBeenLastCalledWith(10, 101, [{ productoId: 3, cantidad: 3 }]),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Disminuir cantidad de Cable Z' }));
+      await waitFor(() =>
+        expect(updateReparacionRepuestos).toHaveBeenLastCalledWith(10, 101, [{ productoId: 3, cantidad: 1 }]),
+      );
+    });
+
+    const keysInvalidadas = () =>
+      state.invalidate.mock.calls.map((c: unknown[]) => (c[0] as { queryKey: unknown[] }).queryKey[0]);
+
+    it('tras cambiar repuestos refresca órdenes, inventario y el stock de useRepuestos', async () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [rev({ repuestos: [] }), rep2([snapP(2, 2, 'Batería Y')])],
+      });
+      renderPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Aumentar cantidad de Batería Y' }));
+      await waitFor(() => expect(keysInvalidadas()).toEqual(expect.arrayContaining(['ordenes', 'inventario', 'repuestos'])));
+    });
+
+    it('la mutación no termina hasta que el refetch se resuelve (stepper bloqueado mientras tanto)', async () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [rev({ repuestos: [] }), rep2([snapP(2, 2, 'Batería Y')])],
+      });
+      const liberar: (() => void)[] = [];
+      state.invalidate = vi.fn(() => new Promise<void>((r) => liberar.push(r)));
+      vi.mocked(updateReparacionRepuestos).mockResolvedValueOnce({ repuestos: [] } as never);
+      renderPage();
+      fireEvent.change(screen.getByLabelText('Agregar repuesto'), { target: { value: '3' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
+      await waitFor(() => expect(updateReparacionRepuestos).toHaveBeenCalled());
+      await waitFor(() => expect(state.invalidate).toHaveBeenCalled());
+      // El aviso post-mutación solo aparece cuando la invalidación terminó.
+      expect(state.showToast).not.toHaveBeenCalled();
+      liberar.forEach((fn) => fn());
+      await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(expect.any(String), 'warning'));
+    });
+
+    it('un cambio de estado también refresca el stock de repuestos', async () => {
+      state.orden = makeOrden({ estado: EstadoOrden.DIAGNOSTICO });
+      renderPage();
+      fireEvent.click(within(screen.getByTitle('Rechazar Presupuesto')).getByRole('button'));
+      await waitFor(() => expect(updateOrdenEstado).toHaveBeenCalled());
+      await waitFor(() => expect(keysInvalidadas()).toEqual(expect.arrayContaining(['ordenes', 'repuestos'])));
+    });
+
+    it('no se puede bajar de 1 con el stepper', () => {
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [rev({ repuestos: [] }), rep2([snapP(2, 2, 'Batería Y')])],
+      });
+      renderPage();
+      expect(screen.getByRole('button', { name: 'Disminuir cantidad de Batería Y' })).toBeDisabled();
+    });
+
+    it('un 400 de stock insuficiente al agregar se muestra en toast', async () => {
+      const msg = 'Stock insuficiente de Cable Z. Disponible: 1';
+      state.orden = makeOrden({
+        estado: EstadoOrden.REPARACION,
+        reparaciones: [rev({ repuestos: [] }), rep2([snapP(2, 2, 'Batería Y')])],
+      });
+      vi.mocked(updateReparacionRepuestos).mockRejectedValueOnce(new Error(msg));
+      renderPage();
+      fireEvent.change(screen.getByLabelText('Agregar repuesto'), { target: { value: '3' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
+      await waitFor(() => expect(state.showToast).toHaveBeenCalledWith(msg, 'error'));
     });
 
     it('advierte con toast si tras agregar el repuesto no quedó en la orden', async () => {
