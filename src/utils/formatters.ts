@@ -197,7 +197,8 @@ export function formatCop(amount: number): string {
 
 /**
  * Format an ISO date string to Spanish short date.
- * Example: "2026-07-20T14:30:00Z" → "20/07/2026"
+ * Un instante UTC ("...Z") se muestra en hora local del navegador; un valor sin zona
+ * ("2026-07-20T14:30:00", p. ej. fechaEntrega) se interpreta ya como hora local.
  */
 export function formatDate(iso: string): string {
   try {
@@ -215,7 +216,7 @@ export function formatDate(iso: string): string {
 
 /**
  * Format an ISO date string to Spanish short date + time.
- * Example: "2026-07-20T14:30:00Z" → "20/07/2026 14:30"
+ * Un instante UTC ("...Z") se muestra en hora local; un valor naive se muestra tal cual.
  */
 export function formatDateTime(iso: string): string {
   try {

@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   isAdmin: true,
   resumen: undefined as unknown,
   resumenError: null as unknown,
+  ordenes: null as null | unknown[],
   refetch: vi.fn(),
   productos: [] as unknown[],
   movimientos: [] as unknown[],
@@ -37,7 +38,7 @@ vi.mock('../hooks/useInventory', () => ({
 }));
 vi.mock('../hooks/useQueries', () => ({
   useOrdenes: () => ({
-    data: [
+    data: state.ordenes ?? [
       {
         id: 1,
         clienteId: 1,
@@ -81,6 +82,7 @@ describe('DashboardPage shortcuts', () => {
     state.isAdmin = true;
     state.resumen = RESUMEN_PRO;
     state.resumenError = null;
+    state.ordenes = null;
     state.productos = [];
     state.movimientos = [];
   });
@@ -103,6 +105,7 @@ describe('DashboardPage bloques ADMIN (Fase 3)', () => {
     state.isAdmin = true;
     state.resumen = RESUMEN_PRO;
     state.resumenError = null;
+    state.ordenes = null;
     state.productos = [];
     state.movimientos = [];
   });
@@ -298,5 +301,71 @@ describe('DashboardPage bloques ADMIN (Fase 3)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe('timestamps UTC (Z) del servidor', () => {
+    // Todo se arma con partes locales: independiente de la zona horaria de la máquina.
+    const ordenEntregada = (id: number, fechaEntrada: Date) => ({
+      id,
+      clienteId: 1,
+      estado: 'ENTREGADO',
+      fechaEntrada: fechaEntrada.toISOString(),
+      numeroOrden: `Z-${id}`,
+    });
+
+    it('el filtro de período cuenta por la fechaEntrada Z según el día local', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 7, 12, 0, 0));
+      try {
+        state.isAdmin = false; // sin resumen: conteo local por fechaEntrada
+        state.resumen = undefined;
+        state.ordenes = [
+          ordenEntregada(1, new Date(2026, 9, 7, 0, 30)), // hoy, recién pasada la medianoche
+          ordenEntregada(2, new Date(2026, 9, 6, 23, 30)), // ayer, justo antes
+          ordenEntregada(3, new Date(2026, 9, 7, 11, 0)), // hoy
+        ];
+        renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'Hoy' }));
+        const card = screen.getByText('Entregados (Hoy)').parentElement?.textContent ?? '';
+        expect(card).toContain('2');
+        fireEvent.click(screen.getByRole('button', { name: '7 días' }));
+        expect(screen.getByText('Entregados (7 días)').parentElement?.textContent).toContain('3');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('la fecha mostrada de una entrada Z es la local', () => {
+      state.isAdmin = false;
+      state.resumen = undefined;
+      state.ordenes = [ordenEntregada(1, new Date(2026, 9, 8, 0, 15))];
+      renderPage();
+      expect(screen.getAllByText('08/10/2026').length).toBeGreaterThan(0);
+    });
+
+    it('fechaEntrega naive sigue siendo hora local sin desplazamiento', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 7, 12, 0, 0));
+      try {
+        state.isAdmin = false;
+        state.resumen = undefined;
+        state.ordenes = [
+          {
+            id: 9,
+            clienteId: 1,
+            estado: 'REPARACION',
+            fechaEntrada: new Date(2026, 9, 1, 10, 0).toISOString(),
+            fechaEntrega: '2026-10-09T15:30:00',
+            numeroOrden: 'N-9',
+          },
+        ];
+        renderPage();
+        const entrega = screen.getByText('Reparación #N-9').closest('button') as HTMLElement;
+        expect(entrega.textContent).toContain('09/10/2026');
+        expect(entrega.textContent).toContain('15:30');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

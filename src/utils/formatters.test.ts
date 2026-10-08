@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatCop, formatCurrency } from './formatters';
+import { formatCop, formatCurrency, formatDate, formatDateTime } from './formatters';
 
 const norm = (s: string) => s.replace(/\s/g, ' ');
 
@@ -37,5 +37,39 @@ describe('formatCurrency null-safety', () => {
     expect(formatCurrency(null)).toBe('—');
     expect(formatCurrency(undefined)).toBe('—');
     expect(formatCurrency(Number.NaN)).toBe('—');
+  });
+});
+
+// Los timestamps del servidor llegan como instantes UTC ("...Z"). Las expectativas se arman con
+// partes de fecha LOCALES, así que no dependen de la zona horaria de la máquina.
+describe('formatDate / formatDateTime con instantes UTC (Z)', () => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  it('formatDateTime muestra la hora local del instante', () => {
+    const local = new Date(2026, 9, 7, 23, 30); // 07/10/2026 23:30 local
+    const iso = local.toISOString(); // termina en Z
+    expect(iso.endsWith('Z')).toBe(true);
+    const out = formatDateTime(iso);
+    expect(out).toContain('23:30');
+    expect(out).toContain('07/10/2026');
+  });
+
+  it('formatDate usa el día local, también cerca de la medianoche', () => {
+    const justAfter = new Date(2026, 9, 8, 0, 15).toISOString();
+    const justBefore = new Date(2026, 9, 7, 23, 45).toISOString();
+    expect(formatDate(justAfter)).toBe('08/10/2026');
+    expect(formatDate(justBefore)).toBe('07/10/2026');
+  });
+
+  it('un valor naive (fechaEntrega) se muestra tal cual, sin desplazamiento', () => {
+    const out = formatDateTime('2026-10-07T15:30:00');
+    expect(out).toContain(`${pad(15)}:${pad(30)}`);
+    expect(out).toContain('07/10/2026');
+    expect(formatDate('2026-10-07T00:10:00')).toBe('07/10/2026');
+  });
+
+  it('valores inválidos devuelven "—"', () => {
+    expect(formatDate('nope')).toBe('—');
+    expect(formatDateTime('nope')).toBe('—');
   });
 });
